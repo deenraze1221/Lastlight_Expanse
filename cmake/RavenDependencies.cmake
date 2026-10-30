@@ -1,6 +1,6 @@
 # Third-party dependencies, pinned to release tags (commit hashes recorded in BUILDING.md).
 # Only libraries required by the current milestone are fetched; later milestones add
-# Dear ImGui, Jolt, miniaudio and ufbx when their systems are built.
+# Jolt, miniaudio, ufbx and meshoptimizer when their systems are built.
 include(FetchContent)
 
 FetchContent_Declare(VulkanHeaders
@@ -75,7 +75,14 @@ FetchContent_Declare(cgltf
     SOURCE_SUBDIR  _raven_unused
     SYSTEM)
 
-FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf)
+FetchContent_Declare(imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        v1.92.4
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  _raven_unused
+    SYSTEM)
+
+FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf imgui)
 if(RAVEN_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
@@ -103,3 +110,17 @@ add_library(Raven::stb ALIAS raven_stb)
 add_library(raven_cgltf INTERFACE)
 target_include_directories(raven_cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
 add_library(Raven::cgltf ALIAS raven_cgltf)
+
+# Dear ImGui core + SDL3 platform backend + Vulkan renderer backend (via volk).
+add_library(raven_imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp)
+target_include_directories(raven_imgui SYSTEM PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+target_compile_definitions(raven_imgui PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+target_link_libraries(raven_imgui PUBLIC Raven::volk SDL3::SDL3)
+add_library(Raven::imgui ALIAS raven_imgui)

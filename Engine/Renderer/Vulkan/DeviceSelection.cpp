@@ -3,8 +3,7 @@
 namespace raven::gfx {
 
 int64_t scoreDevice(const DeviceCandidate& c) {
-    if (c.apiVersion < VK_API_VERSION_1_3 || !c.hasGraphicsQueue || !c.hasPresentQueue ||
-        !c.hasSwapchainExtension || !c.hasDynamicRendering || !c.hasSynchronization2 || !c.hasDescriptorIndexing) {
+    if (!c.meetsBaseline) {
         return -1;
     }
     int64_t score = 0;

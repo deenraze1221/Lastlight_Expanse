@@ -28,7 +28,7 @@ uint32_t formatBytesPerPixel(VkFormat format) {
     }
 }
 
-UploadContext::UploadContext(const VulkanContext& context) : m_context(context) {
+UploadContext::UploadContext(VulkanContext& context) : m_context(context) {
     const VkDevice device = context.device();
     VkCommandPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
@@ -39,9 +39,9 @@ UploadContext::UploadContext(const VulkanContext& context) : m_context(context) 
     allocInfo.commandPool = m_pool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = 1;
-    VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     VkResult result = vkAllocateCommandBuffers(device, &allocInfo, &m_cmd);
     if (result == VK_SUCCESS) {
+        VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
         result = vkCreateFence(device, &fenceInfo, nullptr, &m_fence);
     }
     if (result != VK_SUCCESS) {
@@ -77,12 +77,16 @@ void UploadContext::immediate(const std::function<void(VkCommandBuffer)>& record
 
     VkCommandBufferSubmitInfo cmdInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
     cmdInfo.commandBuffer = m_cmd;
-    VkSubmitInfo2 submit{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
-    submit.commandBufferInfoCount = 1;
-    submit.pCommandBufferInfos = &cmdInfo;
-    RAVEN_VK_CHECK(vkQueueSubmit2(m_context.graphicsQueue(), 1, &submit, m_fence));
+    GraphicsSubmit submit;
+    submit.commandBuffers = std::span(&cmdInfo, 1);
+    // The blocking wait uses a fence: equivalent to waiting on the timeline value, but
+    // also understood by older synchronization-validation layers (1.3.275 does not model
+    // vkWaitSemaphores host waits and reports false WAW hazards on reused readback memory).
+    submit.fence = m_fence;
+    m_context.submitGraphics(submit);
     RAVEN_VK_CHECK(vkWaitForFences(device, 1, &m_fence, VK_TRUE, UINT64_MAX));
     RAVEN_VK_CHECK(vkResetFences(device, 1, &m_fence));
+    m_context.collectGarbage();
 }
 
 std::vector<uint8_t> UploadContext::readBuffer(const GpuBuffer& buffer) {

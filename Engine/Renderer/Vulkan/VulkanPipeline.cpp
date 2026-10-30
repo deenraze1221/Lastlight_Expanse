@@ -160,7 +160,7 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context, const GraphicsP
     info.pDynamicState = &dynamic;
     info.layout = m_layout;
 
-    const VkResult result = vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &info, nullptr, &m_pipeline);
+    const VkResult result = vkCreateGraphicsPipelines(m_device, context.pipelineCache(), 1, &info, nullptr, &m_pipeline);
     if (result != VK_SUCCESS) {
         if (m_ownsLayout) {
             vkDestroyPipelineLayout(m_device, m_layout, nullptr);

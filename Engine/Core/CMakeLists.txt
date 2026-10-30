@@ -1,7 +1,8 @@
 add_library(RavenCore STATIC
     Log.cpp
     Error.cpp
-    ImageIO.cpp)
+    ImageIO.cpp
+    Profiler.cpp)
 add_library(Raven::Core ALIAS RavenCore)
 
 target_include_directories(RavenCore PUBLIC ${PROJECT_SOURCE_DIR}/Engine)

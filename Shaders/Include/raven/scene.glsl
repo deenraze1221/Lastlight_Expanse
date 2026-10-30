@@ -1,10 +1,12 @@
 // RAVEN scene shader interface. Matches Engine/Renderer/SceneRenderer.h and Material.h.
 // Every material shader (engine or game) uses this layout:
 //   set 0: bindless textures/samplers + material table
-//   set 1: per-frame data + per-instance transforms
-//   push constants: material index
+//   push constants: addresses of frame constants and instance data, material index
 #ifndef RAVEN_SCENE_GLSL
 #define RAVEN_SCENE_GLSL
+
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
 
 #include "raven/bindless.glsl"
 
@@ -46,7 +48,8 @@ struct RavenPointLight {
     vec4 colorIntensity;  // rgb: colour, a: intensity
 };
 
-layout(set = 1, binding = 0, std140) uniform RavenFrame {
+// Per-frame constants, read through a buffer device address (frame scratch memory).
+layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer RavenFrameBuffer {
     mat4 view;
     mat4 projection;
     mat4 viewProjection;
@@ -57,20 +60,25 @@ layout(set = 1, binding = 0, std140) uniform RavenFrame {
     vec4 sunColor;         // rgb * intensity
     uvec4 lightCounts;     // x: point lights
     RavenPointLight pointLights[RAVEN_MAX_POINT_LIGHTS];
-} ravenFrame;
+};
 
 struct RavenInstance {
     mat4 model;
     mat4 normalMatrix;
 };
 
-layout(set = 1, binding = 1, std430) readonly buffer RavenInstances {
-    RavenInstance ravenInstances[];
+layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer RavenInstanceBuffer {
+    RavenInstance instances[];
 };
 
 layout(push_constant) uniform RavenDraw {
+    uvec2 frameAddress;     // RavenFrameBuffer
+    uvec2 instanceAddress;  // RavenInstanceBuffer; indexed with gl_InstanceIndex
     uint materialIndex;
 } ravenDraw;
+
+#define ravenFrame RavenFrameBuffer(ravenDraw.frameAddress)
+#define ravenInstances RavenInstanceBuffer(ravenDraw.instanceAddress).instances
 
 RavenMaterial ravenMaterial() {
     return ravenMaterials[ravenDraw.materialIndex];

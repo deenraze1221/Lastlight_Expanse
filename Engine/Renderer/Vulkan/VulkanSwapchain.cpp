@@ -5,6 +5,18 @@
 #include "Renderer/Vulkan/VulkanContext.h"
 
 namespace raven::gfx {
+
+bool isSrgbFormat(VkFormat format) {
+    switch (format) {
+    case VK_FORMAT_R8G8B8A8_SRGB:
+    case VK_FORMAT_B8G8R8A8_SRGB:
+    case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+        return true;
+    default:
+        return false;
+    }
+}
+
 namespace {
 
 const char* presentModeName(VkPresentModeKHR mode) {
@@ -127,8 +139,9 @@ void VulkanSwapchain::create(VkExtent2D framebuffer, VkSwapchainKHR oldSwapchain
         m_renderFinished.push_back(semaphore);
     }
 
-    RAVEN_LOG_INFO("Swapchain {}x{}, {} images, present mode {}", m_extent.width, m_extent.height, imageCount,
-                   presentModeName(m_presentMode));
+    RAVEN_LOG_INFO("Swapchain {}x{}, {} images, present mode {}, format {}{}", m_extent.width, m_extent.height,
+                   imageCount, presentModeName(m_presentMode), static_cast<int>(m_format),
+                   isSrgbFormat(m_format) ? " (sRGB)" : " (UNORM: output is encoded in the shader)");
 }
 
 void VulkanSwapchain::destroyImageResources() {

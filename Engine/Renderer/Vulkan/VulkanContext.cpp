@@ -48,37 +48,6 @@ bool hasInstanceExtension(const char* name) {
                        [&](const VkExtensionProperties& e) { return std::strcmp(e.extensionName, name) == 0; });
 }
 
-struct QueueFamilies {
-    uint32_t graphics = UINT32_MAX;
-    uint32_t present = UINT32_MAX;
-};
-
-QueueFamilies findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
-    uint32_t count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &count, nullptr);
-    std::vector<VkQueueFamilyProperties> families(count);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &count, families.data());
-
-    QueueFamilies result;
-    for (uint32_t i = 0; i < count; ++i) {
-        VkBool32 present = VK_FALSE;
-        if (surface) {
-            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present);
-        }
-        const bool graphics = (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
-        if (graphics && (present || !surface)) {
-            return {i, i}; // A single family for both is preferred; headless needs graphics only.
-        }
-        if (graphics && result.graphics == UINT32_MAX) {
-            result.graphics = i;
-        }
-        if (present && result.present == UINT32_MAX) {
-            result.present = i;
-        }
-    }
-    return result;
-}
-
 } // namespace
 
 VulkanContext::VulkanContext(const ContextDesc& desc, const Window* window) : m_window(window) {
@@ -90,6 +59,9 @@ VulkanContext::VulkanContext(const ContextDesc& desc, const Window* window) : m_
         pickPhysicalDevice();
         createDevice();
         createAllocator();
+        m_timeline = std::make_unique<GpuTimeline>(m_device);
+        m_pipelineCache = std::make_unique<PipelineCache>(m_device, m_caps.vendorId, m_caps.deviceId,
+                                                          m_caps.pipelineCacheUUID, desc.pipelineCachePath);
     } catch (...) {
         destroy(); // The destructor does not run for a failed constructor.
         throw;
@@ -104,6 +76,9 @@ void VulkanContext::destroy() {
     if (m_device) {
         vkDeviceWaitIdle(m_device);
     }
+    m_deletionQueue.flushAll();
+    m_pipelineCache.reset(); // Saves to disk.
+    m_timeline.reset();
     if (m_allocator) {
         vmaDestroyAllocator(m_allocator);
         m_allocator = VK_NULL_HANDLE;
@@ -130,6 +105,27 @@ void VulkanContext::destroy() {
 
 void VulkanContext::waitIdle() const {
     RAVEN_VK_CHECK(vkDeviceWaitIdle(m_device));
+}
+
+uint64_t VulkanContext::submitGraphics(const GraphicsSubmit& submit) {
+    const uint64_t value = m_timeline->reserveNext();
+    std::vector<VkSemaphoreSubmitInfo> signals(submit.signals.begin(), submit.signals.end());
+    VkSemaphoreSubmitInfo timeline{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
+    timeline.semaphore = m_timeline->semaphore();
+    timeline.value = value;
+    timeline.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    signals.push_back(timeline);
+
+    VkSubmitInfo2 info{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
+    info.waitSemaphoreInfoCount = static_cast<uint32_t>(submit.waits.size());
+    info.pWaitSemaphoreInfos = submit.waits.data();
+    info.commandBufferInfoCount = static_cast<uint32_t>(submit.commandBuffers.size());
+    info.pCommandBufferInfos = submit.commandBuffers.data();
+    info.signalSemaphoreInfoCount = static_cast<uint32_t>(signals.size());
+    info.pSignalSemaphoreInfos = signals.data();
+    RAVEN_VK_CHECK(vkQueueSubmit2(m_graphicsQueue, 1, &info, submit.fence));
+    m_deletionQueue.onSubmit(value, submit.frameSubmission, m_frameRecording);
+    return value;
 }
 
 void VulkanContext::setDebugName(VkObjectType type, uint64_t handle, const char* name) const {
@@ -207,6 +203,14 @@ void VulkanContext::createInstance(const ContextDesc& desc) {
     info.ppEnabledLayerNames = layers.data();
     // Also captures messages from vkCreateInstance / vkDestroyInstance themselves.
     info.pNext = m_validationEnabled ? &messengerInfo : nullptr;
+    const VkValidationFeatureEnableEXT syncValidation = VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+    VkValidationFeaturesEXT validationFeatures{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
+    validationFeatures.enabledValidationFeatureCount = 1;
+    validationFeatures.pEnabledValidationFeatures = &syncValidation;
+    if (m_validationEnabled && desc.synchronizationValidation) {
+        validationFeatures.pNext = info.pNext;
+        info.pNext = &validationFeatures;
+    }
 
     RAVEN_VK_CHECK(vkCreateInstance(&info, nullptr, &m_instance));
     volkLoadInstanceOnly(m_instance);
@@ -214,7 +218,8 @@ void VulkanContext::createInstance(const ContextDesc& desc) {
     if (m_validationEnabled) {
         RAVEN_VK_CHECK(vkCreateDebugUtilsMessengerEXT(m_instance, &messengerInfo, nullptr, &m_debugMessenger));
     }
-    RAVEN_LOG_INFO("Vulkan instance created (API 1.3, validation {}, {})", m_validationEnabled ? "on" : "off",
+    RAVEN_LOG_INFO("Vulkan instance created (API 1.3, validation {}, {})",
+                   m_validationEnabled ? (desc.synchronizationValidation ? "on + sync" : "on") : "off",
                    m_window ? "windowed" : "headless");
 }
 
@@ -228,68 +233,32 @@ void VulkanContext::pickPhysicalDevice() {
     RAVEN_VK_CHECK(vkEnumeratePhysicalDevices(m_instance, &count, devices.data()));
 
     std::vector<DeviceCandidate> candidates;
-    std::vector<QueueFamilies> families;
+    std::vector<DeviceCapabilities> caps;
     for (VkPhysicalDevice device : devices) {
-        VkPhysicalDeviceProperties props;
-        vkGetPhysicalDeviceProperties(device, &props);
-
-        VkPhysicalDeviceVulkan13Features features13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-        VkPhysicalDeviceVulkan12Features features12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
-        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-        if (props.apiVersion >= VK_API_VERSION_1_3) {
-            features12.pNext = &features13;
-            features.pNext = &features12;
-            vkGetPhysicalDeviceFeatures2(device, &features);
+        DeviceCapabilities c = queryCapabilities(device, m_surface);
+        const auto missing = missingBaseline(c, m_surface != VK_NULL_HANDLE);
+        DeviceCandidate candidate{c.name, c.type, c.deviceLocalMemoryBytes, missing.empty()};
+        std::string missingText;
+        for (const auto& m : missing) {
+            missingText += (missingText.empty() ? "" : ", ") + m;
         }
-
-        uint32_t extCount = 0;
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extCount, nullptr);
-        std::vector<VkExtensionProperties> exts(extCount);
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extCount, exts.data());
-
-        VkPhysicalDeviceMemoryProperties memory;
-        vkGetPhysicalDeviceMemoryProperties(device, &memory);
-        VkDeviceSize localBytes = 0;
-        for (uint32_t i = 0; i < memory.memoryHeapCount; ++i) {
-            if (memory.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
-                localBytes += memory.memoryHeaps[i].size;
-            }
-        }
-
-        const QueueFamilies q = findQueueFamilies(device, m_surface);
-        DeviceCandidate c;
-        c.name = props.deviceName;
-        c.type = props.deviceType;
-        c.apiVersion = props.apiVersion;
-        c.hasGraphicsQueue = q.graphics != UINT32_MAX;
-        // Headless contexts do not present, so presentation support is not a requirement.
-        c.hasPresentQueue = !m_surface || q.present != UINT32_MAX;
-        c.hasSwapchainExtension = !m_surface ||
-            std::any_of(exts.begin(), exts.end(), [](const VkExtensionProperties& e) {
-                return std::strcmp(e.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0;
-            });
-        c.hasDescriptorIndexing = features12.descriptorIndexing && features12.runtimeDescriptorArray &&
-                                  features12.descriptorBindingPartiallyBound &&
-                                  features12.descriptorBindingSampledImageUpdateAfterBind &&
-                                  features12.shaderSampledImageArrayNonUniformIndexing;
-        c.hasDynamicRendering = features13.dynamicRendering == VK_TRUE;
-        c.hasSynchronization2 = features13.synchronization2 == VK_TRUE;
-        c.deviceLocalMemoryBytes = localBytes;
-
-        RAVEN_LOG_INFO("  GPU candidate: {} ({}, Vulkan {}, score {})", c.name, deviceTypeName(c.type),
-                       versionString(c.apiVersion), scoreDevice(c));
-        candidates.push_back(c);
-        families.push_back(q);
+        RAVEN_LOG_INFO("  GPU candidate: {} ({}, Vulkan {}, score {}{}{})", c.name, deviceTypeName(c.type),
+                       versionString(c.apiVersion), scoreDevice(candidate), missing.empty() ? "" : ", missing: ",
+                       missingText);
+        candidates.push_back(candidate);
+        caps.push_back(std::move(c));
     }
 
     const int best = pickBestDevice(candidates);
     if (best < 0) {
-        fail("No GPU supports Vulkan 1.3 with dynamic rendering, synchronization2, descriptor indexing"
-             " and presentation");
+        fail("No GPU meets the RAVEN baseline (Vulkan 1.3 with dynamic rendering, synchronization2, descriptor "
+             "indexing, timeline semaphores, buffer device address and indirect drawing); see the log for details");
     }
     m_physicalDevice = devices[static_cast<size_t>(best)];
-    m_graphicsFamily = families[static_cast<size_t>(best)].graphics;
-    m_presentFamily = families[static_cast<size_t>(best)].present;
+    m_caps = caps[static_cast<size_t>(best)];
+    m_features = resolveFeatures(m_caps);
+    m_graphicsFamily = m_caps.graphicsFamily;
+    m_presentFamily = m_surface ? m_caps.presentFamily : m_caps.graphicsFamily;
 
     VkPhysicalDeviceDriverProperties driver{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
     VkPhysicalDeviceProperties2 props2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
@@ -303,23 +272,27 @@ void VulkanContext::pickPhysicalDevice() {
     m_deviceInfo.driverInfo = driver.driverInfo;
     m_deviceInfo.isSoftwareRasterizer = m_deviceInfo.type == VK_PHYSICAL_DEVICE_TYPE_CPU;
 
-    VkPhysicalDeviceFeatures baseFeatures;
-    vkGetPhysicalDeviceFeatures(m_physicalDevice, &baseFeatures);
-    m_deviceInfo.samplerAnisotropy = baseFeatures.samplerAnisotropy == VK_TRUE;
-    m_deviceInfo.maxSamplerAnisotropy =
-        m_deviceInfo.samplerAnisotropy ? props2.properties.limits.maxSamplerAnisotropy : 1.0f;
+    m_deviceInfo.samplerAnisotropy = m_features.anisotropicFiltering;
+    m_deviceInfo.maxSamplerAnisotropy = m_caps.maxSamplerAnisotropy;
 
     RAVEN_LOG_INFO("Selected GPU: {} ({}), driver {} {}", m_deviceInfo.name, deviceTypeName(m_deviceInfo.type),
                    m_deviceInfo.driverName, m_deviceInfo.driverInfo);
     if (m_deviceInfo.isSoftwareRasterizer) {
         RAVEN_LOG_WARN("Rendering on a software rasterizer: output is valid, performance numbers are not");
     }
+    RAVEN_LOG_INFO("Optional features:");
+    for (const auto& entry : m_features.entries()) {
+        RAVEN_LOG_INFO("  {:<38} {}", entry.name, entry.enabled ? "yes" : fmt::format("no -> {}", entry.fallback));
+    }
 }
 
 void VulkanContext::createDevice() {
     const float priority = 1.0f;
+    std::set<uint32_t> families{m_graphicsFamily, m_presentFamily};
+    if (m_features.asyncCompute) families.insert(m_caps.asyncComputeFamily);
+    if (m_features.dedicatedTransfer) families.insert(m_caps.transferFamily);
     std::vector<VkDeviceQueueCreateInfo> queues;
-    for (uint32_t family : std::set<uint32_t>{m_graphicsFamily, m_presentFamily}) {
+    for (uint32_t family : families) {
         VkDeviceQueueCreateInfo q{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
         q.queueFamilyIndex = family;
         q.queueCount = 1;
@@ -327,10 +300,10 @@ void VulkanContext::createDevice() {
         queues.push_back(q);
     }
 
+    // Engine baseline (validated in pickPhysicalDevice) plus supported optional features.
     VkPhysicalDeviceVulkan13Features features13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     features13.dynamicRendering = VK_TRUE;
     features13.synchronization2 = VK_TRUE;
-    // Bindless resource tables (see BindlessRegistry).
     VkPhysicalDeviceVulkan12Features features12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
     features12.pNext = &features13;
     features12.descriptorIndexing = VK_TRUE;
@@ -338,13 +311,29 @@ void VulkanContext::createDevice() {
     features12.descriptorBindingPartiallyBound = VK_TRUE;
     features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
     features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+    features12.timelineSemaphore = VK_TRUE;
+    features12.bufferDeviceAddress = VK_TRUE;
+    features12.drawIndirectCount = VK_TRUE;
+    features12.hostQueryReset = m_caps.hostQueryReset ? VK_TRUE : VK_FALSE;
+    VkPhysicalDeviceVulkan11Features features11{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
+    features11.pNext = &features12;
+    features11.shaderDrawParameters = VK_TRUE;
     VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-    features.pNext = &features12;
-    features.features.samplerAnisotropy = m_deviceInfo.samplerAnisotropy ? VK_TRUE : VK_FALSE;
+    features.pNext = &features11;
+    features.features.multiDrawIndirect = VK_TRUE;
+    features.features.drawIndirectFirstInstance = VK_TRUE;
+    features.features.samplerAnisotropy = m_features.anisotropicFiltering ? VK_TRUE : VK_FALSE;
+    features.features.textureCompressionBC = m_features.bcTextureCompression ? VK_TRUE : VK_FALSE;
+    features.features.pipelineStatisticsQuery = m_features.pipelineStatistics ? VK_TRUE : VK_FALSE;
+    // Mesh shaders and ray tracing are detected only; they are enabled when their render
+    // paths exist (S9 / S11), so no unused feature affects driver behaviour today.
 
     std::vector<const char*> extensions;
     if (m_surface) {
         extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
+    if (m_features.memoryBudget) {
+        extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     }
 
     VkDeviceCreateInfo info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
@@ -359,8 +348,11 @@ void VulkanContext::createDevice() {
 
     vkGetDeviceQueue(m_device, m_graphicsFamily, 0, &m_graphicsQueue);
     vkGetDeviceQueue(m_device, m_presentFamily, 0, &m_presentQueue);
-    RAVEN_LOG_INFO("Logical device created (graphics family {}, present family {})", m_graphicsFamily,
-                   m_presentFamily);
+    if (m_features.asyncCompute) vkGetDeviceQueue(m_device, m_caps.asyncComputeFamily, 0, &m_computeQueue);
+    if (m_features.dedicatedTransfer) vkGetDeviceQueue(m_device, m_caps.transferFamily, 0, &m_transferQueue);
+    RAVEN_LOG_INFO("Logical device created (graphics family {}, present family {}, compute {}, transfer {})",
+                   m_graphicsFamily, m_presentFamily, m_computeQueue ? std::to_string(m_caps.asyncComputeFamily) : "-",
+                   m_transferQueue ? std::to_string(m_caps.transferFamily) : "-");
 }
 
 void VulkanContext::createAllocator() {
@@ -374,6 +366,10 @@ void VulkanContext::createAllocator() {
     info.device = m_device;
     info.instance = m_instance;
     info.pVulkanFunctions = &functions;
+    info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    if (m_features.memoryBudget) {
+        info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    }
     RAVEN_VK_CHECK(vmaCreateAllocator(&info, &m_allocator));
 }
 

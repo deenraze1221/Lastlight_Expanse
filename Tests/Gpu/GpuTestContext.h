@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 
 #include <memory>
+#include <string>
 
 namespace raven::test {
 
@@ -16,6 +17,10 @@ struct GpuTestEnvironment {
 };
 
 GpuTestEnvironment& gpu();
+
+// Compiled SPIR-V directory: $RAVEN_SHADER_DIR, else the build-time path if it exists,
+// else "shaders" next to the test executable (packaged builds).
+std::string shaderDir();
 
 // Fails the current test if validation reported errors since the guard was created.
 class ValidationGuard {

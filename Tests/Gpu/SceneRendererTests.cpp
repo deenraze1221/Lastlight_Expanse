@@ -2,6 +2,7 @@
 
 #include "Assets/Primitives.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/Resources/FrameAllocator.h"
 #include "Renderer/SceneRenderer.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -18,7 +19,8 @@ namespace {
 constexpr uint32_t kSize = 64;
 
 struct Fixture {
-    SceneRenderer scene{*gpu().context, *gpu().upload, {RAVEN_TEST_SHADER_DIR}};
+    SceneRenderer scene{*gpu().context, *gpu().upload, {raven::test::shaderDir()}};
+    FrameAllocator scratch{*gpu().context, 2};
     GpuMesh cube;
     GpuMesh sphere;
     GpuMesh plane;
@@ -42,8 +44,10 @@ struct Fixture {
 
     RenderStats render(const SceneView& view, VkExtent2D extent = {kSize, kSize}) {
         RenderStats stats;
+        // Each immediate() completes before returning, so slots can be recycled right away.
+        scratch.beginFrame(static_cast<uint32_t>(frame % 2));
         gpu().upload->immediate([&](VkCommandBuffer cmd) {
-            stats = scene.render({cmd, static_cast<uint32_t>(frame % 2), frame}, extent, view);
+            stats = scene.render({cmd, static_cast<uint32_t>(frame % 2), frame, &scratch, nullptr}, extent, view);
         });
         ++frame;
         return stats;
@@ -224,7 +228,7 @@ TEST_CASE("scene: target resize retires old targets safely and resolves to an ou
         transitionImage(cmd, output.handle(), output.fullRange(), VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-        f.scene.resolve({cmd, 0, f.frame}, output.view(), VK_FORMAT_R8G8B8A8_UNORM, {48, 48});
+        f.scene.resolve({cmd, 0, f.frame, &f.scratch, nullptr}, output.view(), VK_FORMAT_R8G8B8A8_UNORM, {48, 48});
         transitionImage(cmd, output.handle(), output.fullRange(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                         VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -232,7 +236,8 @@ TEST_CASE("scene: target resize retires old targets safely and resolves to an ou
     });
     const auto pixels = gpu().upload->readImage(output, VK_IMAGE_LAYOUT_GENERAL);
     const uint8_t* centre = &pixels[(24 * 48 + 24) * 4];
-    CHECK(std::abs(int(centre[0]) - 64) <= 1);  // 0.25
-    CHECK(std::abs(int(centre[1]) - 128) <= 1); // 0.5
+    // UNORM display output is sRGB-encoded by the resolve shader.
+    CHECK(std::abs(int(centre[0]) - 137) <= 1); // linear 0.25
+    CHECK(std::abs(int(centre[1]) - 188) <= 1); // linear 0.5
     CHECK(centre[2] == 255);                    // 2.0 clamped (no tone mapping yet)
 }

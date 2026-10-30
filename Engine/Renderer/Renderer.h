@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Renderer/FrameInfo.h"
 #include "Renderer/Vulkan/SwapchainSupport.h"
 
 #include <volk.h>
@@ -17,6 +18,8 @@ class Window;
 
 namespace raven::gfx {
 
+class FrameAllocator;
+class GpuProfiler;
 class VulkanContext;
 class VulkanSwapchain;
 
@@ -24,6 +27,8 @@ struct RendererDesc {
     std::string applicationName = "RAVEN Application";
     bool enableValidation = true;
     PresentMode presentMode = PresentMode::VSync;
+    std::filesystem::path pipelineCachePath; // Empty: no disk cache.
+    bool synchronizationValidation = false;  // Slower; for correctness runs.
 };
 
 // Everything needed to record one frame. The swapchain image is already in
@@ -37,6 +42,11 @@ struct FrameContext {
     uint32_t imageIndex = 0;
     uint32_t frameSlot = 0;   // Index of the frame-in-flight resources.
     uint64_t frameNumber = 0; // Monotonic count of rendered frames.
+    FrameAllocator* scratch = nullptr;
+    GpuProfiler* profiler = nullptr;
+    uint32_t frameScope = UINT32_MAX; // GPU scope covering the whole frame.
+
+    FrameInfo info() const { return {commandBuffer, frameSlot, frameNumber, scratch, profiler}; }
 };
 
 // Milestone 1 frame orchestration: frames in flight, acquire/submit/present,
@@ -67,6 +77,8 @@ public:
     VulkanContext& context() { return *m_context; }
     const VulkanContext& context() const { return *m_context; }
     const VulkanSwapchain& swapchain() const { return *m_swapchain; }
+    FrameAllocator& scratch() { return *m_scratch; }
+    GpuProfiler& profiler() { return *m_profiler; }
     uint64_t frameNumber() const { return m_frameNumber; }
 
 private:
@@ -74,7 +86,7 @@ private:
         VkCommandPool commandPool = VK_NULL_HANDLE;
         VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
         VkSemaphore imageAvailable = VK_NULL_HANDLE;
-        VkFence inFlight = VK_NULL_HANDLE;
+        uint64_t submittedValue = 0; // Timeline value of this slot's last submission.
     };
 
     struct PendingCapture;
@@ -83,11 +95,13 @@ private:
     void destroyFrameResources();
     void recreateSwapchain();
     void recordCapture(const FrameContext& frame);
-    void finishCapture(const FrameContext& frame);
+    void finishCapture(const FrameContext& frame, uint64_t submittedValue);
 
     Window& m_window;
     std::unique_ptr<VulkanContext> m_context;
     std::unique_ptr<VulkanSwapchain> m_swapchain;
+    std::unique_ptr<FrameAllocator> m_scratch;
+    std::unique_ptr<GpuProfiler> m_profiler;
     std::array<FrameResources, kFramesInFlight> m_frames{};
     uint32_t m_frameSlot = 0;
     uint64_t m_frameNumber = 0;

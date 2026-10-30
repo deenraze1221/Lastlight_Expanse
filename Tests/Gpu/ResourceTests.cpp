@@ -5,6 +5,7 @@
 #include "Renderer/Resources/UploadContext.h"
 
 #include <cstring>
+#include <memory>
 #include <numeric>
 #include <vector>
 
@@ -108,4 +109,99 @@ TEST_CASE("gpu resources: depth image aspect") {
     CHECK(depth.aspect() == VK_IMAGE_ASPECT_DEPTH_BIT);
     CHECK(isDepthFormat(VK_FORMAT_D32_SFLOAT));
     CHECK_FALSE(isDepthFormat(VK_FORMAT_R8G8B8A8_UNORM));
+}
+
+#include "Renderer/Resources/FrameAllocator.h"
+
+TEST_CASE("frame allocator: alignment, growth, addresses and slot recycling") {
+    raven::test::ValidationGuard guard;
+    FrameAllocator scratch(*gpu().context, 2, 1024);
+    scratch.beginFrame(0);
+    const auto a = scratch.allocate(100);
+    const auto b = scratch.allocate(100, 64);
+    CHECK(a.offset % 256 == 0);
+    CHECK(b.offset % 64 == 0);
+    CHECK(b.offset >= a.offset + 100);
+    CHECK(a.address != 0);
+    CHECK(b.address == a.address + (b.offset - a.offset)); // Same block, consistent addressing.
+    const auto big = scratch.allocate(5000);                // Larger than a block: new block.
+    CHECK(big.buffer != a.buffer);
+    const uint32_t values[3] = {1, 2, 3};
+    scratch.write(big, values, sizeof(values));
+    CHECK(static_cast<const uint32_t*>(big.data)[2] == 3);
+    const VkDeviceSize reserved = scratch.bytesReserved();
+
+    scratch.beginFrame(1);
+    CHECK(scratch.bytesUsed() == 0);
+    scratch.beginFrame(0); // Recycled: same memory, no new blocks.
+    const auto again = scratch.allocate(100);
+    CHECK(again.buffer == a.buffer);
+    CHECK(again.offset == 0);
+    CHECK(scratch.bytesReserved() == reserved);
+    CHECK_THROWS(scratch.allocate(0));
+}
+
+TEST_CASE("deletion queue: retired GPU objects are destroyed after their submission completes") {
+    raven::test::ValidationGuard guard;
+    auto buffer = std::make_shared<GpuBuffer>(*gpu().context,
+                                              BufferDesc{256, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, MemoryUsage::Upload, "Retired"});
+    bool destroyed = false;
+    gpu().context->deletionQueue().retire([buffer, &destroyed]() mutable {
+        buffer.reset();
+        destroyed = true;
+    });
+    buffer.reset(); // Only the queue holds it now.
+    CHECK_FALSE(destroyed);
+    gpu().upload->immediate([](VkCommandBuffer) {}); // Submits, waits and collects.
+    CHECK(destroyed);
+    CHECK(gpu().context->timeline().completedValue() == gpu().context->timeline().lastSubmitted());
+}
+
+#include "Renderer/SceneRenderer.h"
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+
+TEST_CASE("pipeline cache: persisted to disk, reloaded, corrupted files ignored") {
+    const auto path = std::filesystem::temp_directory_path() / "raven_test_pipeline_cache.bin";
+    std::filesystem::remove(path);
+    const auto buildPipelines = [&](size_t* loaded) {
+        VulkanContext context({"PipelineCacheTest", true, false, path}, nullptr);
+        *loaded = context.pipelineCacheObject()->loadedBytes();
+        UploadContext upload(context);
+        SceneRenderer scene(context, upload, {raven::test::shaderDir()});
+        const auto start = std::chrono::steady_clock::now();
+        for (AlphaMode mode : {AlphaMode::Opaque, AlphaMode::Blend}) {
+            for (bool twoSided : {false, true}) {
+                for (ShaderHandle shader : {scene.materials().pbrShader(), scene.materials().unlitShader()}) {
+                    MaterialDesc d;
+                    d.shader = shader;
+                    d.alphaMode = mode;
+                    d.doubleSided = twoSided;
+                    scene.materials().pipeline(scene.materials().createMaterial(d));
+                }
+            }
+        }
+        CHECK(context.validationErrorCount() == 0);
+        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    };
+
+    size_t loaded = 0;
+    const double cold = buildPipelines(&loaded);
+    CHECK(loaded == 0);
+    REQUIRE(std::filesystem::exists(path));
+    const auto fileSize = std::filesystem::file_size(path);
+    // Drivers may store only the header (lavapipe does not cache pipelines); real GPU
+    // drivers store compiled pipelines after it.
+    CHECK(fileSize >= sizeof(VkPipelineCacheHeaderVersionOne));
+    const double warm = buildPipelines(&loaded);
+    CHECK(loaded == fileSize); // Validated and handed to the driver.
+    MESSAGE("8 pipelines: cold " << cold << " ms, warm " << warm << " ms, cache " << fileSize
+                                 << " bytes (driver-dependent; informational)");
+
+    { std::ofstream(path, std::ios::binary) << "definitely not a pipeline cache"; }
+    buildPipelines(&loaded);
+    CHECK(loaded == 0); // Rejected before reaching the driver, rebuilt and saved again.
+    std::filesystem::remove(path);
 }

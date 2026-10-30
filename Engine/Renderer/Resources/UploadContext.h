@@ -30,7 +30,7 @@ uint32_t formatBytesPerPixel(VkFormat format);
 // thread. Asynchronous streaming (dedicated transfer queue) is a later milestone.
 class UploadContext {
 public:
-    explicit UploadContext(const VulkanContext& context);
+    explicit UploadContext(VulkanContext& context);
     ~UploadContext();
 
     UploadContext(const UploadContext&) = delete;
@@ -49,7 +49,7 @@ public:
 private:
     friend class UploadBatch;
 
-    const VulkanContext& m_context;
+    VulkanContext& m_context;
     VkCommandPool m_pool = VK_NULL_HANDLE;
     VkCommandBuffer m_cmd = VK_NULL_HANDLE;
     VkFence m_fence = VK_NULL_HANDLE;

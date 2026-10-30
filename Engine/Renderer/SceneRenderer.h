@@ -2,6 +2,7 @@
 
 #include "Renderer/BindlessRegistry.h"
 #include "Renderer/Camera.h"
+#include "Renderer/FrameInfo.h"
 #include "Renderer/Material.h"
 #include "Renderer/Resources/GpuBuffer.h"
 #include "Renderer/Resources/GpuImage.h"
@@ -21,7 +22,10 @@
 namespace raven::gfx {
 
 class GpuMesh;
+class GraphicsPipeline;
+class RenderGraph;
 class UploadContext;
+struct RGImage;
 class VulkanContext;
 
 struct DirectionalLight {
@@ -66,6 +70,7 @@ struct RenderStats {
     uint32_t culled = 0;
     uint32_t drawCalls = 0;
     uint32_t instances = 0;
+    uint64_t triangles = 0;
 };
 
 struct SceneRendererDesc {
@@ -82,13 +87,9 @@ class SceneRenderer {
 public:
     static constexpr uint32_t kMaxPointLights = 64;
 
-    struct FrameInfo {
-        VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-        uint32_t slot = 0;        // Frame-in-flight index whose previous use has completed.
-        uint64_t frameNumber = 0; // Monotonic; frames <= frameNumber - framesInFlight are complete.
-    };
+    using FrameInfo = gfx::FrameInfo;
 
-    SceneRenderer(const VulkanContext& context, UploadContext& upload, const SceneRendererDesc& desc);
+    SceneRenderer(VulkanContext& context, UploadContext& upload, const SceneRendererDesc& desc);
     ~SceneRenderer();
 
     SceneRenderer(const SceneRenderer&) = delete;
@@ -102,32 +103,49 @@ public:
     RenderStats render(const FrameInfo& frame, VkExtent2D extent, const SceneView& view);
 
     // Draws the scene colour into `target` (in COLOR_ATTACHMENT_OPTIMAL) with a fullscreen pass.
+    // The output is display-referred: sRGB-encoded (by hardware for _SRGB formats, in the
+    // shader for UNORM formats).
     void resolve(const FrameInfo& frame, VkImageView target, VkFormat targetFormat, VkExtent2D extent);
+
+    // Render-graph path: adds "Scene" (HDR colour + depth, transient) and "Resolve" (into
+    // `output`) passes. Returns the scene colour so later passes can read it. The CPU
+    // work (culling, sorting, uploads) happens here; GPU commands are recorded at execution.
+    struct GraphOutputs {
+        uint32_t color = UINT32_MAX; // RGImage indices.
+        uint32_t depth = UINT32_MAX;
+    };
+    GraphOutputs addToGraph(RenderGraph& graph, const FrameInfo& frame, VkExtent2D extent, const SceneView& view,
+                            const RGImage& output, VkFormat outputFormat, RenderStats* stats = nullptr);
 
     const GpuImage& colorTarget() const { return m_color; }
     const GpuImage& depthTarget() const { return m_depth; }
     uint32_t colorTargetBindlessIndex() const { return m_colorSlot; }
 
 private:
-    struct FrameResources {
-        GpuBuffer frameData;
-        GpuBuffer instances;
-        uint32_t instanceCapacity = 0;
-        VkDescriptorSet set = VK_NULL_HANDLE;
+
+    struct DrawBatch {
+        const GraphicsPipeline* pipeline;
+        const GpuMesh* mesh;
+        uint32_t submesh;
+        MaterialHandle material;
+        uint32_t firstInstance;
+        uint32_t instanceCount;
     };
-    struct Retired {
-        uint64_t frameNumber;
-        std::function<void()> destroy;
+    struct PreparedScene {
+        VkDeviceAddress frameAddress = 0;
+        VkDeviceAddress instanceAddress = 0;
+        std::vector<DrawBatch> batches;
     };
 
+    // Shared by both paths: culling, sorting, instancing and uploads (CPU only).
+    PreparedScene prepare(const FrameInfo& frame, VkExtent2D extent, const SceneView& view, RenderStats& stats);
+    void recordDraws(VkCommandBuffer cmd, const PreparedScene& scene) const;
+    void recordResolve(VkCommandBuffer cmd, uint32_t sourceIndex, VkFormat targetFormat);
     void createLayouts();
-    void ensureTargets(VkExtent2D extent, uint64_t frameNumber);
-    void ensureInstanceCapacity(FrameResources& frame, uint32_t count);
-    void writeFrameSet(FrameResources& frame);
-    void collectRetired(uint64_t frameNumber);
+    void ensureTargets(VkExtent2D extent);
     const GraphicsPipeline& resolvePipeline(VkFormat format);
 
-    const VulkanContext& m_context;
+    VulkanContext& m_context;
     UploadContext& m_upload;
     SceneRendererDesc m_desc;
 
@@ -136,10 +154,7 @@ private:
     Texture m_flatNormal;
     std::unique_ptr<MaterialSystem> m_materials;
 
-    VkDescriptorSetLayout m_frameLayout = VK_NULL_HANDLE;
-    VkDescriptorPool m_framePool = VK_NULL_HANDLE;
     VkPipelineLayout m_sceneLayout = VK_NULL_HANDLE;
-    std::vector<FrameResources> m_frames;
 
     GpuImage m_color;
     GpuImage m_depth;
@@ -149,8 +164,6 @@ private:
     std::unique_ptr<ShaderModule> m_resolveVs;
     std::unique_ptr<ShaderModule> m_resolveFs;
     std::unordered_map<VkFormat, std::unique_ptr<GraphicsPipeline>> m_resolvePipelines;
-
-    std::vector<Retired> m_retired;
 };
 
 } // namespace raven::gfx

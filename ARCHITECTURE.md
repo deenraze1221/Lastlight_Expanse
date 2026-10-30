@@ -20,8 +20,10 @@
 ## Module graph
 
 ```
-                 Games/<Game>      Samples/*      Tests
-                       \              |            /
+            Games/<Game>   Samples/*   Tools/RavenBench   Tests
+                       \          |           /             /
+                        +------ Debug (ImGui) ------+-------+
+                                     |
                         +-------- Renderer -------+
                                 /          \
                          Platform          Assets   (CPU data + importers, no GPU)
@@ -42,6 +44,12 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | Platform | `Platform`, `Window` | SDL3 lifetime, window + event pump, Vulkan WSI glue (loader, instance extensions, surface) |
 | Renderer | `Renderer` | Frames in flight, acquire/submit/present, swapchain rebuild, screenshot readback |
 | Assets | `MeshData`, `ImageData`, `ModelData`, `Primitives`, `GltfLoader` | Engine vertex (64 B), mesh/tangent/normal generation, RGBA8 images with colour-space-correct mips, glTF 2.0 import (cgltf, stb_image) |
+| Renderer/RenderGraph | `GraphPlanner`, `RenderGraph`, `RenderGraphResources` | Pure culling + barrier planning (unit tested); execution with dynamic rendering, debug labels, per-pass GPU timestamps; pooled transient images |
+| Renderer | `GpuProfiler`, `FrameInfo` | Timestamp scopes per frame slot, VMA memory budget stats; per-frame recording context |
+| Renderer/Resources | `DeletionQueue`, `FrameAllocator` | Timeline-based deferred destruction; per-frame linear scratch memory with device addresses |
+| Renderer/Vulkan | `DeviceCapabilities`, `GpuTimeline`, `PipelineCache` | Capability table + feature resolution with fallbacks; graphics timeline semaphore; validated on-disk pipeline cache |
+| Core | `Profiler` | CPU scope timers, frame-time history with percentiles |
+| Debug | `DebugOverlay` | ImGui profiler overlay (F1), headless capable, drawn as a render-graph pass |
 | Renderer | `SceneRenderer` | Forward renderer: HDR colour + reverse-Z depth targets, frame/instance buffers, culling, sorting, instancing, sun + point lights, resolve |
 | | `MaterialSystem` | Named shaders, 128 B GPU material table, pipeline cache (shader × alpha mode × sidedness) |
 | | `BindlessRegistry` | Global set 0: 4096 textures, 64 samplers, material table |
@@ -66,7 +74,11 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | sRGB swapchain (`B8G8R8A8_SRGB` preferred) | Shaders write linear colour. Scenes will render to an HDR target and resolve into this through the post-process stack. |
 | **Reverse-Z** depth (D32, clear 0, GREATER_OR_EQUAL), infinite far plane by default | Best depth precision for large scenes. |
 | **Bindless** textures/samplers (descriptor indexing) + material SSBO | Any shader indexes any texture; materials are table entries, not descriptor sets. Samplers are independent of textures. |
-| Shared scene pipeline layout: set 0 bindless, set 1 frame + instances, push = material index | One layout for every material shader, engine or game. |
+| Shared scene pipeline layout: set 0 bindless; push constants = frame-data address, instance-data address, material index | One layout for every material shader. Per-frame data lives in `FrameAllocator` scratch memory read through buffer device addresses (no per-frame descriptor sets). |
+| **Render graph** (S1) | Passes declare usage; the planner derives culling, layouts and sync2 barriers. v1 executes in declaration order on one queue, without memory aliasing. The pre-graph path is kept (`SceneRenderer::render/resolve`, `--reference-path`) and must produce byte-identical output (GPU test). |
+| **Timeline semaphore** for all graphics submissions (`VulkanContext::submitGraphics`) | One ordering source for frames, uploads and deferred deletion. Blocking upload waits additionally use a fence because the 1.3.275 synchronization-validation layer does not model `vkWaitSemaphores` host waits. |
+| **Capability baseline**: Vulkan 1.3 + dynamic rendering, sync2, descriptor indexing, timeline semaphores, buffer device address, indirect count/multi-draw/first-instance, shader draw parameters | Every current NVIDIA/AMD/Intel desktop driver, RADV (Steam Deck) and lavapipe. Optional features (mesh shaders, ray tracing, async compute, BC, timestamps, memory budget, anisotropy) resolve to an explicit fallback; mesh shaders/RT are detected but not enabled until their paths exist. |
+| Display output encoding | The resolve writes sRGB-encoded values: hardware does it for `_SRGB` swapchains; the shader does it for UNORM-only surfaces. |
 | Forward shading into an RGBA16F target | Simple, MSAA-friendly, enough for M2 light counts; resolve/post stack on top. |
 | Deferred destruction by frame number | Render targets and bindless slots are released only after frames that used them completed. |
 | Validation on by default, errors counted | `HelloTriangle` exits with code 2 if any validation error occurred; the GPU test relies on it. |
@@ -117,7 +129,7 @@ public engine capabilities.
 ## Shader interface
 
 Engine shader library in `Shaders/Include/raven/` (included as `#include "raven/x.glsl"`):
-`bindless.glsl`, `scene.glsl` (material/frame/instance layout), `vertex.glsl` (standard
+`bindless.glsl`, `scene.glsl` (material table + buffer-reference frame/instance data), `vertex.glsl` (standard
 inputs + `ravenTransformVertex()`), `surface.glsl` (base colour, alpha mask, normal mapping),
 `lighting.glsl` (GGX PBR), `fullscreen.glsl`. A material shader is any vertex/fragment pair
 registered with `MaterialSystem::registerShader`; games implement their own looks this way.
@@ -136,7 +148,9 @@ registered with `MaterialSystem::registerShader`; games implement their own look
 
 - Materials are immutable after creation; textures must outlive materials referencing them.
 - `BindlessRegistry::releaseTexture` assumes the GPU no longer uses the slot (callers defer).
-- Uploads are synchronous on the graphics queue (no streaming/transfer queue yet).
+- Uploads are synchronous on the graphics queue (transfer queue + streaming: S3).
+- Render graph v1: no transient aliasing, no reordering, single queue (async compute: S9).
+- Dear ImGui's Vulkan backend uploads its font texture with its own queue submit + wait.
 - A pipeline is created for a fixed swapchain format; if a recreated swapchain changes format,
   pipelines must be rebuilt (not handled yet; formats do not change in practice).
 - Swapchain recreation uses `vkDeviceWaitIdle`; `VK_EXT_swapchain_maintenance1` present fences

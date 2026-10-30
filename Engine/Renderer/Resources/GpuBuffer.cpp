@@ -35,6 +35,11 @@ GpuBuffer::GpuBuffer(const VulkanContext& context, const BufferDesc& desc)
     VmaAllocationInfo allocInfo{};
     RAVEN_VK_CHECK(vmaCreateBuffer(m_allocator, &info, &alloc, &m_buffer, &m_allocation, &allocInfo));
     m_mapped = allocInfo.pMappedData;
+    if (desc.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) {
+        VkBufferDeviceAddressInfo addressInfo{VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO};
+        addressInfo.buffer = m_buffer;
+        m_address = vkGetBufferDeviceAddress(context.device(), &addressInfo);
+    }
     context.setDebugName(m_buffer, VK_OBJECT_TYPE_BUFFER, desc.debugName);
     if (desc.debugName) {
         vmaSetAllocationName(m_allocator, m_allocation, desc.debugName);
@@ -50,7 +55,8 @@ GpuBuffer::GpuBuffer(GpuBuffer&& other) noexcept
       m_buffer(std::exchange(other.m_buffer, VK_NULL_HANDLE)),
       m_allocation(std::exchange(other.m_allocation, VK_NULL_HANDLE)),
       m_size(std::exchange(other.m_size, 0)),
-      m_mapped(std::exchange(other.m_mapped, nullptr)) {}
+      m_mapped(std::exchange(other.m_mapped, nullptr)),
+      m_address(std::exchange(other.m_address, 0)) {}
 
 GpuBuffer& GpuBuffer::operator=(GpuBuffer&& other) noexcept {
     if (this != &other) {
@@ -60,6 +66,7 @@ GpuBuffer& GpuBuffer::operator=(GpuBuffer&& other) noexcept {
         m_allocation = std::exchange(other.m_allocation, VK_NULL_HANDLE);
         m_size = std::exchange(other.m_size, 0);
         m_mapped = std::exchange(other.m_mapped, nullptr);
+        m_address = std::exchange(other.m_address, 0);
     }
     return *this;
 }
@@ -72,6 +79,7 @@ void GpuBuffer::reset() {
     m_allocation = VK_NULL_HANDLE;
     m_size = 0;
     m_mapped = nullptr;
+    m_address = 0;
 }
 
 void GpuBuffer::write(const void* data, VkDeviceSize size, VkDeviceSize offset) {

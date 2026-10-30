@@ -42,6 +42,8 @@ public:
     VkDeviceSize size() const { return m_size; }
     // Non-null for Upload and Readback buffers.
     void* mapped() const { return m_mapped; }
+    // GPU address (buffers created with VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT), else 0.
+    VkDeviceAddress deviceAddress() const { return m_address; }
 
     // Copies into a mapped buffer and flushes non-coherent memory.
     void write(const void* data, VkDeviceSize size, VkDeviceSize offset = 0);
@@ -58,6 +60,7 @@ private:
     VmaAllocation m_allocation = VK_NULL_HANDLE;
     VkDeviceSize m_size = 0;
     void* m_mapped = nullptr;
+    VkDeviceAddress m_address = 0;
 };
 
 } // namespace raven::gfx

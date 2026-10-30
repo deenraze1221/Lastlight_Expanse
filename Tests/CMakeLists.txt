@@ -4,10 +4,14 @@ add_executable(RavenTests
     Assets/ImageDataTests.cpp
     Assets/MeshDataTests.cpp
     Core/LogTests.cpp
+    Core/ProfilerTests.cpp
     Core/ErrorTests.cpp
     Core/ImageIOTests.cpp
     Renderer/CameraTests.cpp
+    Renderer/DeletionQueueTests.cpp
     Renderer/FrustumTests.cpp
+    Renderer/GraphPlannerTests.cpp
+    Renderer/PipelineCacheTests.cpp
     Renderer/DeviceSelectionTests.cpp
     Renderer/SwapchainSupportTests.cpp
     Renderer/VulkanCheckTests.cpp)
@@ -25,8 +29,10 @@ if(RAVEN_GPU_TESTS)
         Gpu/main.cpp
         Gpu/ResourceTests.cpp
         Gpu/TextureTests.cpp
-        Gpu/SceneRendererTests.cpp)
-    target_link_libraries(RavenGpuTests PRIVATE Raven::Renderer doctest::doctest)
+        Gpu/SceneRendererTests.cpp
+        Gpu/RenderGraphTests.cpp
+        Gpu/DebugOverlayTests.cpp)
+    target_link_libraries(RavenGpuTests PRIVATE Raven::Renderer Raven::Debug doctest::doctest)
     raven_set_warnings(RavenGpuTests)
     target_compile_definitions(RavenGpuTests PRIVATE RAVEN_TEST_SHADER_DIR="${RAVEN_OUTPUT_DIR}/shaders")
     raven_compile_shaders(RavenGpuTests SOURCES
@@ -41,4 +47,8 @@ if(RAVEN_GPU_TESTS)
     add_test(NAME gpu.model_viewer_demo
         COMMAND ModelViewer --frames 30 --width 640 --height 360 --screenshot ${CMAKE_BINARY_DIR}/model_viewer_demo.ppm)
     set_tests_properties(gpu.model_viewer_demo PROPERTIES TIMEOUT 300)
+    add_test(NAME gpu.ravenbench_smoke
+        COMMAND RavenBench --objects 256 --lights 8 --width 640 --height 360 --warmup 5 --frames 20
+                --output ${CMAKE_BINARY_DIR}/ravenbench_smoke.json)
+    set_tests_properties(gpu.ravenbench_smoke PROPERTIES TIMEOUT 300)
 endif()

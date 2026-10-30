@@ -26,3 +26,17 @@ const char* Platform::videoDriver() const {
 }
 
 } // namespace raven
+
+namespace raven {
+
+std::filesystem::path Platform::userDataPath(const std::string& organization, const std::string& application) {
+    char* path = SDL_GetPrefPath(organization.c_str(), application.c_str());
+    if (!path) {
+        return std::filesystem::temp_directory_path() / application;
+    }
+    std::filesystem::path result(path);
+    SDL_free(path);
+    return result;
+}
+
+} // namespace raven

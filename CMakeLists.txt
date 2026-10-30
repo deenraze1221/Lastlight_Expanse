@@ -20,6 +20,7 @@ endif()
 
 option(RAVEN_BUILD_SAMPLES "Build engine samples" ON)
 option(RAVEN_BUILD_TESTS "Build unit tests" ON)
+option(RAVEN_BUILD_TOOLS "Build engine tools (RavenBench)" ON)
 option(RAVEN_GPU_TESTS "Register tests that need a Vulkan device and a video driver" OFF)
 option(RAVEN_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in engine code" OFF)
 
@@ -40,6 +41,10 @@ add_subdirectory(Engine)
 
 if(RAVEN_BUILD_SAMPLES)
     add_subdirectory(Samples)
+endif()
+
+if(RAVEN_BUILD_TOOLS)
+    add_subdirectory(Tools)
 endif()
 
 if(RAVEN_BUILD_TESTS)

@@ -23,8 +23,8 @@ struct Push {
 // Renders a fullscreen triangle that samples one bindless texture into a small RGBA8 target.
 std::vector<uint8_t> renderSample(BindlessRegistry& registry, uint32_t size, const Push& push) {
     const auto& ctx = *gpu().context;
-    ShaderModule vs(ctx.device(), loadSpirv(RAVEN_TEST_SHADER_DIR "/test_sample.vert.spv"));
-    ShaderModule fs(ctx.device(), loadSpirv(RAVEN_TEST_SHADER_DIR "/test_sample.frag.spv"));
+    ShaderModule vs(ctx.device(), loadSpirv(raven::test::shaderDir() + "/test_sample.vert.spv"));
+    ShaderModule fs(ctx.device(), loadSpirv(raven::test::shaderDir() + "/test_sample.frag.spv"));
     GraphicsPipelineDesc desc;
     desc.vertexShader = vs.handle();
     desc.fragmentShader = fs.handle();

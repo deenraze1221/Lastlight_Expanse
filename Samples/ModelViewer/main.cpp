@@ -1,25 +1,30 @@
 // Milestone 2 sample: glTF viewer / material demo on the RAVEN scene renderer.
 //
-//   ModelViewer [model.gltf|.glb] [--frames N] [--screenshot out.ppm] [--no-validation]
+//   ModelViewer [model.gltf|.glb] [--frames N] [--screenshot out.ppm] [--no-validation] [--sync-validation]
 //               [--width W] [--height H] [--yaw DEG] [--pitch DEG] [--zoom F] [--spin DEG_PER_S]
-//               [--nearest]
+//               [--nearest] [--reference-path] [--no-overlay]
 //
 // Without a model path a built-in demo scene of procedural meshes is shown.
-// Controls: left mouse drag orbits, mouse wheel zooms, Esc quits.
+// Controls: left mouse drag orbits, mouse wheel zooms, F1 toggles the profiler, Esc quits.
 // Exit codes: 0 ok, 1 fatal error, 2 validation errors, 3 screenshot failed.
 
 #include "Assets/ModelData.h"
 #include "Assets/Primitives.h"
 #include "Core/Error.h"
 #include "Core/Log.h"
+#include "Core/Profiler.h"
+#include "Debug/DebugOverlay.h"
 #include "Platform/Platform.h"
 #include "Platform/Window.h"
+#include "Renderer/GpuProfiler.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Model.h"
+#include "Renderer/RenderGraph/RenderGraph.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/Resources/UploadContext.h"
 #include "Renderer/SceneRenderer.h"
 #include "Renderer/Vulkan/VulkanContext.h"
+#include "Renderer/Vulkan/VulkanSwapchain.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -53,6 +58,9 @@ struct Options {
     float zoom = 1.0f;
     float spin = 0.0f;
     bool nearest = false;
+    bool referencePath = false; // Pre-render-graph path, kept for comparison.
+    bool overlay = true;
+    bool syncValidation = false;
 };
 
 Options parseOptions(int argc, char** argv) {
@@ -66,6 +74,7 @@ Options parseOptions(int argc, char** argv) {
         if (arg == "--frames") o.maxFrames = std::stoull(next());
         else if (arg == "--screenshot") o.screenshot = next();
         else if (arg == "--no-validation") o.validation = false;
+        else if (arg == "--sync-validation") o.syncValidation = true;
         else if (arg == "--width") o.width = static_cast<uint32_t>(std::stoul(next()));
         else if (arg == "--height") o.height = static_cast<uint32_t>(std::stoul(next()));
         else if (arg == "--yaw") o.yaw = std::stof(next());
@@ -73,6 +82,8 @@ Options parseOptions(int argc, char** argv) {
         else if (arg == "--zoom") o.zoom = std::stof(next());
         else if (arg == "--spin") o.spin = std::stof(next());
         else if (arg == "--nearest") o.nearest = true;
+        else if (arg == "--reference-path") o.referencePath = true;
+        else if (arg == "--no-overlay") o.overlay = false;
         else if (!arg.starts_with("--") && !o.model) o.model = std::string(arg);
         else fail("Unknown argument '" + std::string(arg) + "'");
     }
@@ -129,13 +140,23 @@ struct DemoScene {
 int run(const Options& options) {
     Platform platform;
     Window window({"RAVEN Engine - Model Viewer", options.width, options.height, true});
-    Renderer renderer(window, {"ModelViewer", options.validation, PresentMode::VSync});
+    Renderer renderer(window, {"ModelViewer", options.validation, PresentMode::VSync,
+                               Platform::userDataPath("RAVEN", "ModelViewer") / "pipeline_cache.bin", options.syncValidation});
     UploadContext upload(renderer.context());
 
     const char* base = SDL_GetBasePath();
     SceneRenderer scene(renderer.context(), upload,
                         {std::filesystem::path(base ? base : "") / "shaders", VK_FORMAT_R16G16B16A16_SFLOAT,
                          VK_FORMAT_D32_SFLOAT, Renderer::kFramesInFlight});
+
+    RenderGraphResources graphResources(renderer.context(), scene.bindless());
+    debug::DebugOverlay overlay(renderer.context(), &window, renderer.swapchain().format(),
+                                renderer.swapchain().imageCount());
+    overlay.visible = options.overlay;
+    CpuProfiler cpuProfiler;
+    History cpuFrameMs;
+    History gpuFrameMs;
+    RAVEN_LOG_INFO("Render path: {}", options.referencePath ? "reference (hand-written barriers)" : "render graph");
 
     std::unique_ptr<Model> model;
     std::unique_ptr<DemoScene> demo;
@@ -189,7 +210,10 @@ int run(const Options& options) {
     RenderStats lastStats;
 
     while (!window.shouldClose()) {
+        cpuProfiler.beginFrame();
+        const uint32_t eventsScope = cpuProfiler.begin("Events");
         window.pollEvents([&](const SDL_Event& e) {
+            if (overlay.processEvent(e)) return;
             if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) window.requestClose();
             if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT) dragging = true;
             if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_LEFT) dragging = false;
@@ -199,6 +223,7 @@ int run(const Options& options) {
             }
             if (e.type == SDL_EVENT_MOUSE_WHEEL) distance *= e.wheel.y > 0 ? 0.9f : 1.1f;
         });
+        cpuProfiler.end(eventsScope);
 
         const auto now = Clock::now();
         const float dt = std::chrono::duration<float>(now - last).count();
@@ -215,15 +240,59 @@ int run(const Options& options) {
         if (lastFrame && options.screenshot) {
             renderer.requestScreenshot(*options.screenshot);
         }
+        const uint32_t acquireScope = cpuProfiler.begin("Wait + acquire");
         auto frame = renderer.beginFrame();
+        cpuProfiler.end(acquireScope);
         if (!frame) {
+            cpuProfiler.endFrame();
             SDL_Delay(5);
             continue;
         }
-        const SceneRenderer::FrameInfo info{frame->commandBuffer, frame->frameSlot, frame->frameNumber};
-        lastStats = scene.render(info, frame->extent, view);
-        scene.resolve(info, frame->imageView, frame->format, frame->extent);
+        const FrameInfo info = frame->info();
+        if (options.referencePath) {
+            lastStats = scene.render(info, frame->extent, view);
+            scene.resolve(info, frame->imageView, frame->format, frame->extent);
+        } else {
+            const uint32_t buildScope = cpuProfiler.begin("Build graph + prepare");
+            RenderGraph graph(graphResources);
+            // The frame loop hands over the swapchain image as a colour attachment and
+            // transitions it for presentation afterwards.
+            RGImportedImage swapchainImage;
+            swapchainImage.image = frame->image;
+            swapchainImage.view = frame->imageView;
+            swapchainImage.format = frame->format;
+            swapchainImage.extent = frame->extent;
+            swapchainImage.initial = usageState(ResourceUsage::ColorAttachment);
+            swapchainImage.final = usageState(ResourceUsage::ColorAttachment);
+            const RGImage output = graph.importImage("Swapchain", swapchainImage);
+            scene.addToGraph(graph, info, frame->extent, view, output, frame->format, &lastStats);
+
+            overlay.newFrame(frame->extent, dt);
+            debug::ProfilerSnapshot snapshot;
+            snapshot.cpu = &cpuProfiler;
+            snapshot.gpu = &renderer.profiler();
+            snapshot.cpuFrameMs = &cpuFrameMs;
+            snapshot.gpuFrameMs = &gpuFrameMs;
+            snapshot.render = lastStats;
+            snapshot.memory = queryMemoryStats(renderer.context());
+            snapshot.resolution = frame->extent;
+            snapshot.frameNumber = frame->frameNumber;
+            overlay.drawProfiler(snapshot);
+            overlay.addToGraph(graph, output);
+            cpuProfiler.end(buildScope);
+
+            const uint32_t recordScope = cpuProfiler.begin("Record");
+            graph.execute(info);
+            cpuProfiler.end(recordScope);
+        }
+        const uint32_t submitScope = cpuProfiler.begin("Submit + present");
         renderer.endFrame(*frame);
+        cpuProfiler.end(submitScope);
+        cpuProfiler.endFrame();
+        cpuFrameMs.push(static_cast<float>(cpuProfiler.lastFrameMs()));
+        if (renderer.profiler().enabled()) {
+            gpuFrameMs.push(static_cast<float>(renderer.profiler().lastFrameMs()));
+        }
 
         ++statsFrames;
         const double elapsed = std::chrono::duration<double>(now - statsStart).count();

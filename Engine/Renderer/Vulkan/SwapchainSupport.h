@@ -21,4 +21,7 @@ uint32_t chooseImageCount(const VkSurfaceCapabilitiesKHR& capabilities);
 
 const char* toString(PresentMode mode);
 
+// True for 8-bit formats whose hardware conversion applies the sRGB transfer function.
+bool isSrgbFormat(VkFormat format);
+
 } // namespace raven::gfx

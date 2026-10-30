@@ -25,10 +25,11 @@ No Vulkan SDK library is linked; the loader is resolved at runtime.
 | GLM | 1.0.1 | 0af55ccecd98 |
 | stb (stb_image; stb_image_write in tests) | — | 003501f6d7a8 |
 | cgltf | v1.15 | bbeb5b0b070d |
+| Dear ImGui (+ SDL3 / Vulkan backends) | v1.92.4 | 9a5d5c45f54b |
 | doctest (tests only) | v2.4.12 | 1da23a3e8119 |
 
 Headers are 1.4.304 because volk's tags follow header versions; the engine requests and
-requires **API 1.3** plus descriptor indexing. Later milestones add Dear ImGui, Jolt, miniaudio and ufbx.
+requires **API 1.3** plus the baseline in ARCHITECTURE.md (descriptor indexing, timeline semaphores, buffer device address, indirect count). Later stages add meshoptimizer, KTX2 support, FSR, Jolt, miniaudio and ufbx.
 
 ## Windows 10/11
 
@@ -78,7 +79,8 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 | --- | --- | --- |
 | `RAVEN_BUILD_SAMPLES` | ON | Build `Samples/` |
 | `RAVEN_BUILD_TESTS` | ON | Build `RavenTests` (doctest) |
-| `RAVEN_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless device), `gpu.hello_triangle`, `gpu.model_viewer_demo` (need a video driver) |
+| `RAVEN_BUILD_TOOLS` | ON | Build `Tools/` (RavenBench) |
+| `RAVEN_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.ravenbench_smoke` (need a video driver) |
 | `RAVEN_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` for engine code |
 
 ## HelloTriangle arguments
@@ -100,7 +102,44 @@ ModelViewer [file.gltf|file.glb] [--frames N] [--screenshot F.ppm] [--no-validat
             [--width W] [--height H] [--yaw DEG] [--pitch DEG] [--zoom F] [--spin DEG_PER_S] [--nearest]
 ```
 
-Without a file it shows a procedural material demo. Left-drag orbits, wheel zooms, Esc quits.
+Without a file it shows a procedural material demo. Left-drag orbits, wheel zooms, F1 toggles
+the profiler overlay, Esc quits. `--reference-path` uses the pre-render-graph path,
+`--no-overlay` hides the profiler.
+
+## RavenBench
+
+Deterministic benchmark (fixed camera orbit) writing a JSON report: CPU/GPU frame times
+(avg/p50/p95/p99/max), per-pass GPU times, CPU scopes, draw calls, visible/culled objects,
+triangles, GPU memory and validation counts.
+
+```
+RavenBench [--scene grid|model] [--model file.glb] [--objects N] [--lights N] [--width W] [--height H]
+           [--warmup N] [--frames N] [--path graph|reference] [--present immediate|low-latency|vsync]
+           [--overlay] [--no-validation] [--output report.json] [--screenshot out.ppm]
+```
+
+Use `--no-validation` for timing runs (validation layers add CPU cost) and a separate run with
+validation for correctness. Reports from a software rasterizer set `"softwareRasterizer": true`.
+
+## Windows build from Linux (MinGW-w64)
+
+For cloud-built Windows test binaries (the primary Windows toolchain stays MSVC):
+
+```bash
+sudo apt install g++-mingw-w64-x86-64-posix
+```
+
+```bash
+cmake -S . -B build-windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake -DRAVEN_GPU_TESTS=ON
+```
+
+```bash
+cmake --build build-windows
+```
+
+Executables in `build-windows/bin` are statically linked (only Windows system DLLs). Copy them
+with the `shaders/` folder; `RavenGpuTests` finds shaders next to the executable or via
+`RAVEN_SHADER_DIR`.
 Khronos sample models (e.g. `DamagedHelmet.glb`) are good test inputs; they are not part of
 the repository.
 

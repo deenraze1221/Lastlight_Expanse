@@ -4,6 +4,8 @@
 #include "Core/ImageIO.h"
 #include "Core/Log.h"
 #include "Platform/Window.h"
+#include "Renderer/GpuProfiler.h"
+#include "Renderer/Resources/FrameAllocator.h"
 #include "Renderer/Vulkan/VulkanCheck.h"
 #include "Renderer/Vulkan/VulkanContext.h"
 #include "Renderer/Vulkan/VulkanSwapchain.h"
@@ -19,6 +21,8 @@ VkExtent2D toExtent(FramebufferSize size) {
     return {size.width, size.height};
 }
 
+// Transitions to PRESENT_SRC use ALL_COMMANDS as destination stage so the layout
+// transition is ordered before the ALL_COMMANDS semaphore signal that presentation waits on.
 void imageBarrier(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
                   VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage,
                   VkAccessFlags2 dstAccess) {
@@ -56,8 +60,10 @@ struct Renderer::PendingCapture {
 };
 
 Renderer::Renderer(Window& window, const RendererDesc& desc) : m_window(window) {
-    m_context = std::make_unique<VulkanContext>(ContextDesc{desc.applicationName, desc.enableValidation}, &window);
+    m_context = std::make_unique<VulkanContext>(ContextDesc{desc.applicationName, desc.enableValidation, desc.synchronizationValidation, desc.pipelineCachePath}, &window);
     m_swapchain = std::make_unique<VulkanSwapchain>(*m_context, toExtent(window.framebufferSize()), desc.presentMode);
+    m_scratch = std::make_unique<FrameAllocator>(*m_context, kFramesInFlight);
+    m_profiler = std::make_unique<GpuProfiler>(*m_context, kFramesInFlight);
     try {
         createFrameResources();
     } catch (...) {
@@ -72,6 +78,8 @@ Renderer::~Renderer() {
         vkDeviceWaitIdle(m_context->device());
     }
     m_capture.reset();
+    m_scratch.reset();
+    m_profiler.reset();
     destroyFrameResources();
     m_swapchain.reset();
     m_context.reset();
@@ -94,9 +102,6 @@ void Renderer::createFrameResources() {
         VkSemaphoreCreateInfo semaphoreInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         RAVEN_VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frame.imageAvailable));
 
-        VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        RAVEN_VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &frame.inFlight));
     }
 }
 
@@ -106,7 +111,6 @@ void Renderer::destroyFrameResources() {
     }
     const VkDevice device = m_context->device();
     for (auto& frame : m_frames) {
-        if (frame.inFlight) vkDestroyFence(device, frame.inFlight, nullptr);
         if (frame.imageAvailable) vkDestroySemaphore(device, frame.imageAvailable, nullptr);
         if (frame.commandPool) vkDestroyCommandPool(device, frame.commandPool, nullptr); // Frees the buffer.
         frame = {};
@@ -137,7 +141,9 @@ std::optional<FrameContext> Renderer::beginFrame() {
 
     const VkDevice device = m_context->device();
     FrameResources& frame = m_frames[m_frameSlot];
-    RAVEN_VK_CHECK(vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, UINT64_MAX));
+    // Wait until this slot's previous frame finished, then release deferred deletions.
+    m_context->timeline().wait(frame.submittedValue);
+    m_context->collectGarbage();
 
     uint32_t imageIndex = 0;
     const VkResult acquire = vkAcquireNextImageKHR(device, m_swapchain->handle(), UINT64_MAX,
@@ -152,8 +158,8 @@ std::optional<FrameContext> Renderer::beginFrame() {
         throwVkError(acquire, "vkAcquireNextImageKHR");
     }
 
-    // Reset only after a successful acquire so an early return never leaves the fence unsignalled.
-    RAVEN_VK_CHECK(vkResetFences(device, 1, &frame.inFlight));
+    m_context->setFrameRecording(true);
+    m_scratch->beginFrame(m_frameSlot);
     RAVEN_VK_CHECK(vkResetCommandPool(device, frame.commandPool, 0));
 
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -169,25 +175,30 @@ std::optional<FrameContext> Renderer::beginFrame() {
     ctx.imageIndex = imageIndex;
     ctx.frameSlot = m_frameSlot;
     ctx.frameNumber = m_frameNumber;
+    ctx.scratch = m_scratch.get();
+    ctx.profiler = m_profiler.get();
 
     // The previous contents are discarded; the acquire semaphore wait (at the
     // colour-output stage) is chained through the barrier's source stage.
     imageBarrier(ctx.commandBuffer, ctx.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE,
                  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+    m_profiler->beginFrame(ctx.commandBuffer, ctx.frameSlot);
+    ctx.frameScope = m_profiler->beginScope(ctx.commandBuffer, "Frame");
     return ctx;
 }
 
 void Renderer::endFrame(const FrameContext& ctx) {
     FrameResources& frame = m_frames[ctx.frameSlot];
     const VkCommandBuffer cmd = ctx.commandBuffer;
+    m_profiler->endScope(cmd, ctx.frameScope);
 
     if (m_screenshotRequest) {
         recordCapture(ctx);
     } else {
         imageBarrier(cmd, ctx.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                     VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE);
+                     VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_NONE);
     }
     RAVEN_VK_CHECK(vkEndCommandBuffer(cmd));
 
@@ -200,14 +211,13 @@ void Renderer::endFrame(const FrameContext& ctx) {
     VkCommandBufferSubmitInfo cmdInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
     cmdInfo.commandBuffer = cmd;
 
-    VkSubmitInfo2 submit{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
-    submit.waitSemaphoreInfoCount = 1;
-    submit.pWaitSemaphoreInfos = &wait;
-    submit.commandBufferInfoCount = 1;
-    submit.pCommandBufferInfos = &cmdInfo;
-    submit.signalSemaphoreInfoCount = 1;
-    submit.pSignalSemaphoreInfos = &signal;
-    RAVEN_VK_CHECK(vkQueueSubmit2(m_context->graphicsQueue(), 1, &submit, frame.inFlight));
+    GraphicsSubmit submit;
+    submit.commandBuffers = std::span(&cmdInfo, 1);
+    submit.waits = std::span(&wait, 1);
+    submit.signals = std::span(&signal, 1);
+    submit.frameSubmission = true;
+    frame.submittedValue = m_context->submitGraphics(submit);
+    m_context->setFrameRecording(false);
 
     const VkSemaphore renderFinished = signal.semaphore;
     const VkSwapchainKHR swapchain = m_swapchain->handle();
@@ -225,7 +235,7 @@ void Renderer::endFrame(const FrameContext& ctx) {
     }
 
     if (m_capture) {
-        finishCapture(ctx);
+        finishCapture(ctx, frame.submittedValue);
     }
     m_frameSlot = (m_frameSlot + 1) % kFramesInFlight;
     ++m_frameNumber;
@@ -249,7 +259,7 @@ void Renderer::recordCapture(const FrameContext& ctx) {
         m_lastScreenshotOk = false;
         imageBarrier(cmd, ctx.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                     VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE);
+                     VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_NONE);
         return;
     }
 
@@ -289,7 +299,7 @@ void Renderer::recordCapture(const FrameContext& ctx) {
     VkImageMemoryBarrier2 presentBarrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
     presentBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
     presentBarrier.srcAccessMask = VK_ACCESS_2_NONE;
-    presentBarrier.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
+    presentBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
     presentBarrier.dstAccessMask = VK_ACCESS_2_NONE;
     presentBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     presentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -308,10 +318,9 @@ void Renderer::recordCapture(const FrameContext& ctx) {
     m_capture = std::move(capture);
 }
 
-void Renderer::finishCapture(const FrameContext& ctx) {
+void Renderer::finishCapture(const FrameContext& ctx, uint64_t submittedValue) {
     auto capture = std::move(m_capture);
-    const VkFence fence = m_frames[ctx.frameSlot].inFlight;
-    RAVEN_VK_CHECK(vkWaitForFences(m_context->device(), 1, &fence, VK_TRUE, UINT64_MAX));
+    m_context->timeline().wait(submittedValue);
     RAVEN_VK_CHECK(vmaInvalidateAllocation(capture->allocator, capture->allocation, 0, VK_WHOLE_SIZE));
 
     VmaAllocationInfo info;

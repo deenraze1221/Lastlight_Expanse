@@ -8,11 +8,20 @@ add_library(RavenRenderer STATIC
     Frustum.cpp
     SceneRenderer.cpp
     Model.cpp
+    GpuProfiler.cpp
+    RenderGraph/ResourceState.cpp
+    RenderGraph/GraphPlanner.cpp
+    RenderGraph/RenderGraph.cpp
     Resources/GpuBuffer.cpp
     Resources/GpuImage.cpp
+    Resources/DeletionQueue.cpp
+    Resources/FrameAllocator.cpp
     Resources/UploadContext.cpp
     Vulkan/VulkanCheck.cpp
+    Vulkan/DeviceCapabilities.cpp
     Vulkan/DeviceSelection.cpp
+    Vulkan/GpuTimeline.cpp
+    Vulkan/PipelineCache.cpp
     Vulkan/SwapchainSupport.cpp
     Vulkan/VulkanContext.cpp
     Vulkan/VulkanSwapchain.cpp

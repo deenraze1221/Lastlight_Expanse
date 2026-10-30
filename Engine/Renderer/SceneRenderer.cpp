@@ -3,7 +3,9 @@
 #include "Core/Error.h"
 #include "Core/Log.h"
 #include "Renderer/Frustum.h"
+#include "Renderer/RenderGraph/RenderGraph.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/Resources/FrameAllocator.h"
 #include "Renderer/Resources/UploadContext.h"
 #include "Renderer/Vulkan/VulkanCheck.h"
 #include "Renderer/Vulkan/VulkanContext.h"
@@ -11,6 +13,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 
 #include <algorithm>
+#include <cstddef>
 
 namespace raven::gfx {
 namespace {
@@ -38,15 +41,34 @@ struct GpuInstance {
     glm::mat4 normalMatrix;
 };
 
+// Mirrors RavenDraw in raven/scene.glsl.
 struct PushConstants {
+    VkDeviceAddress frameAddress;
+    VkDeviceAddress instanceAddress;
     uint32_t materialIndex;
     uint32_t reserved[3];
 };
+static_assert(sizeof(PushConstants) == 32);
 
 struct ResolvePush {
     uint32_t sourceTexture;
     uint32_t sourceSampler;
+    uint32_t encodeSrgb;
 };
+
+// 8/10-bit UNORM display formats without hardware sRGB conversion.
+bool needsShaderSrgbEncode(VkFormat format) {
+    switch (format) {
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_B8G8R8A8_UNORM:
+    case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+    case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+        return true;
+    default:
+        return false;
+    }
+}
 
 struct DrawEntry {
     const GraphicsPipeline* pipeline;
@@ -57,7 +79,7 @@ struct DrawEntry {
 
 } // namespace
 
-SceneRenderer::SceneRenderer(const VulkanContext& context, UploadContext& upload, const SceneRendererDesc& desc)
+SceneRenderer::SceneRenderer(VulkanContext& context, UploadContext& upload, const SceneRendererDesc& desc)
     : m_context(context), m_upload(upload), m_desc(desc) {
     RAVEN_ENSURE(desc.framesInFlight >= 1, "framesInFlight must be at least 1");
     m_bindless = std::make_unique<BindlessRegistry>(context);
@@ -83,105 +105,26 @@ SceneRenderer::SceneRenderer(const VulkanContext& context, UploadContext& upload
 
 SceneRenderer::~SceneRenderer() {
     vkDeviceWaitIdle(m_context.device());
-    for (auto& r : m_retired) {
-        r.destroy();
-    }
-    m_retired.clear();
+    m_context.collectGarbage(); // Old targets retired by this renderer reference m_bindless.
+    m_context.deletionQueue().flushAll();
     m_resolvePipelines.clear();
     m_materials.reset();
-    m_frames.clear();
     vkDestroyPipelineLayout(m_context.device(), m_sceneLayout, nullptr);
-    vkDestroyDescriptorPool(m_context.device(), m_framePool, nullptr);
-    vkDestroyDescriptorSetLayout(m_context.device(), m_frameLayout, nullptr);
 }
 
 void SceneRenderer::createLayouts() {
-    const VkDevice device = m_context.device();
-    const VkShaderStageFlags stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    const VkDescriptorSetLayoutBinding bindings[2] = {
-        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, stages, nullptr},
-        {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stages, nullptr},
-    };
-    VkDescriptorSetLayoutCreateInfo layoutInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    layoutInfo.bindingCount = 2;
-    layoutInfo.pBindings = bindings;
-    RAVEN_VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &m_frameLayout));
-
-    const VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_desc.framesInFlight},
-                                           {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, m_desc.framesInFlight}};
-    VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    poolInfo.maxSets = m_desc.framesInFlight;
-    poolInfo.poolSizeCount = 2;
-    poolInfo.pPoolSizes = sizes;
-    RAVEN_VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, nullptr, &m_framePool));
-
-    const VkDescriptorSetLayout setLayouts[2] = {m_bindless->layout(), m_frameLayout};
-    const VkPushConstantRange push{stages, 0, sizeof(PushConstants)};
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    pipelineLayoutInfo.setLayoutCount = 2;
-    pipelineLayoutInfo.pSetLayouts = setLayouts;
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pPushConstantRanges = &push;
-    RAVEN_VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &m_sceneLayout));
-
-    m_frames.resize(m_desc.framesInFlight);
-    for (auto& frame : m_frames) {
-        VkDescriptorSetAllocateInfo alloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-        alloc.descriptorPool = m_framePool;
-        alloc.descriptorSetCount = 1;
-        alloc.pSetLayouts = &m_frameLayout;
-        RAVEN_VK_CHECK(vkAllocateDescriptorSets(device, &alloc, &frame.set));
-        frame.frameData = GpuBuffer(m_context, {sizeof(GpuFrameData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                                MemoryUsage::Upload, "FrameData"});
-        ensureInstanceCapacity(frame, 1024);
-    }
+    // Set 0: bindless resources. Frame and instance data are passed as buffer addresses.
+    const VkDescriptorSetLayout setLayout = m_bindless->layout();
+    const VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants)};
+    VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    info.setLayoutCount = 1;
+    info.pSetLayouts = &setLayout;
+    info.pushConstantRangeCount = 1;
+    info.pPushConstantRanges = &push;
+    RAVEN_VK_CHECK(vkCreatePipelineLayout(m_context.device(), &info, nullptr, &m_sceneLayout));
 }
 
-void SceneRenderer::ensureInstanceCapacity(FrameResources& frame, uint32_t count) {
-    if (count <= frame.instanceCapacity) {
-        return;
-    }
-    uint32_t capacity = std::max(frame.instanceCapacity, 1024u);
-    while (capacity < count) {
-        capacity *= 2;
-    }
-    // This slot's previous frame has completed, so the old buffer can be replaced directly.
-    frame.instances = GpuBuffer(m_context, {sizeof(GpuInstance) * capacity, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                                            MemoryUsage::Upload, "Instances"});
-    frame.instanceCapacity = capacity;
-    writeFrameSet(frame);
-}
-
-void SceneRenderer::writeFrameSet(FrameResources& frame) {
-    const VkDescriptorBufferInfo ubo{frame.frameData.handle(), 0, sizeof(GpuFrameData)};
-    const VkDescriptorBufferInfo ssbo{frame.instances.handle(), 0, VK_WHOLE_SIZE};
-    VkWriteDescriptorSet writes[2]{};
-    writes[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    writes[0].dstSet = frame.set;
-    writes[0].dstBinding = 0;
-    writes[0].descriptorCount = 1;
-    writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    writes[0].pBufferInfo = &ubo;
-    writes[1] = writes[0];
-    writes[1].dstBinding = 1;
-    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    writes[1].pBufferInfo = &ssbo;
-    vkUpdateDescriptorSets(m_context.device(), 2, writes, 0, nullptr);
-}
-
-void SceneRenderer::collectRetired(uint64_t frameNumber) {
-    // Work retired during frame R was last used by frames <= R; frame R has completed
-    // once frameNumber >= R + framesInFlight (its fence has been waited for).
-    auto it = std::partition(m_retired.begin(), m_retired.end(), [&](const Retired& r) {
-        return r.frameNumber + m_desc.framesInFlight > frameNumber;
-    });
-    for (auto done = it; done != m_retired.end(); ++done) {
-        done->destroy();
-    }
-    m_retired.erase(it, m_retired.end());
-}
-
-void SceneRenderer::ensureTargets(VkExtent2D extent, uint64_t frameNumber) {
+void SceneRenderer::ensureTargets(VkExtent2D extent) {
     if (m_color.isValid() && m_color.extent().width == extent.width && m_color.extent().height == extent.height) {
         return;
     }
@@ -191,11 +134,11 @@ void SceneRenderer::ensureTargets(VkExtent2D extent, uint64_t frameNumber) {
         auto oldDepth = std::make_shared<GpuImage>(std::move(m_depth));
         const uint32_t oldSlot = m_colorSlot;
         BindlessRegistry* bindless = m_bindless.get();
-        m_retired.push_back({frameNumber, [oldColor, oldDepth, oldSlot, bindless]() mutable {
-                                 bindless->releaseTexture(oldSlot);
-                                 oldColor.reset();
-                                 oldDepth.reset();
-                             }});
+        m_context.deletionQueue().retire([oldColor, oldDepth, oldSlot, bindless]() mutable {
+            bindless->releaseTexture(oldSlot);
+            oldColor.reset();
+            oldDepth.reset();
+        });
     }
     m_color = GpuImage(m_context, {extent.width, extent.height, m_desc.colorFormat,
                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -209,13 +152,11 @@ void SceneRenderer::ensureTargets(VkExtent2D extent, uint64_t frameNumber) {
     RAVEN_LOG_DEBUG("Scene targets {}x{}", extent.width, extent.height);
 }
 
-RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, const SceneView& view) {
-    RAVEN_ENSURE(frame.slot < m_frames.size(), "frame slot out of range");
+SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkExtent2D extent, const SceneView& view,
+                                                   RenderStats& stats) {
+    RAVEN_ENSURE(frame.scratch != nullptr, "scene rendering needs a frame scratch allocator");
     RAVEN_ENSURE(extent.width > 0 && extent.height > 0, "render extent must be non-zero");
-    collectRetired(frame.frameNumber);
-    ensureTargets(extent, frame.frameNumber);
-    FrameResources& resources = m_frames[frame.slot];
-    RenderStats stats;
+    PreparedScene prepared;
 
     // --- Frame constants -----------------------------------------------------------
     const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
@@ -244,7 +185,7 @@ RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, con
         const PointLight& p = view.lighting.pointLights[i];
         data.pointLights[i] = {glm::vec4(p.position, p.range), glm::vec4(p.color, p.intensity)};
     }
-    resources.frameData.write(&data, sizeof(data));
+    prepared.frameAddress = frame.scratch->upload(data).address;
 
     // --- Visibility and ordering ---------------------------------------------------------
     const Frustum frustum(viewProjection);
@@ -276,18 +217,75 @@ RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, con
         return a.draw->submesh < b.draw->submesh;
     });
 
-    ensureInstanceCapacity(resources, static_cast<uint32_t>(std::max<size_t>(entries.size(), 1)));
-    auto* instances = static_cast<GpuInstance*>(resources.instances.mapped());
+    std::vector<GpuInstance> instances(entries.size());
     for (size_t i = 0; i < entries.size(); ++i) {
         const glm::mat4& model = entries[i].draw->transform;
         instances[i] = {model, glm::mat4(glm::inverseTranspose(glm::mat3(model)))};
     }
-    if (!entries.empty()) {
-        resources.instances.write(instances, sizeof(GpuInstance) * entries.size()); // Flush (no-op when coherent).
-    }
+    prepared.instanceAddress = frame.scratch->upload(std::span<const GpuInstance>(instances)).address;
     stats.instances = static_cast<uint32_t>(entries.size());
 
-    // --- Recording -------------------------------------------------------------------
+    for (size_t i = 0; i < entries.size();) {
+        const DrawEntry& e = entries[i];
+        // Batch consecutive identical opaque draws into one instanced call.
+        size_t count = 1;
+        while (!e.blend && i + count < entries.size()) {
+            const DrawEntry& n = entries[i + count];
+            if (n.blend || n.draw->mesh != e.draw->mesh || n.draw->submesh != e.draw->submesh ||
+                n.draw->material != e.draw->material) {
+                break;
+            }
+            ++count;
+        }
+        prepared.batches.push_back({e.pipeline, e.draw->mesh, e.draw->submesh, e.draw->material,
+                                    static_cast<uint32_t>(i), static_cast<uint32_t>(count)});
+        i += count;
+    }
+    stats.drawCalls = static_cast<uint32_t>(prepared.batches.size());
+    for (const DrawBatch& b : prepared.batches) {
+        stats.triangles += static_cast<uint64_t>(b.mesh->submeshes()[b.submesh].indexCount / 3) * b.instanceCount;
+    }
+    return prepared;
+}
+
+void SceneRenderer::recordDraws(VkCommandBuffer cmd, const PreparedScene& scene) const {
+    const VkDescriptorSet set = m_bindless->set();
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_sceneLayout, 0, 1, &set, 0, nullptr);
+    const VkShaderStageFlags pushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    const PushConstants addresses{scene.frameAddress, scene.instanceAddress, 0, {0, 0, 0}};
+    vkCmdPushConstants(cmd, m_sceneLayout, pushStages, 0, sizeof(addresses), &addresses);
+
+    const GraphicsPipeline* boundPipeline = nullptr;
+    const GpuMesh* boundMesh = nullptr;
+    uint32_t boundMaterial = UINT32_MAX;
+    for (const DrawBatch& b : scene.batches) {
+        if (b.pipeline != boundPipeline) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, b.pipeline->handle());
+            boundPipeline = b.pipeline;
+        }
+        if (b.material != boundMaterial) {
+            vkCmdPushConstants(cmd, m_sceneLayout, pushStages, offsetof(PushConstants, materialIndex),
+                               sizeof(uint32_t), &b.material);
+            boundMaterial = b.material;
+        }
+        if (b.mesh != boundMesh) {
+            const VkBuffer vb = b.mesh->vertexBuffer().handle();
+            const VkDeviceSize offset = 0;
+            vkCmdBindVertexBuffers(cmd, 0, 1, &vb, &offset);
+            vkCmdBindIndexBuffer(cmd, b.mesh->indexBuffer().handle(), 0, VK_INDEX_TYPE_UINT32);
+            boundMesh = b.mesh;
+        }
+        const Submesh& sub = b.mesh->submeshes()[b.submesh];
+        vkCmdDrawIndexed(cmd, sub.indexCount, b.instanceCount, sub.firstIndex, 0, b.firstInstance);
+    }
+}
+
+RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, const SceneView& view) {
+    ensureTargets(extent);
+    RenderStats stats;
+    const PreparedScene prepared = prepare(frame, extent, view, stats);
+
+    // Reference path: hand-written barriers (kept for regression comparison with the graph).
     const VkCommandBuffer cmd = frame.commandBuffer;
     // The previous frame may still read colour (resolve) or write depth: order against both.
     transitionImage(cmd, m_color.handle(), m_color.fullRange(), VK_IMAGE_LAYOUT_UNDEFINED,
@@ -322,51 +320,11 @@ RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, con
     rendering.pColorAttachments = &color;
     rendering.pDepthAttachment = &depth;
     vkCmdBeginRendering(cmd, &rendering);
-
     const VkViewport viewport{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f};
     const VkRect2D scissor{{0, 0}, extent};
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
-    const VkDescriptorSet sets[2] = {m_bindless->set(), resources.set};
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_sceneLayout, 0, 2, sets, 0, nullptr);
-
-    const GraphicsPipeline* boundPipeline = nullptr;
-    const GpuMesh* boundMesh = nullptr;
-    uint32_t boundMaterial = UINT32_MAX;
-    for (size_t i = 0; i < entries.size();) {
-        const DrawEntry& e = entries[i];
-        // Batch consecutive identical opaque draws into one instanced call.
-        size_t count = 1;
-        while (!e.blend && i + count < entries.size()) {
-            const DrawEntry& n = entries[i + count];
-            if (n.blend || n.draw->mesh != e.draw->mesh || n.draw->submesh != e.draw->submesh ||
-                n.draw->material != e.draw->material) {
-                break;
-            }
-            ++count;
-        }
-        if (e.pipeline != boundPipeline) {
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, e.pipeline->handle());
-            boundPipeline = e.pipeline;
-        }
-        if (e.draw->material != boundMaterial) {
-            const PushConstants push{e.draw->material, {0, 0, 0}};
-            vkCmdPushConstants(cmd, m_sceneLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                               sizeof(push), &push);
-            boundMaterial = e.draw->material;
-        }
-        if (e.draw->mesh != boundMesh) {
-            const VkBuffer vb = e.draw->mesh->vertexBuffer().handle();
-            const VkDeviceSize offset = 0;
-            vkCmdBindVertexBuffers(cmd, 0, 1, &vb, &offset);
-            vkCmdBindIndexBuffer(cmd, e.draw->mesh->indexBuffer().handle(), 0, VK_INDEX_TYPE_UINT32);
-            boundMesh = e.draw->mesh;
-        }
-        const Submesh& sub = e.draw->mesh->submeshes()[e.draw->submesh];
-        vkCmdDrawIndexed(cmd, sub.indexCount, static_cast<uint32_t>(count), sub.firstIndex, 0, static_cast<uint32_t>(i));
-        ++stats.drawCalls;
-        i += count;
-    }
+    recordDraws(cmd, prepared);
     vkCmdEndRendering(cmd);
 
     transitionImage(cmd, m_color.handle(), m_color.fullRange(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -374,6 +332,35 @@ RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, con
                     VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                     VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     return stats;
+}
+
+SceneRenderer::GraphOutputs SceneRenderer::addToGraph(RenderGraph& graph, const FrameInfo& frame, VkExtent2D extent,
+                                                      const SceneView& view, const RGImage& output,
+                                                      VkFormat outputFormat, RenderStats* statsOut) {
+    RenderStats stats;
+    auto prepared = std::make_shared<PreparedScene>(prepare(frame, extent, view, stats));
+    if (statsOut) {
+        *statsOut = stats;
+    }
+
+    const RGImage color = graph.createImage("SceneColor", {extent.width, extent.height, m_desc.colorFormat, 1});
+    const RGImage depth = graph.createImage("SceneDepth", {extent.width, extent.height, m_desc.depthFormat, 1});
+    graph.addPass(
+        "Scene", RenderGraph::PassType::Raster,
+        [&](PassBuilder& b) {
+            b.colorAttachment(color, LoadOp::Clear, view.clearColor);
+            b.depthAttachment(depth, LoadOp::Clear, 0.0f); // Reverse Z: far = 0.
+        },
+        [this, prepared](PassContext& ctx) { recordDraws(ctx.cmd(), *prepared); });
+
+    graph.addPass(
+        "Resolve", RenderGraph::PassType::Raster,
+        [&](PassBuilder& b) {
+            b.read(color, ResourceUsage::SampledFragment);
+            b.colorAttachment(output, LoadOp::DontCare);
+        },
+        [this, color, outputFormat](PassContext& ctx) { recordResolve(ctx.cmd(), ctx.bindlessIndex(color), outputFormat); });
+    return {color.index, depth.index};
 }
 
 const GraphicsPipeline& SceneRenderer::resolvePipeline(VkFormat format) {
@@ -391,11 +378,19 @@ const GraphicsPipeline& SceneRenderer::resolvePipeline(VkFormat format) {
     return *m_resolvePipelines.emplace(format, std::make_unique<GraphicsPipeline>(m_context, desc)).first->second;
 }
 
+void SceneRenderer::recordResolve(VkCommandBuffer cmd, uint32_t sourceIndex, VkFormat targetFormat) {
+    const GraphicsPipeline& pipeline = resolvePipeline(targetFormat);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle());
+    const VkDescriptorSet set = m_bindless->set();
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout(), 0, 1, &set, 0, nullptr);
+    const ResolvePush push{sourceIndex, m_resolveSampler, needsShaderSrgbEncode(targetFormat) ? 1u : 0u};
+    vkCmdPushConstants(cmd, pipeline.layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+}
+
 void SceneRenderer::resolve(const FrameInfo& frame, VkImageView target, VkFormat targetFormat, VkExtent2D extent) {
     RAVEN_ENSURE(m_color.isValid(), "resolve() called before render()");
-    const GraphicsPipeline& pipeline = resolvePipeline(targetFormat);
     const VkCommandBuffer cmd = frame.commandBuffer;
-
     VkRenderingAttachmentInfo color{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
     color.imageView = target;
     color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -411,12 +406,7 @@ void SceneRenderer::resolve(const FrameInfo& frame, VkImageView target, VkFormat
     const VkRect2D scissor{{0, 0}, extent};
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle());
-    const VkDescriptorSet set = m_bindless->set();
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout(), 0, 1, &set, 0, nullptr);
-    const ResolvePush push{m_colorSlot, m_resolveSampler};
-    vkCmdPushConstants(cmd, pipeline.layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
-    vkCmdDraw(cmd, 3, 1, 0, 0);
+    recordResolve(cmd, m_colorSlot, targetFormat);
     vkCmdEndRendering(cmd);
 }
 

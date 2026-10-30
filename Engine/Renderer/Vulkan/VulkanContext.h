@@ -1,10 +1,18 @@
 #pragma once
 
+#include "Renderer/Resources/DeletionQueue.h"
+#include "Renderer/Vulkan/DeviceCapabilities.h"
+#include "Renderer/Vulkan/GpuTimeline.h"
+#include "Renderer/Vulkan/PipelineCache.h"
+
 #include <volk.h>
 #include <vk_mem_alloc.h>
 
 #include <atomic>
+#include <memory>
+#include <span>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 
 namespace raven {
@@ -18,6 +26,19 @@ struct ContextDesc {
     // Requests VK_LAYER_KHRONOS_validation. If the layer is missing a warning is
     // logged and the context continues without it.
     bool enableValidation = true;
+    // Adds VK_EXT_validation_features synchronization validation (slower; for tests).
+    bool synchronizationValidation = false;
+    // Persistent pipeline cache file. Empty: in-memory cache only.
+    std::filesystem::path pipelineCachePath;
+};
+
+// One graphics-queue submission. The context appends the timeline signal.
+struct GraphicsSubmit {
+    std::span<const VkCommandBufferSubmitInfo> commandBuffers;
+    std::span<const VkSemaphoreSubmitInfo> waits;
+    std::span<const VkSemaphoreSubmitInfo> signals;
+    bool frameSubmission = false; // Completes the frame currently being recorded.
+    VkFence fence = VK_NULL_HANDLE; // Optional, for host waits (see UploadContext).
 };
 
 struct DeviceInfo {
@@ -58,8 +79,15 @@ public:
     uint32_t presentQueueFamily() const { return m_presentFamily; }
 
     const DeviceInfo& deviceInfo() const { return m_deviceInfo; }
+    const DeviceCapabilities& capabilities() const { return m_caps; }
+    const ResolvedFeatures& features() const { return m_features; }
+
+    // Dedicated queues; VK_NULL_HANDLE when the device has none (use the graphics queue).
+    VkQueue asyncComputeQueue() const { return m_computeQueue; }
+    VkQueue transferQueue() const { return m_transferQueue; }
     bool validationEnabled() const { return m_validationEnabled; }
     bool isHeadless() const { return m_window == nullptr; }
+    bool debugUtilsEnabled() const { return m_debugUtils; }
 
     // Names an object for validation messages and graphics debuggers (no-op when
     // VK_EXT_debug_utils is unavailable).
@@ -74,6 +102,19 @@ public:
     uint32_t validationWarningCount() const { return m_validationWarnings.load(); }
 
     void waitIdle() const;
+
+    // All graphics-queue work goes through here so the timeline and the deletion queue
+    // stay consistent. Returns the timeline value signalled by this submission.
+    uint64_t submitGraphics(const GraphicsSubmit& submit);
+    VkPipelineCache pipelineCache() const { return m_pipelineCache ? m_pipelineCache->handle() : VK_NULL_HANDLE; }
+    PipelineCache* pipelineCacheObject() { return m_pipelineCache.get(); }
+    GpuTimeline& timeline() { return *m_timeline; }
+    const GpuTimeline& timeline() const { return *m_timeline; }
+    DeletionQueue& deletionQueue() { return m_deletionQueue; }
+    // Retires completed deferred deletions; call once per frame and after blocking waits.
+    void collectGarbage() { m_deletionQueue.collect(m_timeline->completedValue()); }
+    // Set by the frame loop while a frame command buffer is being recorded.
+    void setFrameRecording(bool recording) { m_frameRecording = recording; }
 
 private:
     void createInstance(const ContextDesc& desc);
@@ -100,7 +141,15 @@ private:
     uint32_t m_graphicsFamily = UINT32_MAX;
     uint32_t m_presentFamily = UINT32_MAX;
     DeviceInfo m_deviceInfo;
+    DeviceCapabilities m_caps;
+    ResolvedFeatures m_features;
+    VkQueue m_computeQueue = VK_NULL_HANDLE;
+    VkQueue m_transferQueue = VK_NULL_HANDLE;
     bool m_validationEnabled = false;
+    std::unique_ptr<GpuTimeline> m_timeline;
+    std::unique_ptr<PipelineCache> m_pipelineCache;
+    DeletionQueue m_deletionQueue;
+    bool m_frameRecording = false;
     std::atomic<uint32_t> m_validationErrors{0};
     std::atomic<uint32_t> m_validationWarnings{0};
 };
