@@ -41,7 +41,7 @@ struct FrameContext {
 
 // Milestone 1 frame orchestration: frames in flight, acquire/submit/present,
 // swapchain recreation and optional swapchain readback. Higher-level rendering
-// (render graph, materials, profiles) is built on top of this in Milestone 2+.
+// (render graph, materials, post-processing) is built on top of this in Milestone 2+.
 class Renderer {
 public:
     static constexpr uint32_t kFramesInFlight = 2;

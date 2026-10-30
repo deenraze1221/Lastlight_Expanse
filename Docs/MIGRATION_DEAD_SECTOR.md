@@ -16,6 +16,12 @@ browser tests, a Node `ws` room server (`server/index.js`) and a separate relay 
 native client (`server/native.js`). The README mentions a Godot port in `godot/`, but that
 directory is **not present** in the archive.
 
+## Art direction
+
+DEAD SECTOR keeps its PSX-inspired look, owned by the game (not the engine). The port
+upgrades textures, models and lighting within that direction. The original fixed 540-line
+pixelation is the baseline preset; exact parameters are tuned by visual comparison.
+
 ## Rules for the port
 
 1. **Engine vs game.** Anything generic (rendering, physics, audio, navigation grid, net
@@ -45,7 +51,7 @@ directory is **not present** in the archive.
 | `operations.js`, `mission-roll.js`, `mission-models.js`, `encounter-events.js`, `power-grid.js` | Missions per wave, generators/growths, district blackouts | `Games/DeadSector/Missions/*` | Game | M6 |
 | `weather.js`, `city-weather.js`, `atmosphere.js`, `atmosphere-particles.js`, `city-sky.js`, `environment-light.js` | Weather/fog rolls, wetness, day–night, sky, ash/sparks, environment lighting | Engine/Renderer (sky, fog, IBL, particles) + game weather rules | Both | M3, M6 |
 | `flashlight.js` | Spot light, 120 s duration | Engine spot light + shadow; game battery rule | Both | M4 |
-| `psx.js` | 540-line pixelated render target | **Engine RETRO profile** (generalized) | Engine | M3 |
+| `psx.js` | 540-line pixelated render target | `Games/DeadSector/Rendering/` PSX style preset (game shaders + settings) on engine internal-resolution/upscale and post-process capabilities | Game | M4 |
 | `audio.js`, `music-tracks.js` | Synthesized SFX and 10 procedural scores (no audio files) | Engine/Audio (miniaudio) with a synth voice node; track data in game | Both | M5 |
 | `game.js` | Main loop, state machine, glue (~40 KB) | `Games/DeadSector/DeadSectorGame` (split by system) | Game | M5–M6 |
 | `compass.js`, `map.js`, `lobby-ui.js`, `shop-ui.js`, `metrics.js`, `settings.js`, `i18n.js`, `style.css`, `index.html`, `app.html` | HUD, map, lobby, settings, EN/RU strings, perf overlay | Engine/UI primitives + game screens; i18n → string tables | Both | M5–M7 |

@@ -8,7 +8,7 @@ done before it is verified.
 | --- | --- | --- |
 | 1 | Engine foundation | **Done** (verified on Linux/lavapipe; Windows pending local run) |
 | 2 | 3D renderer | Not started |
-| 3 | Graphics profiles (HIGH QUALITY / RETRO) | Not started |
+| 3 | Lighting, post-processing and graphics settings | Not started |
 | 4 | First DEAD SECTOR prototype scene | Not started |
 | 5 | Gameplay foundation | Not started |
 | 6 | World and game systems | Not started |
@@ -19,31 +19,43 @@ done before it is verified.
 CMake/Ninja, C++20, SDL3 window, Vulkan 1.3 instance/device/swapchain, validation layers,
 logging, error handling, triangle, unit tests, GPU smoke test with readback.
 
-## M2 — 3D renderer
-- Engine math types on GLM; camera (perspective, reverse-Z depth).
-- GPU buffers/images through VMA with RAII handles; staging uploads; deferred deletion queue.
-- Depth buffer; vertex/index buffers; mesh rendering.
-- Descriptor management (descriptor indexing / bindless textures).
-- Texture loading (stb_image), mipmaps, samplers with anisotropy.
-- Material system (data-driven parameters + textures).
-- glTF loading (cgltf) into engine mesh/material structures.
-- Directional + point lights; shadow mapping for the directional light.
-- Dear ImGui debug overlay (frame timings, GPU info, render settings).
-- Accept: Sponza-class glTF renders validation-clean; screenshots on GPU and lavapipe.
+## M2 — 3D renderer core (style-neutral)
+- GPU resources: RAII buffers/images via VMA, staging uploads, deferred deletion per frame.
+- Descriptors: bindless texture table (descriptor indexing) + per-frame uniform data.
+- Depth buffer (reverse-Z), camera (perspective/orthographic), debug fly camera.
+- Meshes: vertex/index buffers, one engine vertex format, instanced draws.
+- Textures: stb_image load, mip generation, sRGB/linear handling, sampler descriptions
+  (linear/nearest, anisotropy, wrap) chosen per material.
+- Materials: shader + parameter block + texture slots as data. Built-in shading models:
+  `Unlit` and `PBR (metallic-roughness)`. Games can register their own shaders.
+- Shader pipeline: shared GLSL include library, pipeline cache keyed by material shader +
+  render state; custom vertex functions supported by the material interface.
+- glTF 2.0 loading (cgltf) into engine meshes/materials/textures.
+- Lights: directional + point (forward shading, light list uploaded per frame).
+- Shadow mapping for the directional light; resolution/filtering configurable.
+- Offscreen HDR scene target → minimal resolve to swapchain (tone mapping arrives in M3).
+- Dear ImGui debug overlay: frame time, GPU info, camera, light/shadow controls.
+- Accept: a standard glTF test scene renders validation-clean; screenshots on lavapipe in the
+  cloud and on a real GPU locally; unit tests for resource/material/glTF code paths.
 
-## M3 — Graphics profiles
-- HIGH QUALITY: metallic-roughness PBR, HDR target, tone mapping (ACES/AgX), bloom, SSAO,
-  colour grading LUT, distance + height fog, spot lights, configurable shadow resolution,
-  render-scale.
-- RETRO: internal resolution 320×180/426×240/640×360, nearest upscale, vertex snapping,
-  affine UV option, colour quantization, ordered dithering, retro grading/fog.
-- Runtime profile switching without reloading assets.
-- Prepared (interfaces only): TAA jitter/history, volumetrics, reflections, GPU-driven culling.
+## M3 — Lighting, post-processing and graphics settings (style-neutral)
+- Spot lights, shadow quality tiers, cascaded or fitted directional shadows.
+- Post-process stack: ordered data-driven passes; built-ins tone mapping (ACES/AgX/none),
+  bloom, SSAO, distance + height fog, colour LUT; API for custom passes.
+- Internal render resolution: scale factor or fixed size, upscale filter linear/nearest.
+- `GraphicsSettings` struct + runtime apply without reloading assets.
+- Prepared interfaces (not implementations): TAA jitter/history, volumetrics, reflections,
+  GPU-driven culling.
+- Accept: two deliberately different sample looks (e.g. realistic PBR scene and a flat
+  unlit/low-res scene) built purely from settings + materials, no engine code changes.
 
 ## M4 — First DEAD SECTOR prototype
-Small urban street, several buildings, concrete/asphalt materials, props, dark corridor,
-first-person camera, flashlight (spot light + shadow), imported weapon model (FBX → glTF via
-the asset compiler using ufbx), basic movement. Same scene in both profiles.
+Game target `Games/DeadSector` created. Small urban street, several buildings,
+concrete/asphalt materials, props, dark corridor, first-person camera, flashlight (spot light +
+shadow), imported weapon model (FBX → glTF via the asset compiler using ufbx), basic movement.
+DEAD SECTOR's own PSX-inspired style preset (game shaders: vertex snapping, affine UV option,
+dither/quantize pass; low internal resolution with nearest upscale) built only on engine
+capabilities. Improved textures/models/lighting while keeping the PSX art direction.
 
 ## M5 — Gameplay foundation
 Scene/ECS, transform hierarchy, input mapping, Jolt character controller and collision,
