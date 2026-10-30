@@ -3,6 +3,7 @@
 #include "Assets/ModelData.h"
 #include "Renderer/Material.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/GpuScene.h"
 #include "Renderer/SceneRenderer.h"
 #include "Renderer/Texture.h"
 
@@ -11,6 +12,7 @@
 
 namespace zodar::gfx {
 
+class GeometryPool;
 class UploadBatch;
 
 // Optional overrides applied when a model is turned into GPU resources. They let a game
@@ -23,6 +25,8 @@ struct ModelUploadOptions {
     // Shaders used for glTF PBR and unlit materials (default: engine built-ins).
     std::optional<ShaderHandle> pbrShader;
     std::optional<ShaderHandle> unlitShader;
+    // Upload meshes into a shared pool (required to draw the model through a GpuScene).
+    GeometryPool* geometryPool = nullptr;
 };
 
 // GPU-resident model: meshes, textures and materials created from ModelData.
@@ -42,6 +46,8 @@ public:
     size_t meshCount() const { return m_meshes.size(); }
     size_t textureCount() const { return m_textures.size(); }
     const std::vector<MaterialHandle>& materials() const { return m_materials; }
+    // Registers every node submesh as a GpuScene instance (meshes must be pooled).
+    void addToScene(GpuScene& scene, const glm::mat4& transform = glm::mat4(1.0f)) const;
 
 private:
     std::vector<GpuMesh> m_meshes;

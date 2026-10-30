@@ -20,6 +20,7 @@ namespace zodar::gfx {
 
 class FrameAllocator;
 class GpuProfiler;
+class UploadQueue;
 class VulkanContext;
 class VulkanSwapchain;
 
@@ -29,6 +30,7 @@ struct RendererDesc {
     PresentMode presentMode = PresentMode::VSync;
     std::filesystem::path pipelineCachePath; // Empty: no disk cache.
     bool synchronizationValidation = false;  // Slower; for correctness runs.
+    bool dedicatedTransferQueue = true;      // false: uploads on the graphics queue (A/B tests).
 };
 
 // Everything needed to record one frame. The swapchain image is already in
@@ -74,6 +76,10 @@ public:
 
     void waitIdle() const;
 
+    // Finished asynchronous uploads of `queue` are acquired at the start of every frame
+    // (UploadQueue::acquireCompleted). Optional; nullptr detaches.
+    void attachUploads(UploadQueue* queue) { m_uploads = queue; }
+
     VulkanContext& context() { return *m_context; }
     const VulkanContext& context() const { return *m_context; }
     const VulkanSwapchain& swapchain() const { return *m_swapchain; }
@@ -102,6 +108,7 @@ private:
     std::unique_ptr<VulkanSwapchain> m_swapchain;
     std::unique_ptr<FrameAllocator> m_scratch;
     std::unique_ptr<GpuProfiler> m_profiler;
+    UploadQueue* m_uploads = nullptr;
     std::array<FrameResources, kFramesInFlight> m_frames{};
     uint32_t m_frameSlot = 0;
     uint64_t m_frameNumber = 0;

@@ -3,6 +3,7 @@
 #include "Assets/Bounds.h"
 #include "Assets/ImageData.h"
 #include "Assets/MeshData.h"
+#include "Assets/TextureCache.h"
 
 #include <glm/glm.hpp>
 
@@ -53,6 +54,23 @@ struct ModelNode {
     glm::mat4 world{1.0f};
 };
 
+// Where a model's textures came from (see GltfLoadOptions).
+struct TextureLoadStats {
+    uint32_t compiled = 0;    // KTX2 from the compiled cache (baked mips, BCn)
+    uint32_t source = 0;      // decoded from the source image (PNG/JPEG)
+    uint32_t runtimeMips = 0; // ... with mips generated at load time (fallback)
+    uint32_t stale = 0;       // cache files ignored because the source changed
+};
+
+// Source of one entry of ModelData::images (GltfLoadOptions::keepImageSources).
+struct ModelImageSource {
+    std::vector<uint8_t> bytes; // Encoded source file (PNG/JPEG/...)
+    TextureUsage usage = TextureUsage::Color;
+    int gltfImage = -1;
+    std::filesystem::path cachePath; // Where the compiled KTX2 belongs
+    std::string sourceKey;           // textureSourceKey(bytes, usage)
+};
+
 // Imported static model: meshes (one submesh per primitive, materialIndex refers to
 // `materials`), decoded images, materials and a flattened list of mesh instances.
 struct ModelData {
@@ -65,10 +83,18 @@ struct ModelData {
     std::vector<ModelNode> nodes;
     Bounds bounds;
     std::vector<std::string> warnings; // Unsupported features that were skipped.
+    TextureLoadStats textureStats;
+    std::vector<ModelImageSource> imageSources; // Parallel to images when requested.
 };
 
 struct GltfLoadOptions {
+    // Use compiled KTX2 textures (baked mips, BCn) from textureCacheDirectory(path) when
+    // present and up to date; otherwise decode the source image.
+    bool useCompiledTextures = true;
+    // For decoded source images only: generate mips at load time (fallback; compiled
+    // textures carry baked mips).
     bool generateMips = true;
+    bool keepImageSources = false; // Fill ModelData::imageSources (asset compiler)
 };
 
 // Loads .gltf (external or embedded buffers/images) and .glb files. Supports static

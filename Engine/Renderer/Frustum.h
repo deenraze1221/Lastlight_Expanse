@@ -15,6 +15,10 @@ public:
     // Conservative test: false only when the box is entirely outside one plane.
     bool intersects(const Bounds& worldBounds) const;
 
+    // Normalised inward planes (xyz normal, w distance); count is 5 for infinite projections.
+    const glm::vec4* planes() const { return m_planes; }
+    int planeCount() const { return m_planeCount; }
+
 private:
     glm::vec4 m_planes[6];
     int m_planeCount = 0;

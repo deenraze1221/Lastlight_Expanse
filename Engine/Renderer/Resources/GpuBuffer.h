@@ -21,6 +21,10 @@ struct BufferDesc {
     VkBufferUsageFlags usage = 0;
     MemoryUsage memory = MemoryUsage::GpuOnly;
     const char* debugName = nullptr;
+    // The buffer is written by the upload (transfer) queue while the graphics queue may use
+    // it, e.g. append-only pools. Uses VK_SHARING_MODE_CONCURRENT across the graphics and
+    // transfer families (no ownership transfers); ignored when both are the same family.
+    bool sharedWithTransfer = false;
 };
 
 // Move-only owner of a VkBuffer and its VMA allocation.
@@ -44,6 +48,8 @@ public:
     void* mapped() const { return m_mapped; }
     // GPU address (buffers created with VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT), else 0.
     VkDeviceAddress deviceAddress() const { return m_address; }
+    // True when created with sharedWithTransfer across two queue families.
+    bool isConcurrent() const { return m_concurrent; }
 
     // Copies into a mapped buffer and flushes non-coherent memory.
     void write(const void* data, VkDeviceSize size, VkDeviceSize offset = 0);
@@ -51,6 +57,8 @@ public:
     void write(std::span<const T> items, VkDeviceSize offset = 0) {
         write(items.data(), items.size_bytes(), offset);
     }
+    // Flushes host writes made directly through mapped() (no-op for coherent memory).
+    void flush(VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
     // Makes GPU writes visible to the host before reading mapped().
     void invalidate();
 
@@ -61,6 +69,7 @@ private:
     VkDeviceSize m_size = 0;
     void* m_mapped = nullptr;
     VkDeviceAddress m_address = 0;
+    bool m_concurrent = false;
 };
 
 } // namespace zodar::gfx

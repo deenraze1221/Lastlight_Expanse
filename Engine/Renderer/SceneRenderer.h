@@ -3,6 +3,9 @@
 #include "Renderer/BindlessRegistry.h"
 #include "Renderer/Camera.h"
 #include "Renderer/FrameInfo.h"
+#include "Renderer/Lighting/ClusteredLighting.h"
+#include "Renderer/Lighting/Environment.h"
+#include "Renderer/Lighting/Lights.h"
 #include "Renderer/Material.h"
 #include "Renderer/Resources/GpuBuffer.h"
 #include "Renderer/Resources/GpuImage.h"
@@ -21,33 +24,14 @@
 
 namespace zodar::gfx {
 
+class GeometryPool;
 class GpuMesh;
+class GpuScene;
 class GraphicsPipeline;
 class RenderGraph;
 class UploadContext;
 struct RGImage;
 class VulkanContext;
-
-struct DirectionalLight {
-    glm::vec3 direction{-0.4f, -1.0f, -0.3f}; // Direction the light travels.
-    glm::vec3 color{1.0f};
-    float intensity = 3.0f;
-    bool enabled = true;
-};
-
-struct PointLight {
-    glm::vec3 position{0.0f};
-    glm::vec3 color{1.0f};
-    float intensity = 10.0f; // Inverse-square: irradiance = intensity / d^2.
-    float range = 0.0f;      // Smooth cut-off distance; 0 = unbounded.
-};
-
-struct SceneLighting {
-    glm::vec3 ambientColor{1.0f};
-    float ambientIntensity = 0.03f;
-    DirectionalLight sun;
-    std::vector<PointLight> pointLights; // Up to kMaxPointLights are used.
-};
 
 struct MeshDraw {
     const GpuMesh* mesh = nullptr;
@@ -61,16 +45,34 @@ struct SceneView {
     glm::vec4 clearColor{0.0f, 0.0f, 0.0f, 1.0f}; // Linear HDR colour.
     SceneLighting lighting;
     std::span<const MeshDraw> draws;
+    // Optional persistent GPU-driven scene (render-graph path only). Its opaque/masked
+    // instances are culled and drawn on the GPU; `draws` are still drawn by the CPU path.
+    GpuScene* gpuScene = nullptr;
     float time = 0.0f;
     bool frustumCulling = true;
+    LightingDebugView debugView = LightingDebugView::None;
+    // Reference mode: every light is evaluated for every fragment (clustered culling skipped
+    // in shading). Produces the same image as clustered shading; used to validate it.
+    bool bruteForceLights = false;
 };
 
 struct RenderStats {
     uint32_t submitted = 0;
     uint32_t culled = 0;
     uint32_t drawCalls = 0;
-    uint32_t instances = 0;
+    uint32_t instances = 0;     // Visible instances drawn.
     uint64_t triangles = 0;
+    uint32_t commandDraws = 0;  // vkCmdDraw* calls recorded (a multi-draw indirect call counts once).
+    // GPU-driven results are read back when the frame slot is reused, so they describe the
+    // frame rendered framesInFlight frames earlier (0 when only the CPU path drew).
+    uint32_t statsLatencyFrames = 0;
+    // Clustered lighting (GPU counters, same latency as above; valid == false until available).
+    uint32_t lights = 0;
+    uint32_t clusters = 0;
+    uint32_t clusterAssignments = 0;   // Sum of cluster light-list lengths
+    uint32_t maxLightsInCluster = 0;   // Longest list found (before clamping)
+    uint32_t overflowClusters = 0;     // Clusters with more lights than the list capacity
+    bool lightingStatsValid = false;
 };
 
 struct SceneRendererDesc {
@@ -85,8 +87,6 @@ struct SceneRendererDesc {
 // defined by materials, shaders and lighting supplied by the caller.
 class SceneRenderer {
 public:
-    static constexpr uint32_t kMaxPointLights = 64;
-
     using FrameInfo = gfx::FrameInfo;
 
     SceneRenderer(VulkanContext& context, UploadContext& upload, const SceneRendererDesc& desc);
@@ -97,6 +97,14 @@ public:
 
     BindlessRegistry& bindless() { return *m_bindless; }
     MaterialSystem& materials() { return *m_materials; }
+    // Shared geometry for meshes that should be drawable by a GpuScene.
+    GeometryPool& geometry() { return *m_geometry; }
+    ClusteredLighting& clusteredLighting() { return *m_lighting; }
+    // Bakes environments for SceneLighting::environment; owns the DFG LUT.
+    IblBaker& ibl() { return *m_ibl; }
+
+    void setLightingSettings(const LightingSettings& settings) { m_lightingSettings = settings; }
+    const LightingSettings& lightingSettings() const { return m_lightingSettings; }
 
     // Records the scene pass. Targets are (re)created to match `extent`. Afterwards the
     // colour target is in SHADER_READ_ONLY_OPTIMAL and depth in DEPTH_ATTACHMENT_OPTIMAL.
@@ -134,13 +142,32 @@ private:
     struct PreparedScene {
         VkDeviceAddress frameAddress = 0;
         VkDeviceAddress instanceAddress = 0;
+        VkDeviceAddress visibleAddress = 0;
         std::vector<DrawBatch> batches;
+        glm::mat4 viewProjection{1.0f};
+        glm::vec3 cameraPosition{0.0f};
+        glm::vec3 forward{0.0f, 0.0f, -1.0f};
+        ClusteredLighting::Frame lights;
+        size_t firstBlendBatch = 0;
+        struct Sky {
+            glm::mat4 inverseViewProjection{1.0f};
+            uint32_t cube = 0;
+            uint32_t sampler = 0;
+            float intensity = 1.0f;
+            float lod = 0.0f;
+        };
+        bool drawSky = false;
+        bool depthPrepass = false;
+        Sky sky;
     };
 
     // Shared by both paths: culling, sorting, instancing and uploads (CPU only).
     PreparedScene prepare(const FrameInfo& frame, VkExtent2D extent, const SceneView& view, RenderStats& stats);
-    void recordDraws(VkCommandBuffer cmd, const PreparedScene& scene) const;
+    enum class DrawSet { Opaque, Blended, Depth }; // Depth: opaque/masked with depth-only pipelines
+    void recordDraws(VkCommandBuffer cmd, const PreparedScene& scene, DrawSet set) const;
+    void recordSky(VkCommandBuffer cmd, const PreparedScene& scene);
     void recordResolve(VkCommandBuffer cmd, uint32_t sourceIndex, VkFormat targetFormat);
+    VkDeviceAddress identityList(uint32_t count);
     void createLayouts();
     void ensureTargets(VkExtent2D extent);
     const GraphicsPipeline& resolvePipeline(VkFormat format);
@@ -150,6 +177,15 @@ private:
     SceneRendererDesc m_desc;
 
     std::unique_ptr<BindlessRegistry> m_bindless;
+    std::unique_ptr<GeometryPool> m_geometry;
+    std::unique_ptr<ClusteredLighting> m_lighting;
+    std::unique_ptr<IblBaker> m_ibl;
+    std::unique_ptr<ShaderModule> m_skyVs;
+    std::unique_ptr<ShaderModule> m_skyFs;
+    std::unique_ptr<GraphicsPipeline> m_skyPipeline;
+    LightingSettings m_lightingSettings;
+    GpuBuffer m_identity; // 0..n-1 instance list for the CPU draw path.
+    uint32_t m_identityCount = 0;
     Texture m_white;
     Texture m_flatNormal;
     std::unique_ptr<MaterialSystem> m_materials;

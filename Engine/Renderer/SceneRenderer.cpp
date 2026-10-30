@@ -3,6 +3,10 @@
 #include "Core/Error.h"
 #include "Core/Log.h"
 #include "Renderer/Frustum.h"
+#include "Renderer/GeometryPool.h"
+#include "Renderer/GpuProfiler.h"
+#include "Renderer/GpuScene.h"
+#include "Renderer/InstanceData.h"
 #include "Renderer/RenderGraph/RenderGraph.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Resources/FrameAllocator.h"
@@ -18,11 +22,7 @@
 namespace zodar::gfx {
 namespace {
 
-// std140 mirror of ZodarFrame in zodar/scene.glsl.
-struct GpuPointLight {
-    glm::vec4 positionRange;
-    glm::vec4 colorIntensity;
-};
+// std430 mirror of ZodarFrameBuffer in zodar/scene.glsl.
 struct GpuFrameData {
     glm::mat4 view;
     glm::mat4 projection;
@@ -32,21 +32,28 @@ struct GpuFrameData {
     glm::vec4 ambient;
     glm::vec4 sunDirection;
     glm::vec4 sunColor;
-    glm::uvec4 lightCounts;
-    GpuPointLight pointLights[SceneRenderer::kMaxPointLights];
+    glm::uvec4 lightCounts;   // x: lights, y: debug view, z: flags, w: max lights per cluster
+    glm::uvec4 clusterGrid;
+    glm::vec4 clusterDepth;
+    VkDeviceAddress lightsAddress;
+    VkDeviceAddress clusterCountsAddress;
+    VkDeviceAddress clusterIndicesAddress;
+    VkDeviceAddress reserved0;
+    glm::uvec4 ibl;           // Bindless slots: irradiance, prefiltered, DFG LUT, sampler
+    glm::vec4 iblParams;      // x: intensity, y: prefiltered mips, z: skybox mip
 };
+static_assert(sizeof(GpuFrameData) == 384, "GpuFrameData must match zodar/scene.glsl");
 
-struct GpuInstance {
-    glm::mat4 model;
-    glm::mat4 normalMatrix;
-};
+constexpr uint32_t kLightingIbl = 1u, kLightingMultiscatter = 2u, kLightingBruteForce = 4u;
+constexpr uint32_t kNoSlot = 0xFFFFFFFFu;
+
 
 // Mirrors ZodarDraw in zodar/scene.glsl.
 struct PushConstants {
     VkDeviceAddress frameAddress;
     VkDeviceAddress instanceAddress;
-    uint32_t materialIndex;
-    uint32_t reserved[3];
+    VkDeviceAddress visibleAddress;
+    uint64_t reserved;
 };
 static_assert(sizeof(PushConstants) == 32);
 
@@ -83,6 +90,11 @@ SceneRenderer::SceneRenderer(VulkanContext& context, UploadContext& upload, cons
     : m_context(context), m_upload(upload), m_desc(desc) {
     ZODAR_ENSURE(desc.framesInFlight >= 1, "framesInFlight must be at least 1");
     m_bindless = std::make_unique<BindlessRegistry>(context);
+    m_geometry = std::make_unique<GeometryPool>(context);
+    m_lighting = std::make_unique<ClusteredLighting>(context, desc.shaderDirectory, desc.framesInFlight);
+    m_ibl = std::make_unique<IblBaker>(context, upload, *m_bindless, desc.shaderDirectory);
+    m_skyVs = std::make_unique<ShaderModule>(context.device(), loadSpirv(desc.shaderDirectory / "sky.vert.spv"));
+    m_skyFs = std::make_unique<ShaderModule>(context.device(), loadSpirv(desc.shaderDirectory / "sky.frag.spv"));
     {
         UploadBatch batch(upload);
         m_white = Texture(batch, *m_bindless, ImageData::solid(1, 1, 255, 255, 255, 255, ColorSpace::Linear, "DefaultWhite"));
@@ -108,7 +120,11 @@ SceneRenderer::~SceneRenderer() {
     m_context.collectGarbage(); // Old targets retired by this renderer reference m_bindless.
     m_context.deletionQueue().flushAll();
     m_resolvePipelines.clear();
+    m_skyPipeline.reset();
     m_materials.reset();
+    m_ibl.reset();
+    m_lighting.reset();
+    m_geometry.reset();
     vkDestroyPipelineLayout(m_context.device(), m_sceneLayout, nullptr);
 }
 
@@ -152,6 +168,25 @@ void SceneRenderer::ensureTargets(VkExtent2D extent) {
     ZODAR_LOG_DEBUG("Scene targets {}x{}", extent.width, extent.height);
 }
 
+VkDeviceAddress SceneRenderer::identityList(uint32_t count) {
+    const uint32_t needed = std::max(count, 1u);
+    if (m_identityCount < needed) {
+        uint32_t capacity = std::max(m_identityCount, 4096u);
+        while (capacity < needed) capacity *= 2;
+        // In-flight frames may still read the old list.
+        auto old = std::make_shared<GpuBuffer>(std::move(m_identity));
+        m_context.deletionQueue().retire([old] {});
+        m_identity = GpuBuffer(m_context, {VkDeviceSize(capacity) * 4,
+                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                           MemoryUsage::Upload, "IdentityInstanceList"});
+        auto* values = static_cast<uint32_t*>(m_identity.mapped());
+        for (uint32_t i = 0; i < capacity; ++i) values[i] = i;
+        m_identity.flush();
+        m_identityCount = capacity;
+    }
+    return m_identity.deviceAddress();
+}
+
 SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkExtent2D extent, const SceneView& view,
                                                    RenderStats& stats) {
     ZODAR_ENSURE(frame.scratch != nullptr, "scene rendering needs a frame scratch allocator");
@@ -163,6 +198,9 @@ SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkEx
     const glm::mat4 viewMatrix = view.camera.viewMatrix();
     const glm::mat4 projection = view.camera.projectionMatrix(aspect);
     const glm::mat4 viewProjection = projection * viewMatrix;
+    prepared.viewProjection = viewProjection;
+    prepared.cameraPosition = view.camera.position;
+    prepared.forward = view.camera.forward();
 
     GpuFrameData data{};
     data.view = viewMatrix;
@@ -176,14 +214,46 @@ SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkEx
     data.sunDirection = glm::vec4(sunLength > 0.0f ? sun.direction / sunLength : glm::vec3(0, -1, 0),
                                   sun.enabled ? 1.0f : 0.0f);
     data.sunColor = glm::vec4(sun.color * sun.intensity, 0.0f);
-    const auto pointCount = static_cast<uint32_t>(std::min<size_t>(view.lighting.pointLights.size(), kMaxPointLights));
-    if (view.lighting.pointLights.size() > kMaxPointLights) {
-        ZODAR_LOG_WARN("{} point lights submitted; only {} are used", view.lighting.pointLights.size(), kMaxPointLights);
+
+    // Clustered lights: statistics of the frame that last used this slot, then this frame's data.
+    const ClusteredLighting::Stats lightStats = m_lighting->readStats(frame.slot);
+    if (lightStats.valid) {
+        stats.lightingStatsValid = true;
+        stats.clusterAssignments = lightStats.assignments;
+        stats.maxLightsInCluster = lightStats.maxFound;
+        stats.overflowClusters = lightStats.overflowClusters;
     }
-    data.lightCounts = glm::uvec4(pointCount, 0, 0, 0);
-    for (uint32_t i = 0; i < pointCount; ++i) {
-        const PointLight& p = view.lighting.pointLights[i];
-        data.pointLights[i] = {glm::vec4(p.position, p.range), glm::vec4(p.color, p.intensity)};
+    const float nearPlane = view.camera.projection.nearPlane;
+    prepared.lights = m_lighting->prepare(frame, extent, view.lighting, m_lightingSettings, viewMatrix, projection,
+                                          nearPlane);
+    const ClusterGrid& grid = prepared.lights.grid;
+    stats.lights = prepared.lights.lightCount;
+    stats.clusters = grid.count();
+    const uint32_t flags = (m_lightingSettings.multiscatter ? kLightingMultiscatter : 0u) |
+                           (view.bruteForceLights ? kLightingBruteForce : 0u);
+    data.lightCounts = glm::uvec4(prepared.lights.lightCount, static_cast<uint32_t>(view.debugView), flags,
+                                  prepared.lights.maxLightsPerCluster);
+    data.clusterGrid = glm::uvec4(grid.x, grid.y, grid.z, grid.tileSize);
+    data.clusterDepth = glm::vec4(grid.sliceScale, grid.sliceBias, grid.nearPlane, grid.farPlane);
+    data.lightsAddress = prepared.lights.lights;
+    data.clusterCountsAddress = prepared.lights.counts;
+    data.clusterIndicesAddress = prepared.lights.indices;
+    // Image-based lighting (the DFG LUT is always available; it also drives multiscatter).
+    const Environment* env = view.lighting.environment;
+    data.ibl = glm::uvec4(kNoSlot, kNoSlot, m_ibl->dfgLutSlot(), m_ibl->samplerSlot());
+    data.iblParams = glm::vec4(0.0f);
+    if (env) {
+        data.lightCounts.z |= kLightingIbl;
+        data.ibl.x = env->irradianceSlot();
+        data.ibl.y = env->prefilteredSlot();
+        data.iblParams = glm::vec4(view.lighting.environmentIntensity, float(env->prefilteredMips()), 0.0f, 0.0f);
+        if (view.lighting.drawEnvironmentBackground) {
+            prepared.drawSky = true;
+            prepared.sky.inverseViewProjection = glm::inverse(projection * glm::mat4(glm::mat3(viewMatrix)));
+            prepared.sky.cube = env->radianceSlot();
+            prepared.sky.sampler = m_ibl->samplerSlot();
+            prepared.sky.intensity = view.lighting.environmentIntensity;
+        }
     }
     prepared.frameAddress = frame.scratch->upload(data).address;
 
@@ -217,12 +287,17 @@ SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkEx
         return a.draw->submesh < b.draw->submesh;
     });
 
-    std::vector<GpuInstance> instances(entries.size());
+    // Instance data is written in place into frame memory (no intermediate copy).
+    const FrameAllocator::Allocation instanceData =
+        frame.scratch->allocate(std::max<VkDeviceSize>(entries.size(), 1) * sizeof(GpuInstance), 16);
+    auto* instances = static_cast<GpuInstance*>(instanceData.data);
     for (size_t i = 0; i < entries.size(); ++i) {
-        const glm::mat4& model = entries[i].draw->transform;
-        instances[i] = {model, glm::mat4(glm::inverseTranspose(glm::mat3(model)))};
+        instances[i] = makeGpuInstance(entries[i].draw->transform, entries[i].draw->material);
     }
-    prepared.instanceAddress = frame.scratch->upload(std::span<const GpuInstance>(instances)).address;
+    frame.scratch->flush(instanceData);
+    prepared.instanceAddress = instanceData.address;
+    // Draw instance i uses instance i: a persistent 0..n-1 list (grown, never rebuilt per frame).
+    prepared.visibleAddress = identityList(static_cast<uint32_t>(entries.size()));
     stats.instances = static_cast<uint32_t>(entries.size());
 
     for (size_t i = 0; i < entries.size();) {
@@ -241,43 +316,83 @@ SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkEx
                                     static_cast<uint32_t>(i), static_cast<uint32_t>(count)});
         i += count;
     }
+    prepared.depthPrepass = m_lightingSettings.depthPrepass;
+    prepared.firstBlendBatch = prepared.batches.size();
+    for (size_t b = 0; b < prepared.batches.size(); ++b) {
+        if (m_materials->material(prepared.batches[b].material).alphaMode == AlphaMode::Blend) {
+            prepared.firstBlendBatch = b;
+            break;
+        }
+    }
     stats.drawCalls = static_cast<uint32_t>(prepared.batches.size());
+    stats.commandDraws = stats.drawCalls;
     for (const DrawBatch& b : prepared.batches) {
         stats.triangles += static_cast<uint64_t>(b.mesh->submeshes()[b.submesh].indexCount / 3) * b.instanceCount;
     }
     return prepared;
 }
 
-void SceneRenderer::recordDraws(VkCommandBuffer cmd, const PreparedScene& scene) const {
+void SceneRenderer::recordDraws(VkCommandBuffer cmd, const PreparedScene& scene, DrawSet drawSet) const {
     const VkDescriptorSet set = m_bindless->set();
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_sceneLayout, 0, 1, &set, 0, nullptr);
     const VkShaderStageFlags pushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    const PushConstants addresses{scene.frameAddress, scene.instanceAddress, 0, {0, 0, 0}};
+    const PushConstants addresses{scene.frameAddress, scene.instanceAddress, scene.visibleAddress, 0};
     vkCmdPushConstants(cmd, m_sceneLayout, pushStages, 0, sizeof(addresses), &addresses);
 
     const GraphicsPipeline* boundPipeline = nullptr;
-    const GpuMesh* boundMesh = nullptr;
-    uint32_t boundMaterial = UINT32_MAX;
-    for (const DrawBatch& b : scene.batches) {
-        if (b.pipeline != boundPipeline) {
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, b.pipeline->handle());
-            boundPipeline = b.pipeline;
+    VkBuffer boundVertices = VK_NULL_HANDLE;
+    const bool blended = drawSet == DrawSet::Blended;
+    const size_t begin = blended ? scene.firstBlendBatch : 0;
+    const size_t end = blended ? scene.batches.size() : scene.firstBlendBatch;
+    for (size_t i = begin; i < end; ++i) {
+        const DrawBatch& b = scene.batches[i];
+        const GraphicsPipeline* pipeline =
+            drawSet == DrawSet::Depth ? &m_materials->depthPipeline(b.material) : b.pipeline;
+        if (pipeline != boundPipeline) {
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->handle());
+            boundPipeline = pipeline;
         }
-        if (b.material != boundMaterial) {
-            vkCmdPushConstants(cmd, m_sceneLayout, pushStages, offsetof(PushConstants, materialIndex),
-                               sizeof(uint32_t), &b.material);
-            boundMaterial = b.material;
-        }
-        if (b.mesh != boundMesh) {
-            const VkBuffer vb = b.mesh->vertexBuffer().handle();
+        if (b.mesh->vertexBuffer() != boundVertices) { // Pooled meshes share one buffer pair.
+            const VkBuffer vb = b.mesh->vertexBuffer();
             const VkDeviceSize offset = 0;
             vkCmdBindVertexBuffers(cmd, 0, 1, &vb, &offset);
-            vkCmdBindIndexBuffer(cmd, b.mesh->indexBuffer().handle(), 0, VK_INDEX_TYPE_UINT32);
-            boundMesh = b.mesh;
+            vkCmdBindIndexBuffer(cmd, b.mesh->indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+            boundVertices = vb;
         }
         const Submesh& sub = b.mesh->submeshes()[b.submesh];
-        vkCmdDrawIndexed(cmd, sub.indexCount, b.instanceCount, sub.firstIndex, 0, b.firstInstance);
+        vkCmdDrawIndexed(cmd, sub.indexCount, b.instanceCount, b.mesh->baseIndex() + sub.firstIndex,
+                         static_cast<int32_t>(b.mesh->baseVertex()), b.firstInstance);
     }
+}
+
+void SceneRenderer::recordSky(VkCommandBuffer cmd, const PreparedScene& scene) {
+    if (!scene.drawSky) {
+        return;
+    }
+    if (!m_skyPipeline) {
+        GraphicsPipelineDesc desc;
+        desc.vertexShader = m_skyVs->handle();
+        desc.fragmentShader = m_skyFs->handle();
+        desc.colorFormat = m_desc.colorFormat;
+        desc.depthFormat = m_desc.depthFormat;
+        desc.depthTest = true; // Reverse Z: passes only where the cleared depth (0) remains
+        desc.depthWrite = false;
+        desc.setLayouts = {m_bindless->layout()};
+        desc.pushConstantSize = sizeof(PreparedScene::Sky);
+        desc.pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT;
+        desc.debugName = "Sky";
+        m_skyPipeline = std::make_unique<GraphicsPipeline>(m_context, desc);
+    }
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_skyPipeline->handle());
+    const VkDescriptorSet set = m_bindless->set();
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_skyPipeline->layout(), 0, 1, &set, 0, nullptr);
+    vkCmdPushConstants(cmd, m_skyPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(scene.sky), &scene.sky);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+    // Later draws use the shared scene layout again.
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_sceneLayout, 0, 1, &set, 0, nullptr);
+    const PushConstants addresses{scene.frameAddress, scene.instanceAddress, scene.visibleAddress, 0};
+    vkCmdPushConstants(cmd, m_sceneLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                       sizeof(addresses), &addresses);
 }
 
 RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, const SceneView& view) {
@@ -287,6 +402,7 @@ RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, con
 
     // Reference path: hand-written barriers (kept for regression comparison with the graph).
     const VkCommandBuffer cmd = frame.commandBuffer;
+    m_lighting->record(cmd, prepared.lights);
     // The previous frame may still read colour (resolve) or write depth: order against both.
     transitionImage(cmd, m_color.handle(), m_color.fullRange(), VK_IMAGE_LAYOUT_UNDEFINED,
                     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -300,6 +416,33 @@ RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, con
                     VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 
+    const VkViewport viewport{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f};
+    const VkRect2D scissor{{0, 0}, extent};
+    if (prepared.depthPrepass) {
+        // Depth prepass: opaque/masked depth only; the shading pass then runs one fragment per pixel.
+        VkRenderingAttachmentInfo prepassDepth{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+        prepassDepth.imageView = m_depth.view();
+        prepassDepth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        prepassDepth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        prepassDepth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        prepassDepth.clearValue.depthStencil = {0.0f, 0};
+        VkRenderingInfo prepass{VK_STRUCTURE_TYPE_RENDERING_INFO};
+        prepass.renderArea = {{0, 0}, extent};
+        prepass.layerCount = 1;
+        prepass.pDepthAttachment = &prepassDepth;
+        vkCmdBeginRendering(cmd, &prepass);
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+        recordDraws(cmd, prepared, DrawSet::Depth);
+        vkCmdEndRendering(cmd);
+        transitionImage(cmd, m_depth.handle(), m_depth.fullRange(), VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    }
+
     VkRenderingAttachmentInfo color{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
     color.imageView = m_color.view();
     color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -309,7 +452,7 @@ RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, con
     VkRenderingAttachmentInfo depth{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
     depth.imageView = m_depth.view();
     depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth.loadOp = prepared.depthPrepass ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
     depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     depth.clearValue.depthStencil = {0.0f, 0}; // Reverse Z: far = 0.
 
@@ -320,11 +463,11 @@ RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, con
     rendering.pColorAttachments = &color;
     rendering.pDepthAttachment = &depth;
     vkCmdBeginRendering(cmd, &rendering);
-    const VkViewport viewport{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f};
-    const VkRect2D scissor{{0, 0}, extent};
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
-    recordDraws(cmd, prepared);
+    recordDraws(cmd, prepared, DrawSet::Opaque);
+    recordSky(cmd, prepared);
+    recordDraws(cmd, prepared, DrawSet::Blended);
     vkCmdEndRendering(cmd);
 
     transitionImage(cmd, m_color.handle(), m_color.fullRange(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -339,19 +482,146 @@ SceneRenderer::GraphOutputs SceneRenderer::addToGraph(RenderGraph& graph, const 
                                                       VkFormat outputFormat, RenderStats* statsOut) {
     RenderStats stats;
     auto prepared = std::make_shared<PreparedScene>(prepare(frame, extent, view, stats));
+
+    // --- GPU-driven scene: culled and expanded into indirect draws on the GPU. --------
+    GpuScene* gpuScene = view.gpuScene;
+    GpuScene::FramePasses gpu;
+    struct BlendDraw {
+        const GraphicsPipeline* pipeline;
+        const GpuMesh* mesh;
+        uint32_t submesh;
+        uint32_t listIndex;
+    };
+    auto blendDraws = std::make_shared<std::vector<BlendDraw>>();
+    VkDeviceAddress blendListAddress = 0;
+    if (gpuScene) {
+        ZODAR_ENSURE(gpuScene->geometryPool() == nullptr || gpuScene->geometryPool() == m_geometry.get(),
+                     "GpuScene meshes must come from this renderer's geometry pool");
+        const Frustum frustum(prepared->viewProjection);
+        gpu = gpuScene->addCullPasses(graph, frame, frustum);
+
+        // Blended instances: CPU frustum test and back-to-front sort (same rules as `draws`).
+        struct Entry {
+            uint32_t slot;
+            float depth;
+        };
+        std::vector<Entry> entries;
+        for (uint32_t slot : gpuScene->blendedSlots()) {
+            const GpuScene::BlendedInstance b = gpuScene->blended(slot);
+            if (view.frustumCulling && !b.world.isEmpty() && !frustum.intersects(b.world)) {
+                ++stats.culled;
+                continue;
+            }
+            const glm::vec3 centre = b.world.isEmpty() ? glm::vec3(0.0f) : b.world.center();
+            entries.push_back({slot, glm::dot(centre - prepared->cameraPosition, prepared->forward)});
+        }
+        std::stable_sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) { return a.depth > b.depth; });
+        if (!entries.empty()) {
+            std::vector<uint32_t> list(entries.size());
+            for (uint32_t i = 0; i < entries.size(); ++i) {
+                const GpuScene::BlendedInstance b = gpuScene->blended(entries[i].slot);
+                list[i] = entries[i].slot;
+                blendDraws->push_back({&m_materials->pipeline(b.material), b.mesh, b.submesh, i});
+                stats.triangles += b.mesh->submeshes()[b.submesh].indexCount / 3;
+            }
+            blendListAddress = frame.scratch->upload(std::span<const uint32_t>(list), 16).address;
+        }
+        stats.submitted += gpuScene->instanceCount();
+        stats.instances += gpu.stats.visible + static_cast<uint32_t>(entries.size());
+        stats.drawCalls += gpu.stats.drawCommands + static_cast<uint32_t>(entries.size());
+        stats.triangles += gpu.stats.triangles;
+        stats.culled = stats.submitted - stats.instances;
+        stats.commandDraws += gpuScene->indirectCallCount() + static_cast<uint32_t>(entries.size());
+        stats.statsLatencyFrames = gpu.stats.valid ? m_desc.framesInFlight : 0;
+    }
     if (statsOut) {
         *statsOut = stats;
     }
 
+    const ClusteredLighting::GraphBuffers lightBuffers = m_lighting->addToGraph(graph, prepared->lights);
     const RGImage color = graph.createImage("SceneColor", {extent.width, extent.height, m_desc.colorFormat, 1});
     const RGImage depth = graph.createImage("SceneDepth", {extent.width, extent.height, m_desc.depthFormat, 1});
+    const bool prepass = prepared->depthPrepass;
+    if (prepass) {
+        graph.addPass(
+            "Scene.DepthPrepass", RenderGraph::PassType::Raster,
+            [&](PassBuilder& b) {
+                b.depthAttachment(depth, LoadOp::Clear, 0.0f);
+                if (gpuScene) {
+                    b.read(gpu.commands, ResourceUsage::IndirectArgs);
+                    b.read(gpu.visible, ResourceUsage::UniformRead);
+                    b.read(gpu.instances, ResourceUsage::UniformRead);
+                }
+            },
+            [this, prepared, gpuScene, gpu](PassContext& ctx) {
+                const VkCommandBuffer cmd = ctx.cmd();
+                if (gpuScene) {
+                    const VkDescriptorSet set = m_bindless->set();
+                    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_sceneLayout, 0, 1, &set, 0, nullptr);
+                    const PushConstants push{prepared->frameAddress, gpu.instanceAddress, gpu.visibleAddress, 0};
+                    vkCmdPushConstants(cmd, m_sceneLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                                       sizeof(push), &push);
+                    gpuScene->recordIndirectDraws(cmd, gpu, true);
+                }
+                recordDraws(cmd, *prepared, DrawSet::Depth);
+            });
+    }
     graph.addPass(
         "Scene", RenderGraph::PassType::Raster,
         [&](PassBuilder& b) {
             b.colorAttachment(color, LoadOp::Clear, view.clearColor);
-            b.depthAttachment(depth, LoadOp::Clear, 0.0f); // Reverse Z: far = 0.
+            b.depthAttachment(depth, prepass ? LoadOp::Load : LoadOp::Clear, 0.0f); // Reverse Z: far = 0.
+            b.read(lightBuffers.lights, ResourceUsage::UniformRead);
+            b.read(lightBuffers.counts, ResourceUsage::UniformRead);
+            b.read(lightBuffers.indices, ResourceUsage::UniformRead);
+            if (gpuScene) {
+                b.read(gpu.commands, ResourceUsage::IndirectArgs);
+                b.read(gpu.visible, ResourceUsage::UniformRead);
+                b.read(gpu.instances, ResourceUsage::UniformRead);
+            }
         },
-        [this, prepared](PassContext& ctx) { recordDraws(ctx.cmd(), *prepared); });
+        [this, prepared, gpuScene, gpu, blendDraws, blendListAddress, profiler = frame.profiler](PassContext& ctx) {
+            const VkCommandBuffer cmd = ctx.cmd();
+            // Fragment-shader invocations etc. of the whole scene pass (when supported).
+            const uint32_t statsScope = profiler ? profiler->beginStatistics(cmd, "Scene") : UINT32_MAX;
+            const VkShaderStageFlags pushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+            if (gpuScene) {
+                // 1. GPU-culled opaque and masked instances.
+                const VkDescriptorSet set = m_bindless->set();
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_sceneLayout, 0, 1, &set, 0, nullptr);
+                const PushConstants push{prepared->frameAddress, gpu.instanceAddress, gpu.visibleAddress, 0};
+                vkCmdPushConstants(cmd, m_sceneLayout, pushStages, 0, sizeof(push), &push);
+                gpuScene->recordIndirectDraws(cmd, gpu);
+            }
+            // 2. CPU-submitted draws (opaque, then blended).
+            recordDraws(cmd, *prepared, DrawSet::Opaque);
+            recordSky(cmd, *prepared);
+            recordDraws(cmd, *prepared, DrawSet::Blended);
+            if (gpuScene && !blendDraws->empty()) {
+                // 3. Blended GPU-scene instances, back to front.
+                const PushConstants push{prepared->frameAddress, gpu.instanceAddress, blendListAddress, 0};
+                vkCmdPushConstants(cmd, m_sceneLayout, pushStages, 0, sizeof(push), &push);
+                const GraphicsPipeline* bound = nullptr;
+                VkBuffer boundVertices = VK_NULL_HANDLE;
+                for (const BlendDraw& d : *blendDraws) {
+                    if (d.pipeline != bound) {
+                        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, d.pipeline->handle());
+                        bound = d.pipeline;
+                    }
+                    if (d.mesh->vertexBuffer() != boundVertices) {
+                        const VkBuffer vb = d.mesh->vertexBuffer();
+                        const VkDeviceSize offset = 0;
+                        vkCmdBindVertexBuffers(cmd, 0, 1, &vb, &offset);
+                        vkCmdBindIndexBuffer(cmd, d.mesh->indexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+                        boundVertices = vb;
+                    }
+                    const Submesh& sub = d.mesh->submeshes()[d.submesh];
+                    vkCmdDrawIndexed(cmd, sub.indexCount, 1, d.mesh->baseIndex() + sub.firstIndex,
+                                     static_cast<int32_t>(d.mesh->baseVertex()), d.listIndex);
+                }
+            }
+            if (profiler) profiler->endStatistics(cmd, statsScope);
+        });
 
     graph.addPass(
         "Resolve", RenderGraph::PassType::Raster,
@@ -360,6 +630,9 @@ SceneRenderer::GraphOutputs SceneRenderer::addToGraph(RenderGraph& graph, const 
             b.colorAttachment(output, LoadOp::DontCare);
         },
         [this, color, outputFormat](PassContext& ctx) { recordResolve(ctx.cmd(), ctx.bindlessIndex(color), outputFormat); });
+    if (gpuScene) {
+        gpuScene->addStatsPass(graph, frame, gpu);
+    }
     return {color.index, depth.index};
 }
 

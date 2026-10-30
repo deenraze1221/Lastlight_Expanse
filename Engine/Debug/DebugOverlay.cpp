@@ -173,6 +173,30 @@ void DebugOverlay::drawProfiler(const ProfilerSnapshot& s) {
         ImGui::Text("Draw calls %u   instances %u   culled %u / %u", s.render.drawCalls, s.render.instances,
                     s.render.culled, s.render.submitted);
         ImGui::Text("Triangles %llu", static_cast<unsigned long long>(s.render.triangles));
+        if (s.render.lights > 0) {
+            if (s.render.lightingStatsValid) {
+                ImGui::Text("Lights %u   clusters %u   avg %.1f / max %u per cluster", s.render.lights, s.render.clusters,
+                            s.render.clusters ? double(s.render.clusterAssignments) / s.render.clusters : 0.0,
+                            s.render.maxLightsInCluster);
+                if (s.render.overflowClusters > 0) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.3f, 1.0f, 1.0f), "%u clusters overflow (raise lighting quality)",
+                                       s.render.overflowClusters);
+                }
+            } else {
+                ImGui::Text("Lights %u   clusters %u", s.render.lights, s.render.clusters);
+            }
+        }
+        if (s.gpu && s.gpu->statisticsEnabled()) {
+            for (const auto& st : s.gpu->lastStatistics()) {
+                const double pixels = double(s.resolution.width) * double(s.resolution.height);
+                ImGui::Text("%s: %llu fragment invocations (%.2f / pixel), %llu primitives", st.name.c_str(),
+                            static_cast<unsigned long long>(st.fragmentInvocations),
+                            pixels > 0 ? double(st.fragmentInvocations) / pixels : 0.0,
+                            static_cast<unsigned long long>(st.clippingPrimitives));
+            }
+        } else {
+            ImGui::TextDisabled("Pipeline statistics unavailable (fallback: CPU triangle counts)");
+        }
     }
     if (ImGui::CollapsingHeader("Memory", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Text("Device local %s / %s%s", bytes(s.memory.deviceLocalUsage).c_str(),

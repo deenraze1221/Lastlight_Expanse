@@ -61,6 +61,9 @@ FrameAllocator::Allocation FrameAllocator::allocate(VkDeviceSize size, VkDeviceS
 
 void FrameAllocator::write(const Allocation& allocation, const void* data, VkDeviceSize size, VkDeviceSize offset) {
     ZODAR_ENSURE(offset + size <= allocation.size, "frame allocation write out of range");
+    const auto* dst = static_cast<const uint8_t*>(allocation.data) + offset;
+    const auto* src = static_cast<const uint8_t*>(data);
+    ZODAR_ENSURE(src + size <= dst || dst + size <= src, "write() source overlaps the allocation; use flush()");
     for (auto& block : m_slots[m_slot].blocks) {
         if (block.buffer.handle() == allocation.buffer) {
             block.buffer.write(data, size, allocation.offset + offset);
@@ -68,6 +71,16 @@ void FrameAllocator::write(const Allocation& allocation, const void* data, VkDev
         }
     }
     fail("write() to an allocation that is not from the current frame");
+}
+
+void FrameAllocator::flush(const Allocation& allocation) {
+    for (auto& block : m_slots[m_slot].blocks) {
+        if (block.buffer.handle() == allocation.buffer) {
+            block.buffer.flush(allocation.offset, allocation.size);
+            return;
+        }
+    }
+    fail("flush() of an allocation that is not from the current frame");
 }
 
 VkDeviceSize FrameAllocator::bytesUsed() const {

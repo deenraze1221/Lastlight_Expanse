@@ -20,16 +20,18 @@
 ## Module graph
 
 ```
-            Games/<Game>   Samples/*   Tools/ZodarBench   Tests
-                       \          |           /             /
-                        +------ Debug (ImGui) ------+-------+
-                                     |
-                        +-------- Renderer -------+
-                                /          \
-                         Platform          Assets   (CPU data + importers, no GPU)
+            Games/<Game>   Samples/*   Tools/ZodarBench   Tests     Tools/ZodarAssetCompiler
+                       \          |           /             /    \            |
+                        +------ Debug (ImGui) ------+-------+      AssetPipeline (offline: BCn, mips)
+                                     |                               |
+                        +-------- Renderer -------+                  |
+                                /          \                         |
+                         Platform          Assets  <-----------------+  (CPU data, importers, KTX2; no GPU)
                                 \          /
                                     Core
 ```
+
+The runtime renderer never links `AssetPipeline` (encoders are offline-only).
 
 Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`, `Audio`,
 `Input`, `UI` depend on `Core` (and `Platform` where they touch the OS); `Renderer` consumes
@@ -43,18 +45,27 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | Core | `Log`, `Error`, `ImageIO` | spdlog-based engine logger, `zodar::Error` + `fail()` + `ZODAR_ENSURE`, PPM writer for screenshots |
 | Platform | `Platform`, `Window` | SDL3 lifetime, window + event pump, Vulkan WSI glue (loader, instance extensions, surface) |
 | Renderer | `Renderer` | Frames in flight, acquire/submit/present, swapchain rebuild, screenshot readback |
-| Assets | `MeshData`, `ImageData`, `ModelData`, `Primitives`, `GltfLoader` | Engine vertex (64 B), mesh/tangent/normal generation, RGBA8 images with colour-space-correct mips, glTF 2.0 import (cgltf, stb_image) |
+| Assets | `MeshData`, `ImageData`, `ModelData`, `Primitives`, `GltfLoader` | Engine vertex (64 B), mesh/tangent/normal generation, images (RGBA8 or BC1/3/4/5/7) with colour-space-correct mips, BCn→RGBA8 decode fallback (bcdec), glTF 2.0 import (cgltf, stb_image) |
+| Assets | `Ktx2`, `TextureCache` (S3) | KTX 2.0 reader/writer (2D, no supercompression, levels smallest first, validated); compiled texture cache next to each model (`<model>.zodar/`), keyed by a hash of the source image + usage so stale data is never used |
+| AssetPipeline | `TextureCompiler`, `ModelCompiler` (S3) | Offline: baked mips (engine filters), BC1/3/4/5 (rgbcx) and BC7 (bc7enc) encoding, deterministic across thread counts; per-model texture compilation; used by `ZodarAssetCompiler` and tests |
 | Renderer/RenderGraph | `GraphPlanner`, `RenderGraph`, `RenderGraphResources` | Pure culling + barrier planning (unit tested); execution with dynamic rendering, debug labels, per-pass GPU timestamps; pooled transient images |
-| Renderer | `GpuProfiler`, `FrameInfo` | Timestamp scopes per frame slot, VMA memory budget stats; per-frame recording context |
+| Renderer | `GpuProfiler`, `FrameInfo` | Timestamp scopes per frame slot, optional pipeline-statistics scopes (fragment invocations, S2.1), VMA memory budget stats; per-frame recording context |
 | Renderer/Resources | `DeletionQueue`, `FrameAllocator` | Timeline-based deferred destruction; per-frame linear scratch memory with device addresses |
 | Renderer/Vulkan | `DeviceCapabilities`, `GpuTimeline`, `PipelineCache` | Capability table + feature resolution with fallbacks; graphics timeline semaphore; validated on-disk pipeline cache |
 | Core | `Profiler` | CPU scope timers, frame-time history with percentiles |
 | Debug | `DebugOverlay` | ImGui profiler overlay (F1), headless capable, drawn as a render-graph pass |
+| Renderer | `GpuScene` (S2) | Persistent GPU-resident instances (transform, normal matrix, material, world AABB); dirty-range uploads; ordered GPU frustum culling (cull + prefix-sum scan + scatter, S2.1); multi-draw indirect per pipeline; blended instances sorted on the CPU |
+| Renderer | `GeometryPool` (S2) | Shared device-local vertex/index buffers (growable); pooled meshes can be drawn by one indirect call |
+| Renderer/Vulkan | `ComputePipeline` (S2) | Compute pipelines with owned layout |
 | Renderer | `SceneRenderer` | Forward renderer: HDR colour + reverse-Z depth targets, frame/instance buffers, culling, sorting, instancing, sun + point lights, resolve |
 | | `MaterialSystem` | Named shaders, 128 B GPU material table, pipeline cache (shader × alpha mode × sidedness) |
 | | `BindlessRegistry` | Global set 0: 4096 textures, 64 samplers, material table |
 | | `Texture`, `Sampler`, `GpuMesh`, `Model`, `Camera`, `Frustum` | Sampled textures, sampler descriptions, GPU meshes, glTF models with override hooks, reverse-Z cameras, culling |
-| Renderer/Resources | `GpuBuffer`, `GpuImage`, `UploadContext`, `UploadBatch` | VMA-backed RAII resources, batched staging uploads, readback |
+| Renderer/Resources | `GpuBuffer`, `GpuImage`, `UploadContext`, `UploadBatch` | VMA-backed RAII resources, batched staging uploads (blocking or async), graphics-queue readback |
+| Renderer/Lighting | `ClusterMath`, `Lights`, `ClusteredLighting` (S4) | Light API (point/spot/sun, LightingSettings, debug views); pure cluster math (exponential slices, automatic ranges, spot cones; unit tested); GPU Clustered Forward+ (light upload, compute cull, per-cluster 16-bit lists, stats readback) |
+| Renderer/Lighting | `Environment`, `IblBaker` (S4) | GPU IBL bake (compute): equirect → radiance cube + mips, irradiance cube, GGX-prefiltered cube, multi-scatter DFG LUT; bindless cube slots |
+| Assets | `EnvironmentMaps` (S4) | Procedural sky / uniform equirect HDR images; `.hdr` loading in `ImageData` (Rgba16f) |
+| Renderer/Resources | `UploadQueue` (S3) | Uploads on the dedicated transfer queue (fallback: graphics queue): non-blocking submit → ticket, timeline semaphore + fence, queue-family release/acquire barriers (pure `makeOwnershipTransfer`, unit tested), per-frame `acquireCompleted`, staging freed on completion |
 | Renderer/Vulkan | `VulkanContext` | Instance, debug messenger, surface (optional: headless mode), GPU selection, device, queues, VMA allocator |
 | | `VulkanSwapchain` | Swapchain, image views, per-image present semaphores, recreation |
 | | `VulkanPipeline` | SPIR-V loading, `ShaderModule`, minimal `GraphicsPipeline` |
@@ -74,8 +85,12 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | sRGB swapchain (`B8G8R8A8_SRGB` preferred) | Shaders write linear colour. Scenes will render to an HDR target and resolve into this through the post-process stack. |
 | **Reverse-Z** depth (D32, clear 0, GREATER_OR_EQUAL), infinite far plane by default | Best depth precision for large scenes. |
 | **Bindless** textures/samplers (descriptor indexing) + material SSBO | Any shader indexes any texture; materials are table entries, not descriptor sets. Samplers are independent of textures. |
-| Shared scene pipeline layout: set 0 bindless; push constants = frame-data address, instance-data address, material index | One layout for every material shader. Per-frame data lives in `FrameAllocator` scratch memory read through buffer device addresses (no per-frame descriptor sets). |
+| Shared scene pipeline layout: set 0 bindless; push constants = frame-data, instance-data and visible-list addresses; material index stored per instance | One layout for every material shader. Per-frame data lives in `FrameAllocator` scratch memory read through buffer device addresses (no per-frame descriptor sets). |
+| **GPU-driven rendering** (S2) | `SceneView::gpuScene` selects it. Per frame the CPU uploads only changed instances; three compute passes cull every instance with the same world bounds and frustum planes as the CPU path (plus a 1e-5 conservative margin) and compact the visible ones deterministically: (1) frustum test + workgroup exclusive scan over a group-sorted order array, (2) scan of the per-workgroup counts, (3) scatter to `visible[]` and write each group's `firstInstance`/`instanceCount`. The visible list therefore has exactly the CPU path's draw order (pipeline, material, mesh, submesh, insertion order) — verified by reading it back in a GPU test — so early-Z behaviour and fragment-shader invocations match the CPU path. Static command fields are uploaded only when the structure changes. Drawing is one `vkCmdDrawIndexedIndirect` per pipeline. The CPU draw list path (`SceneView::draws`) and the reference path are kept; all three render byte-identical images (GPU tests + benchmark screenshots). GPU statistics are read back without stalls and lag by framesInFlight frames. |
 | **Render graph** (S1) | Passes declare usage; the planner derives culling, layouts and sync2 barriers. v1 executes in declaration order on one queue, without memory aliasing. The pre-graph path is kept (`SceneRenderer::render/resolve`, `--reference-path`) and must produce byte-identical output (GPU test). |
+| **Uploads on the transfer queue** (S3) | `UploadBatch` records copies into an `UploadQueue` submission on the dedicated transfer family. Images and new buffers are `EXCLUSIVE`: the transfer queue releases them (with the final layout transition) and the graphics queue acquires them — at the start of a frame (`Renderer::attachUploads` → `acquireCompleted`) or in a small graphics submission for blocking `submit()`. Buffers written while the graphics queue uses other ranges (geometry pool) use `CONCURRENT` sharing (`BufferDesc::sharedWithTransfer`). Every later graphics submission waits on the upload timeline at the highest acquired value (already signalled → no stall), which makes all transfer writes visible. `ContextDesc::dedicatedTransferQueue = false` / `ZodarBench --no-transfer-queue` force the graphics-queue fallback for A/B tests. |
+| **Compiled textures** (S3) | `ZodarAssetCompiler` bakes mips with the engine's filters and encodes BC7 (all model textures by default) into KTX2; `loadGltf` uses them when the source hash matches and falls back to decoding the source image with runtime mip generation (logged) otherwise. `Texture` uploads BCn directly; devices without BC sampling get a CPU decode (bcdec). Streaming is designed in `Docs/ASSET_STREAMING.md`, not implemented. |
+| **Lighting** (S4) | Clustered Forward+ (Olsson 2012) with exponential depth slices; one compute thread per cluster streams all lights through shared memory and writes a fixed-capacity, ascending-order 16-bit light list, so clustered shading is byte-identical to evaluating every light (GPU test). Lights live in a device-local buffer (copied from frame scratch each frame); shaders read lights and lists through buffer device addresses in the frame constants. Shading: GGX + height-correlated Smith + Schlick + Lambert with multiple-scattering energy compensation from a baked DFG LUT; IBL via irradiance cube + GGX-prefiltered cube + DFG LUT (split sum), constant ambient without an environment. Optional depth-only prepass with `invariant gl_Position`; the shading pass keeps its pipelines (GREATER_OR_EQUAL, depth write of identical values), so images are identical with and without prepass. Design notes and results: `Docs/S4_REPORT.md`. |
 | **Timeline semaphore** for all graphics submissions (`VulkanContext::submitGraphics`) | One ordering source for frames, uploads and deferred deletion. Blocking upload waits additionally use a fence because the 1.3.275 synchronization-validation layer does not model `vkWaitSemaphores` host waits. |
 | **Capability baseline**: Vulkan 1.3 + dynamic rendering, sync2, descriptor indexing, timeline semaphores, buffer device address, indirect count/multi-draw/first-instance, shader draw parameters | Every current NVIDIA/AMD/Intel desktop driver, RADV (Steam Deck) and lavapipe. Optional features (mesh shaders, ray tracing, async compute, BC, timestamps, memory budget, anisotropy) resolve to an explicit fallback; mesh shaders/RT are detected but not enabled until their paths exist. |
 | Display output encoding | The resolve writes sRGB-encoded values: hardware does it for `_SRGB` swapchains; the shader does it for UNORM-only surfaces. |
@@ -148,8 +163,22 @@ registered with `MaterialSystem::registerShader`; games implement their own look
 
 - Materials are immutable after creation; textures must outlive materials referencing them.
 - `BindlessRegistry::releaseTexture` assumes the GPU no longer uses the slot (callers defer).
-- Uploads are synchronous on the graphics queue (transfer queue + streaming: S3).
+- Uploads (S3): `UploadQueue` is single-threaded (main thread); no streaming yet (design:
+  `Docs/ASSET_STREAMING.md`); staging buffers are allocated per batch (streaming staging ring
+  planned); the ZodarAssetCompiler up-to-date check still decodes the source images.
+- S3 verification gaps (see `Docs/S3_REPORT.md`): the per-frame `acquireCompleted` path with
+  a real cross-family ownership transfer has no hardware evidence yet (only the blocking path
+  was validated on an RTX 4070); KTX2 output was not checked with Khronos `ktx validate`.
+- KTX2: no supercompression (Zstandard/Basis), 2D only; BC5 normal maps need z
+  reconstruction in the shader, so model normal maps use BC7 for now.
 - Render graph v1: no transient aliasing, no reordering, single queue (async compute: S9).
+- S4: cluster lists have a fixed capacity per preset (overflow drops lights; counted and shown);
+  IBL bake is synchronous; depth prepass has no normal/roughness/velocity outputs yet; no tone
+  mapping (S6), so bright HDR clips in the resolve.
+- GpuScene (S2): frustum culling only (occlusion/HZB: S9); blended instances are CPU-sorted and
+  drawn after all opaque geometry; GPU-scene and `draws` blended objects are not interleaved;
+  geometry pool has no per-mesh free. Draw order within a group is submission order, not
+  front-to-back (same as the CPU path; depth prepass: S4).
 - Dear ImGui's Vulkan backend uploads its font texture with its own queue submit + wait.
 - A pipeline is created for a fixed swapchain format; if a recreated swapchain changes format,
   pipelines must be rebuilt (not handled yet; formats do not change in practice).

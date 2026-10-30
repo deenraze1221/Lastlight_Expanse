@@ -19,7 +19,7 @@ Model::Model(UploadBatch& batch, SceneRenderer& scene, const ModelData& data, co
     : m_nodes(data.nodes), m_bounds(data.bounds) {
     m_meshes.reserve(data.meshes.size());
     for (const MeshData& mesh : data.meshes) {
-        m_meshes.emplace_back(batch, mesh);
+        m_meshes.emplace_back(batch, mesh, options.geometryPool);
     }
     m_textures.reserve(data.images.size());
     for (const ImageData& image : data.images) {
@@ -83,6 +83,14 @@ Model::Model(UploadBatch& batch, SceneRenderer& scene, const ModelData& data, co
     fallback.metallic = 1.0f;
     fallback.roughness = 1.0f;
     m_fallbackMaterial = materials.createMaterial(fallback);
+}
+
+void Model::addToScene(GpuScene& scene, const glm::mat4& transform) const {
+    std::vector<MeshDraw> draws;
+    appendDraws(draws, transform);
+    for (const MeshDraw& d : draws) {
+        scene.add(*d.mesh, d.submesh, d.material, d.transform);
+    }
 }
 
 void Model::appendDraws(std::vector<MeshDraw>& draws, const glm::mat4& transform) const {

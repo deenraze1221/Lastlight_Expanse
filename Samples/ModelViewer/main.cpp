@@ -3,11 +3,17 @@
 //   ModelViewer [model.gltf|.glb] [--frames N] [--screenshot out.ppm] [--no-validation] [--sync-validation]
 //               [--width W] [--height H] [--yaw DEG] [--pitch DEG] [--zoom F] [--spin DEG_PER_S]
 //               [--nearest] [--reference-path] [--no-overlay]
+//               [--environment sky|none|file.hdr] [--lighting-quality low|medium|high|ultra]
+//               [--debug-view none|light-count|cluster-slice|normals|direct|indirect|specular-ibl]
+//               [--lights N] [--no-prepass]
 //
-// Without a model path a built-in demo scene of procedural meshes is shown.
-// Controls: left mouse drag orbits, mouse wheel zooms, F1 toggles the profiler, Esc quits.
+// Without a model path a built-in demo scene of procedural meshes is shown. The environment
+// (default: procedural sky) provides image-based lighting and the background.
+// Controls: left mouse drag orbits, mouse wheel zooms, F1 toggles the profiler, F2 cycles the
+// lighting debug views, Esc quits.
 // Exit codes: 0 ok, 1 fatal error, 2 validation errors, 3 screenshot failed.
 
+#include "Assets/EnvironmentMaps.h"
 #include "Assets/ModelData.h"
 #include "Assets/Primitives.h"
 #include "Core/Error.h"
@@ -32,6 +38,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -61,6 +68,11 @@ struct Options {
     bool referencePath = false; // Pre-render-graph path, kept for comparison.
     bool overlay = true;
     bool syncValidation = false;
+    std::string environment = "sky";
+    LightingQuality quality = LightingQuality::High;
+    LightingDebugView debugView = LightingDebugView::None;
+    uint32_t extraLights = 0; // Animated coloured point lights around the scene
+    bool prepass = true;
 };
 
 Options parseOptions(int argc, char** argv) {
@@ -73,6 +85,11 @@ Options parseOptions(int argc, char** argv) {
         };
         if (arg == "--frames") o.maxFrames = std::stoull(next());
         else if (arg == "--screenshot") o.screenshot = next();
+        else if (arg == "--environment") o.environment = next();
+        else if (arg == "--lighting-quality") o.quality = parseLightingQuality(next());
+        else if (arg == "--debug-view") o.debugView = parseLightingDebugView(next());
+        else if (arg == "--lights") o.extraLights = static_cast<uint32_t>(std::stoul(next()));
+        else if (arg == "--no-prepass") o.prepass = false;
         else if (arg == "--no-validation") o.validation = false;
         else if (arg == "--sync-validation") o.syncValidation = true;
         else if (arg == "--width") o.width = static_cast<uint32_t>(std::stoul(next()));
@@ -143,6 +160,7 @@ int run(const Options& options) {
     Renderer renderer(window, {"ModelViewer", options.validation, PresentMode::VSync,
                                Platform::userDataPath("ZODAR", "ModelViewer") / "pipeline_cache.bin", options.syncValidation});
     UploadContext upload(renderer.context());
+    renderer.attachUploads(&upload.queue()); // Async uploads are acquired at frame start.
 
     const char* base = SDL_GetBasePath();
     SceneRenderer scene(renderer.context(), upload,
@@ -186,8 +204,22 @@ int run(const Options& options) {
                        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
     }
 
+    LightingSettings lightingSettings;
+    lightingSettings.quality = options.quality;
+    lightingSettings.depthPrepass = options.prepass;
+    scene.setLightingSettings(lightingSettings);
+    std::unique_ptr<Environment> environment;
+    if (options.environment != "none") {
+        ProceduralSkyDesc sky;
+        sky.sunDirection = {-0.5f, -1.0f, -0.6f};
+        const ImageData source = options.environment == "sky" ? proceduralSky(1024, sky) : loadHdrImage(options.environment);
+        environment = scene.ibl().bake(source, iblSettings(options.quality));
+    }
+
     SceneView view;
     view.clearColor = {0.06f, 0.07f, 0.09f, 1.0f};
+    view.debugView = options.debugView;
+    view.lighting.environment = environment.get();
     view.lighting.ambientIntensity = 0.25f;
     view.lighting.ambientColor = {0.75f, 0.85f, 1.0f};
     view.lighting.sun = {{-0.5f, -1.0f, -0.6f}, {1.0f, 0.96f, 0.9f}, 3.0f, true};
@@ -200,6 +232,13 @@ int run(const Options& options) {
     float distance = radius / std::sin(view.camera.projection.verticalFovRadians * 0.5f) / options.zoom;
     view.lighting.pointLights.push_back({target + glm::vec3(radius, radius * 0.8f, radius), {1.0f, 0.75f, 0.5f},
                                          radius * radius * 4.0f, radius * 6.0f});
+    // Optional swarm of small coloured lights orbiting the scene (clustered lighting demo).
+    for (uint32_t i = 0; i < options.extraLights; ++i) {
+        const float hue = float(i) * 0.618034f;
+        const glm::vec3 color(0.5f + 0.5f * std::cos(6.2832f * hue), 0.5f + 0.5f * std::cos(6.2832f * (hue + 0.33f)),
+                              0.5f + 0.5f * std::cos(6.2832f * (hue + 0.67f)));
+        view.lighting.pointLights.push_back({target, color, radius * radius * 0.05f, radius * 0.35f});
+    }
 
     bool dragging = false;
     using Clock = std::chrono::steady_clock;
@@ -215,6 +254,10 @@ int run(const Options& options) {
         window.pollEvents([&](const SDL_Event& e) {
             if (overlay.processEvent(e)) return;
             if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) window.requestClose();
+            if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_F2) {
+                view.debugView = LightingDebugView((uint32_t(view.debugView) + 1) % 7);
+                ZODAR_LOG_INFO("Debug view: {}", toString(view.debugView));
+            }
             if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT) dragging = true;
             if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_LEFT) dragging = false;
             if (e.type == SDL_EVENT_MOUSE_MOTION && dragging) {
@@ -234,6 +277,13 @@ int run(const Options& options) {
         view.camera.position = target + offset * distance;
         view.camera.lookAt(target);
         view.time = std::chrono::duration<float>(now - start).count();
+        for (uint32_t i = 0; i < options.extraLights; ++i) {
+            const float phase = float(i) * 2.399963f + view.time * (0.2f + 0.05f * float(i % 7));
+            const float ring = radius * (0.4f + 0.8f * float((i * 37) % 100) / 100.0f);
+            view.lighting.pointLights[1 + i].position =
+                target + glm::vec3(std::cos(phase) * ring, radius * (0.1f + 0.5f * float((i * 13) % 10) / 10.0f),
+                                   std::sin(phase) * ring);
+        }
         view.draws = draws;
 
         const bool lastFrame = options.maxFrames > 0 && renderer.frameNumber() + 1 >= options.maxFrames;

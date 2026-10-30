@@ -7,7 +7,7 @@ done before it is verified.
 | # | Milestone | Status |
 | --- | --- | --- |
 | 1 | Engine foundation | **Done** (verified on Linux/lavapipe; Windows pending local run) |
-| 2+3 | Combined modern renderer (stages S1–S11 below) | **S1 complete, awaiting review** |
+| 2+3 | Combined modern renderer (stages S1–S11 below) | S1–S3 done; **S4 implemented, awaiting RTX 4070 benchmarks and review (Docs/S4_REPORT.md)** |
 | 4 | First DEAD SECTOR prototype scene | Not started |
 | 5 | Gameplay foundation | Not started |
 | 6 | World and game systems | Not started |
@@ -25,10 +25,10 @@ textures/samplers, materials (PBR/unlit + custom shaders), forward lighting, glT
 
 | Stage | Contents | Tier | Status |
 | --- | --- | --- | --- |
-| S1 Foundation | Capability table + fallbacks, timeline semaphores + deletion queue, frame scratch allocator, render graph v1, scene/resolve ported (reference path kept), GPU timestamps + CPU timers, pipeline cache on disk, ImGui profiler, ZodarBench | 1 | **Done — awaiting review** |
-| S2 GPU scene | Shared geometry buffers (meshoptimizer), vertex pulling, persistent instances, compute frustum culling, multi-draw indirect count | 1 | Planned |
-| S3 Assets | Async transfer queue, KTX2 + BCn (asset compiler), mips, streaming design | 1 | Planned |
-| S4 Lighting | Depth prepass (normals/roughness/velocity), clustered Forward+, spot lights, multi-scatter GGX, IBL, emissive | 1 | Planned |
+| S1 Foundation | Capability table + fallbacks, timeline semaphores + deletion queue, frame scratch allocator, render graph v1, scene/resolve ported (reference path kept), GPU timestamps + CPU timers, pipeline cache on disk, ImGui profiler, ZodarBench | 1 | **Done** |
+| S2 GPU-driven rendering | Geometry pool, persistent GpuScene, GPU frustum culling, multi-draw indirect, per-instance materials; CPU paths kept (meshoptimizer/meshlets moved to S9) | 1 | **Done (S2.1: ordered deterministic cull, `--frame-cap`, pipeline statistics, CPU-path fixes; accepted)** |
+| S3 Assets | Async transfer queue (`UploadQueue`, ownership transfer, graphics fallback), KTX2 + BCn (`ZodarAssetCompiler`, BC7/BC1–5, bcdec fallback), baked mips with a source-hash cache, streaming design (`Docs/ASSET_STREAMING.md`) | 1 | **Done** — results and unverified items in `Docs/S3_REPORT.md` |
+| S4 Lighting | Depth prepass (normals/roughness/velocity), clustered Forward+, spot lights, multi-scatter GGX, IBL, emissive | 1 | **Implemented — awaiting review** (depth-only prepass; normals/roughness/velocity outputs deferred to their consumers in S6/S7; no RTX numbers yet) |
 | S5 Shadows | Stable CSM, spot/point shadow atlas, PCF, GPU caster culling, static caching, 1024–4096+ | 1 | Planned |
 | S6 Post | Histogram auto-exposure, ACES/AgX, bloom, 3D LUT, TAA, dynamic resolution, `IUpscaler` + FSR | 1 | Planned |
 | S7 AO / reflections / GI | GTAO, reflection probes, SSR with probe fallback, irradiance probe grid | 1–2 | Planned |

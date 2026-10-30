@@ -1,0 +1,152 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "zodar/clusters.glsl"
+
+// One thread per cluster. Lights are streamed through shared memory in batches; each
+// cluster appends the lights overlapping its view-space AABB in ascending light order, so
+// the per-cluster lists (and the shading sums) are deterministic. Tests are conservative:
+// a light that can affect a fragment of the cluster is never dropped.
+layout(local_size_x = 64) in;
+
+layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer ClusterParams {
+    mat4 inverseProjection;
+    uvec4 grid;          // xyz: clusters, w: tile size in pixels
+    vec4 depth;          // x: slice scale, y: slice bias, z: near, w: far
+    uvec4 counts;        // x: light count, y: max lights per cluster, z: cluster count
+    vec4 viewport;       // xy: size in pixels, zw: 1/size
+};
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer ClusterStats {
+    uint assignments;    // Sum of list lengths
+    uint maxCount;       // Longest list (before clamping)
+    uint overflow;       // Clusters that hit maxLightsPerCluster
+    uint nonEmpty;       // Clusters with at least one light
+};
+
+layout(push_constant) uniform Push {
+    uvec2 params;
+    uvec2 lights;
+    uvec2 counts;
+    uvec2 indices;
+    uvec2 stats;
+} pc;
+
+#define BATCH 64
+shared vec4 s_sphere[BATCH];    // view position, range
+shared vec4 s_direction[BATCH]; // view spot direction, w: 1 for spot lights
+shared vec2 s_cone[BATCH];      // cos(outer), sin(outer)
+
+vec3 unproject(ClusterParams p, vec2 ndc, float z) {
+    vec4 v = p.inverseProjection * vec4(ndc, z, 1.0);
+    return v.xyz / v.w;
+}
+
+// View-space point on the corner ray through `ndc` at view depth `depth` (z = -depth).
+// Works for perspective and orthographic projections.
+vec3 cornerAtDepth(ClusterParams p, vec2 ndc, float depth) {
+    vec3 a = unproject(p, ndc, 1.0); // Reverse Z: near plane
+    vec3 b = unproject(p, ndc, 0.5);
+    float t = (-depth - a.z) / (b.z - a.z);
+    return a + (b - a) * t;
+}
+
+float sliceDepth(ClusterParams p, uint slice) {
+    return p.depth.z * pow(p.depth.w / p.depth.z, float(slice) / float(p.grid.z));
+}
+
+void main() {
+    ClusterParams p = ClusterParams(pc.params);
+    uint cluster = gl_GlobalInvocationID.x;
+    uint clusterCount = p.counts.z;
+    bool inRange = cluster < clusterCount;
+
+    vec3 boxMin = vec3(0.0), boxMax = vec3(0.0);
+    if (inRange) {
+        uint x = cluster % p.grid.x;
+        uint y = (cluster / p.grid.x) % p.grid.y;
+        uint z = cluster / (p.grid.x * p.grid.y);
+        vec2 px0 = vec2(x, y) * float(p.grid.w);
+        vec2 px1 = min(px0 + float(p.grid.w), p.viewport.xy);
+        vec2 ndc0 = px0 * p.viewport.zw * 2.0 - 1.0;
+        vec2 ndc1 = px1 * p.viewport.zw * 2.0 - 1.0;
+        // The first slice reaches the camera and the last one to infinity (fragments clamp).
+        float d0 = z == 0u ? 0.0 : sliceDepth(p, z);
+        float d1 = z + 1u == p.grid.z ? 1e30 : sliceDepth(p, z + 1u);
+        d1 = min(d1, 1e7);
+        boxMin = vec3(1e30);
+        boxMax = vec3(-1e30);
+        for (int i = 0; i < 4; ++i) {
+            vec2 ndc = vec2((i & 1) == 0 ? ndc0.x : ndc1.x, (i & 2) == 0 ? ndc0.y : ndc1.y);
+            vec3 c0 = cornerAtDepth(p, ndc, max(d0, 0.0));
+            vec3 c1 = cornerAtDepth(p, ndc, d1);
+            boxMin = min(boxMin, min(c0, c1));
+            boxMax = max(boxMax, max(c0, c1));
+        }
+        // Conservative margin against rounding differences with the fragment's cluster,
+        // proportional to the depths involved (never to the box size: the last slice is huge).
+        float lateral = d1 * 1e-4 + 1e-4;
+        boxMin -= vec3(lateral, lateral, d1 * 1e-4 + 1e-4); // View z is negative: min z = far side
+        boxMax += vec3(lateral, lateral, d0 * 1e-4 + 1e-4);
+    }
+    vec3 centre = (boxMin + boxMax) * 0.5;
+    float radius = length(boxMax - centre);
+
+    ZodarLightBuffer lights = ZodarLightBuffer(pc.lights);
+    ZodarClusterIndices indices = ZodarClusterIndices(pc.indices);
+    uint maxPerCluster = p.counts.y;
+    uint lightCount = p.counts.x;
+    uint count = 0u, found = 0u, pending = 0u;
+    uint base = cluster * maxPerCluster;
+
+    for (uint first = 0u; first < lightCount; first += BATCH) {
+        uint li = first + gl_LocalInvocationID.x;
+        if (li < lightCount) {
+            ZodarLight l = lights.lights[li];
+            s_sphere[gl_LocalInvocationID.x] = l.viewPositionRange;
+            bool spot = floatBitsToUint(l.colorType.a) == ZODAR_LIGHT_SPOT;
+            s_direction[gl_LocalInvocationID.x] = vec4(l.viewDirection.xyz, spot ? 1.0 : 0.0);
+            s_cone[gl_LocalInvocationID.x] = l.spotOffsetCone.yz;
+        }
+        barrier();
+        uint batch = min(uint(BATCH), lightCount - first);
+        for (uint j = 0u; inRange && j < batch; ++j) {
+            vec4 sphere = s_sphere[j];
+            vec3 closest = clamp(sphere.xyz, boxMin, boxMax);
+            vec3 d = closest - sphere.xyz;
+            bool hit = dot(d, d) <= sphere.w * sphere.w;
+            if (hit && s_direction[j].w > 0.5) {
+                // Cone vs. the cluster's bounding sphere (Wronski, "Cull that cone").
+                vec3 v = centre - sphere.xyz;
+                float vLenSq = dot(v, v);
+                float v1 = dot(v, s_direction[j].xyz);
+                float closestDist = s_cone[j].x * sqrt(max(vLenSq - v1 * v1, 0.0)) - v1 * s_cone[j].y;
+                hit = !(closestDist > radius || v1 > radius + sphere.w || v1 < -radius);
+            }
+            if (hit) {
+                ++found;
+                if (count < maxPerCluster) {
+                    uint index = first + j;
+                    if ((count & 1u) == 0u) {
+                        pending = index;
+                    } else {
+                        indices.pairs[(base + count) >> 1] = pending | (index << 16);
+                    }
+                    ++count;
+                }
+            }
+        }
+        barrier();
+    }
+    if (inRange) {
+        if ((count & 1u) == 1u) {
+            indices.pairs[(base + count) >> 1] = pending;
+        }
+        ZodarClusterCounts(pc.counts).counts[cluster] = count;
+        ClusterStats stats = ClusterStats(pc.stats);
+        if (found > 0u) {
+            atomicAdd(stats.assignments, count);
+            atomicMax(stats.maxCount, found);
+            atomicAdd(stats.nonEmpty, 1u);
+            if (found > maxPerCluster) atomicAdd(stats.overflow, 1u);
+        }
+    }
+}

@@ -51,8 +51,11 @@ public:
         return upload(std::span<const T>(&value, 1), alignment);
     }
 
-    // Copies into an allocation and flushes non-coherent memory.
+    // Copies into an allocation and flushes non-coherent memory. `data` must not point into
+    // the allocation itself; for data written in place through Allocation::data use flush().
     void write(const Allocation& allocation, const void* data, VkDeviceSize size, VkDeviceSize offset = 0);
+    // Flushes data written in place through Allocation::data.
+    void flush(const Allocation& allocation);
 
     VkDeviceSize bytesUsed() const;     // Current slot.
     VkDeviceSize bytesReserved() const; // All slots.

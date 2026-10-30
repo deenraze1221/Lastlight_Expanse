@@ -2,6 +2,8 @@ add_executable(ZodarTests
     main.cpp
     Assets/GltfLoaderTests.cpp
     Assets/ImageDataTests.cpp
+    Assets/TextureAssetTests.cpp
+    Assets/EnvironmentMapTests.cpp
     Assets/MeshDataTests.cpp
     Core/LogTests.cpp
     Core/ProfilerTests.cpp
@@ -14,8 +16,10 @@ add_executable(ZodarTests
     Renderer/PipelineCacheTests.cpp
     Renderer/DeviceSelectionTests.cpp
     Renderer/SwapchainSupportTests.cpp
-    Renderer/VulkanCheckTests.cpp)
-target_link_libraries(ZodarTests PRIVATE Zodar::Renderer Zodar::stb doctest::doctest)
+    Renderer/VulkanCheckTests.cpp
+    Renderer/UploadQueueTests.cpp
+    Renderer/ClusterMathTests.cpp)
+target_link_libraries(ZodarTests PRIVATE Zodar::Renderer Zodar::AssetPipeline Zodar::stb doctest::doctest)
 zodar_set_warnings(ZodarTests)
 
 add_test(NAME unit COMMAND ZodarTests)
@@ -31,8 +35,12 @@ if(ZODAR_GPU_TESTS)
         Gpu/TextureTests.cpp
         Gpu/SceneRendererTests.cpp
         Gpu/RenderGraphTests.cpp
-        Gpu/DebugOverlayTests.cpp)
-    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::Debug doctest::doctest)
+        Gpu/DebugOverlayTests.cpp
+        Gpu/GpuSceneTests.cpp
+        Gpu/UploadQueueTests.cpp
+        Gpu/LightingTests.cpp
+        Gpu/IblTests.cpp)
+    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::Debug Zodar::AssetPipeline doctest::doctest)
     zodar_set_warnings(ZodarGpuTests)
     target_compile_definitions(ZodarGpuTests PRIVATE ZODAR_TEST_SHADER_DIR="${ZODAR_OUTPUT_DIR}/shaders")
     zodar_compile_shaders(ZodarGpuTests SOURCES
@@ -57,5 +65,10 @@ if(ZODAR_GPU_TESTS)
     add_test(NAME gpu.zodarbench_city_smoke
         COMMAND ZodarBench --scene city --blocks 6 --width 640 --height 360 --warmup 3 --frames 10
                 --sync-validation --output ${CMAKE_BINARY_DIR}/zodarbench_city_smoke.json)
-    set_tests_properties(gpu.zodarbench_unique_smoke gpu.zodarbench_city_smoke PROPERTIES TIMEOUT 300)
+    # The CPU-driven fallback path stays covered too.
+    add_test(NAME gpu.zodarbench_city_cpu_path_smoke
+        COMMAND ZodarBench --scene city --blocks 6 --path graph --width 640 --height 360 --warmup 3 --frames 10
+                --sync-validation --output ${CMAKE_BINARY_DIR}/zodarbench_city_cpu_smoke.json)
+    set_tests_properties(gpu.zodarbench_unique_smoke gpu.zodarbench_city_smoke gpu.zodarbench_city_cpu_path_smoke
+                         PROPERTIES TIMEOUT 300)
 endif()

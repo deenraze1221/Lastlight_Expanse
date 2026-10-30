@@ -20,6 +20,7 @@ MaterialSystem::MaterialSystem(const VulkanContext& context, BindlessRegistry& b
 
     m_pbr = registerShader(kPbrShader, "mesh.vert.spv", "pbr.frag.spv");
     m_unlit = registerShader(kUnlitShader, "mesh.vert.spv", "unlit.frag.spv");
+    m_depthMask = std::make_unique<ShaderModule>(context.device(), loadSpirv(shaderDirectory / "depth_mask.frag.spv"));
 }
 
 MaterialSystem::~MaterialSystem() = default;
@@ -120,6 +121,30 @@ const GraphicsPipeline& MaterialSystem::pipeline(MaterialHandle handle) {
     auto pipeline = std::make_unique<GraphicsPipeline>(m_context, desc);
     ZODAR_LOG_DEBUG("Created pipeline {}", debugName);
     return *m_pipelines.emplace(key, std::move(pipeline)).first->second;
+}
+
+const GraphicsPipeline& MaterialSystem::depthPipeline(MaterialHandle handle) {
+    const MaterialDesc& m = m_materials.at(handle);
+    ZODAR_ENSURE(m.alphaMode != AlphaMode::Blend, "blended materials have no depth prepass");
+    const bool masked = m.alphaMode == AlphaMode::Mask;
+    const uint64_t key = (static_cast<uint64_t>(m.shader) << 8) | (masked ? 2u : 0u) | (m.doubleSided ? 1u : 0u);
+    if (auto it = m_depthPipelines.find(key); it != m_depthPipelines.end()) {
+        return *it->second;
+    }
+    const Shader& shader = m_shaders[m.shader];
+    GraphicsPipelineDesc desc;
+    desc.vertexShader = shader.vertex->handle();
+    desc.fragmentShader = masked ? m_depthMask->handle() : VK_NULL_HANDLE;
+    desc.vertexInput = VertexInput::EngineVertex;
+    desc.colorFormat = VK_FORMAT_UNDEFINED;
+    desc.depthFormat = m_formats.depth;
+    desc.depthTest = true;
+    desc.depthWrite = true;
+    desc.cullMode = m.doubleSided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
+    desc.sharedLayout = m_layout;
+    const std::string debugName = shader.name + "/depth" + (masked ? "/mask" : "") + (m.doubleSided ? "/2s" : "");
+    desc.debugName = debugName.c_str();
+    return *m_depthPipelines.emplace(key, std::make_unique<GraphicsPipeline>(m_context, desc)).first->second;
 }
 
 } // namespace zodar::gfx

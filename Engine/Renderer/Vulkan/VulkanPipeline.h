@@ -83,4 +83,24 @@ private:
     VkShaderStageFlags m_pushConstantStages = 0;
 };
 
+// Compute pipeline with an owned layout (descriptor set layouts + one push-constant range).
+class ComputePipeline {
+public:
+    ComputePipeline(const VulkanContext& context, const std::vector<uint32_t>& spirv,
+                    const std::vector<VkDescriptorSetLayout>& setLayouts, uint32_t pushConstantSize,
+                    const char* debugName = nullptr);
+    ~ComputePipeline();
+
+    ComputePipeline(const ComputePipeline&) = delete;
+    ComputePipeline& operator=(const ComputePipeline&) = delete;
+
+    VkPipeline handle() const { return m_pipeline; }
+    VkPipelineLayout layout() const { return m_layout; }
+
+private:
+    VkDevice m_device;
+    VkPipelineLayout m_layout = VK_NULL_HANDLE;
+    VkPipeline m_pipeline = VK_NULL_HANDLE;
+};
+
 } // namespace zodar::gfx

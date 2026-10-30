@@ -1,0 +1,15 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "zodar/ibl_common.glsl"
+
+// Next cube mip: bilinear sample of the previous mip at the texel centre (2x2 box filter).
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0) uniform samplerCube source; // View of the previous mip only
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2DArray target;
+layout(push_constant) uniform Push { uint size; } pc;
+
+void main() {
+    if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(pc.size)))) return;
+    vec3 d = texelDirection(gl_GlobalInvocationID, pc.size);
+    imageStore(target, ivec3(gl_GlobalInvocationID), vec4(textureLod(source, d, 0.0).rgb, 1.0));
+}

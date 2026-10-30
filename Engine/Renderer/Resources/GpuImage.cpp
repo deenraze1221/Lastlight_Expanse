@@ -24,6 +24,18 @@ bool isDepthFormat(VkFormat format) {
     }
 }
 
+VkImageView createImageView(VkDevice device, VkImage image, VkFormat format, VkImageViewType type,
+                            VkImageSubresourceRange range) {
+    VkImageViewCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    info.image = image;
+    info.viewType = type;
+    info.format = format;
+    info.subresourceRange = range;
+    VkImageView view = VK_NULL_HANDLE;
+    ZODAR_VK_CHECK(vkCreateImageView(device, &info, nullptr, &view));
+    return view;
+}
+
 bool hasStencil(VkFormat format) {
     return format == VK_FORMAT_D16_UNORM_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT ||
            format == VK_FORMAT_D32_SFLOAT_S8_UINT;
@@ -36,7 +48,8 @@ uint32_t fullMipCount(uint32_t width, uint32_t height) {
 
 GpuImage::GpuImage(const VulkanContext& context, const ImageDesc& desc)
     : m_device(context.device()), m_allocator(context.allocator()), m_format(desc.format),
-      m_extent{desc.width, desc.height}, m_mipLevels(desc.mipLevels) {
+      m_extent{desc.width, desc.height}, m_mipLevels(desc.mipLevels), m_layers(desc.cube ? 6u : 1u) {
+    ZODAR_ENSURE(!desc.cube || desc.width == desc.height, "cube images must be square");
     ZODAR_ENSURE(desc.width > 0 && desc.height > 0, "image extent must be non-zero");
     ZODAR_ENSURE(desc.mipLevels >= 1 && desc.mipLevels <= fullMipCount(desc.width, desc.height),
                  "invalid mip count");
@@ -54,7 +67,8 @@ GpuImage::GpuImage(const VulkanContext& context, const ImageDesc& desc)
     info.format = desc.format;
     info.extent = {desc.width, desc.height, 1};
     info.mipLevels = desc.mipLevels;
-    info.arrayLayers = 1;
+    info.arrayLayers = m_layers;
+    info.flags = desc.cube ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     info.samples = VK_SAMPLE_COUNT_1_BIT;
     info.tiling = VK_IMAGE_TILING_OPTIMAL;
     info.usage = desc.usage;
@@ -71,11 +85,11 @@ GpuImage::GpuImage(const VulkanContext& context, const ImageDesc& desc)
 
     VkImageViewCreateInfo viewInfo{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     viewInfo.image = m_image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.viewType = desc.cube ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
     viewInfo.format = desc.format;
     // Sampled depth views read the depth aspect only.
     viewInfo.subresourceRange = {isDepthFormat(desc.format) ? VkImageAspectFlags(VK_IMAGE_ASPECT_DEPTH_BIT) : m_aspect,
-                                 0, desc.mipLevels, 0, 1};
+                                 0, desc.mipLevels, 0, m_layers};
     const VkResult result = vkCreateImageView(m_device, &viewInfo, nullptr, &m_view);
     if (result != VK_SUCCESS) {
         vmaDestroyImage(m_allocator, m_image, m_allocation);
@@ -108,6 +122,7 @@ GpuImage& GpuImage::operator=(GpuImage&& other) noexcept {
         m_format = std::exchange(other.m_format, VK_FORMAT_UNDEFINED);
         m_extent = std::exchange(other.m_extent, {});
         m_mipLevels = std::exchange(other.m_mipLevels, 0);
+        m_layers = std::exchange(other.m_layers, 1);
         m_aspect = std::exchange(other.m_aspect, 0);
     }
     return *this;

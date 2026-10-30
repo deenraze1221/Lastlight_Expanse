@@ -43,8 +43,11 @@ ShaderModule::~ShaderModule() {
 
 GraphicsPipeline::GraphicsPipeline(const VulkanContext& context, const GraphicsPipelineDesc& desc)
     : m_device(context.device()), m_pushConstantStages(desc.pushConstantStages) {
-    ZODAR_ENSURE(desc.vertexShader && desc.fragmentShader, "pipeline needs vertex and fragment shaders");
-    ZODAR_ENSURE(desc.colorFormat != VK_FORMAT_UNDEFINED, "pipeline needs a colour format");
+    // Depth-only pipelines (prepass, shadows) have no colour attachment and may omit the
+    // fragment shader.
+    const bool depthOnly = desc.colorFormat == VK_FORMAT_UNDEFINED;
+    ZODAR_ENSURE(desc.vertexShader && (desc.fragmentShader || depthOnly), "pipeline needs vertex and fragment shaders");
+    ZODAR_ENSURE(!depthOnly || desc.depthFormat != VK_FORMAT_UNDEFINED, "pipeline needs a colour or depth format");
 
     if (desc.sharedLayout) {
         m_layout = desc.sharedLayout;
@@ -133,7 +136,7 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context, const GraphicsP
         }
     }
     VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    blend.attachmentCount = 1;
+    blend.attachmentCount = depthOnly ? 0 : 1;
     blend.pAttachments = &blendAttachment;
 
     const VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
@@ -142,13 +145,13 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context, const GraphicsP
     dynamic.pDynamicStates = dynamicStates;
 
     VkPipelineRenderingCreateInfo rendering{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-    rendering.colorAttachmentCount = 1;
+    rendering.colorAttachmentCount = depthOnly ? 0 : 1;
     rendering.pColorAttachmentFormats = &desc.colorFormat;
     rendering.depthAttachmentFormat = desc.depthFormat;
 
     VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     info.pNext = &rendering;
-    info.stageCount = 2;
+    info.stageCount = desc.fragmentShader ? 2 : 1;
     info.pStages = stages;
     info.pVertexInputState = &vertexInput;
     info.pInputAssemblyState = &assembly;
@@ -175,6 +178,38 @@ GraphicsPipeline::~GraphicsPipeline() {
     if (m_ownsLayout) {
         vkDestroyPipelineLayout(m_device, m_layout, nullptr);
     }
+}
+
+ComputePipeline::ComputePipeline(const VulkanContext& context, const std::vector<uint32_t>& spirv,
+                                 const std::vector<VkDescriptorSetLayout>& setLayouts, uint32_t pushConstantSize,
+                                 const char* debugName)
+    : m_device(context.device()) {
+    const ShaderModule module(m_device, spirv);
+    const VkPushConstantRange range{VK_SHADER_STAGE_COMPUTE_BIT, 0, pushConstantSize};
+    VkPipelineLayoutCreateInfo layoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    layoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
+    layoutInfo.pSetLayouts = setLayouts.data();
+    layoutInfo.pushConstantRangeCount = pushConstantSize > 0 ? 1 : 0;
+    layoutInfo.pPushConstantRanges = &range;
+    ZODAR_VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_layout));
+
+    VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+    info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    info.stage.module = module.handle();
+    info.stage.pName = "main";
+    info.layout = m_layout;
+    const VkResult result = vkCreateComputePipelines(m_device, context.pipelineCache(), 1, &info, nullptr, &m_pipeline);
+    if (result != VK_SUCCESS) {
+        vkDestroyPipelineLayout(m_device, m_layout, nullptr);
+        throwVkError(result, "vkCreateComputePipelines");
+    }
+    context.setDebugName(m_pipeline, VK_OBJECT_TYPE_PIPELINE, debugName);
+}
+
+ComputePipeline::~ComputePipeline() {
+    vkDestroyPipeline(m_device, m_pipeline, nullptr);
+    vkDestroyPipelineLayout(m_device, m_layout, nullptr);
 }
 
 } // namespace zodar::gfx

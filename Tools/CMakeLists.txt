@@ -1,1 +1,2 @@
 add_subdirectory(ZodarBench)
+add_subdirectory(ZodarAssetCompiler)

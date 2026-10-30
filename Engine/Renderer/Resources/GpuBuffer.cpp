@@ -17,6 +17,13 @@ GpuBuffer::GpuBuffer(const VulkanContext& context, const BufferDesc& desc)
     info.size = desc.size;
     info.usage = desc.usage;
     info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    const uint32_t families[2] = {context.graphicsQueueFamily(), context.transferQueueFamily()};
+    if (desc.sharedWithTransfer && families[0] != families[1]) {
+        info.sharingMode = VK_SHARING_MODE_CONCURRENT;
+        info.queueFamilyIndexCount = 2;
+        info.pQueueFamilyIndices = families;
+        m_concurrent = true;
+    }
 
     VmaAllocationCreateInfo alloc{};
     alloc.usage = VMA_MEMORY_USAGE_AUTO;
@@ -56,7 +63,7 @@ GpuBuffer::GpuBuffer(GpuBuffer&& other) noexcept
       m_allocation(std::exchange(other.m_allocation, VK_NULL_HANDLE)),
       m_size(std::exchange(other.m_size, 0)),
       m_mapped(std::exchange(other.m_mapped, nullptr)),
-      m_address(std::exchange(other.m_address, 0)) {}
+      m_address(std::exchange(other.m_address, 0)), m_concurrent(std::exchange(other.m_concurrent, false)) {}
 
 GpuBuffer& GpuBuffer::operator=(GpuBuffer&& other) noexcept {
     if (this != &other) {
@@ -67,6 +74,7 @@ GpuBuffer& GpuBuffer::operator=(GpuBuffer&& other) noexcept {
         m_size = std::exchange(other.m_size, 0);
         m_mapped = std::exchange(other.m_mapped, nullptr);
         m_address = std::exchange(other.m_address, 0);
+        m_concurrent = std::exchange(other.m_concurrent, false);
     }
     return *this;
 }
@@ -86,6 +94,10 @@ void GpuBuffer::write(const void* data, VkDeviceSize size, VkDeviceSize offset) 
     ZODAR_ENSURE(m_mapped != nullptr, "write() needs a host-visible buffer");
     ZODAR_ENSURE(offset + size <= m_size, "buffer write out of range");
     std::memcpy(static_cast<uint8_t*>(m_mapped) + offset, data, static_cast<size_t>(size));
+    ZODAR_VK_CHECK(vmaFlushAllocation(m_allocator, m_allocation, offset, size));
+}
+
+void GpuBuffer::flush(VkDeviceSize offset, VkDeviceSize size) {
     ZODAR_VK_CHECK(vmaFlushAllocation(m_allocator, m_allocation, offset, size));
 }
 

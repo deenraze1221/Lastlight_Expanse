@@ -1,5 +1,7 @@
 #include "Assets/ModelData.h"
 
+#include "Assets/Ktx2.h"
+
 #include "Core/Error.h"
 #include "Core/Log.h"
 
@@ -10,6 +12,8 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <utility>
@@ -127,7 +131,7 @@ private:
     }
 
     // Decodes (once per colour space) the image behind a texture reference.
-    ModelTextureRef textureRef(const cgltf_texture_view& view, ColorSpace space, MipFilter mipFilter) {
+    ModelTextureRef textureRef(const cgltf_texture_view& view, TextureUsage usage) {
         ModelTextureRef ref;
         if (!view.texture) {
             return ref;
@@ -143,26 +147,53 @@ private:
             warn("texture '" + std::string(tex.name ? tex.name : "") + "' uses an unsupported image format (KTX2/WebP)");
             return ref;
         }
-        const auto key = std::make_pair(image, space);
+        const auto key = std::make_pair(image, usage);
         if (auto it = m_imageIndex.find(key); it != m_imageIndex.end()) {
             ref.image = it->second;
             return ref;
         }
-        ImageData decoded = decodeImage(*image, space);
-        if (m_options.generateMips) {
-            decoded.generateMips(mipFilter);
+        const int sourceIndex = static_cast<int>(image - m_data->images);
+        const std::string name = image->name ? image->name : (image->uri ? image->uri : "embedded");
+        std::vector<uint8_t> bytes = sourceBytes(*image, name);
+        const std::string sourceKey = textureSourceKey(bytes, usage);
+        const std::filesystem::path cache = textureCachePath(m_path, sourceIndex, usage);
+
+        ImageData loaded;
+        bool compiled = false;
+        if (m_options.useCompiledTextures && std::filesystem::exists(cache)) {
+            Ktx2File file = loadKtx2(cache);
+            const auto it = file.keyValues.find(kTextureSourceKey);
+            if (it != file.keyValues.end() && it->second == sourceKey && file.image.colorSpace == colorSpaceFor(usage)) {
+                loaded = std::move(file.image);
+                loaded.name = name;
+                compiled = true;
+                ++m_model.textureStats.compiled;
+            } else {
+                ++m_model.textureStats.stale;
+                warn("compiled texture '" + cache.filename().string() + "' is out of date; using the source image");
+            }
+        }
+        if (!compiled) {
+            loaded = loadImageFromMemory(bytes, colorSpaceFor(usage), name);
+            ++m_model.textureStats.source;
+            if (m_options.generateMips) {
+                loaded.generateMips(mipFilterFor(usage)); // Runtime fallback: compile the model to bake mips.
+                ++m_model.textureStats.runtimeMips;
+            }
         }
         ref.image = static_cast<int>(m_model.images.size());
-        m_model.images.push_back(std::move(decoded));
+        m_model.images.push_back(std::move(loaded));
+        if (m_options.keepImageSources) {
+            m_model.imageSources.push_back({std::move(bytes), usage, sourceIndex, cache, sourceKey});
+        }
         m_imageIndex.emplace(key, ref.image);
         return ref;
     }
 
-    ImageData decodeImage(const cgltf_image& image, ColorSpace space) {
-        const std::string name = image.name ? image.name : (image.uri ? image.uri : "embedded");
+    std::vector<uint8_t> sourceBytes(const cgltf_image& image, const std::string& name) {
         if (image.buffer_view) {
             const auto* bytes = static_cast<const uint8_t*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
-            return loadImageFromMemory({bytes, image.buffer_view->size}, space, name);
+            return {bytes, bytes + image.buffer_view->size};
         }
         ZODAR_ENSURE(image.uri != nullptr, "glTF image has neither a URI nor a buffer view");
         const std::string uri = image.uri;
@@ -179,12 +210,16 @@ private:
                 fail("Invalid base64 data for image '" + name + "'");
             }
             std::unique_ptr<void, decltype(&std::free)> owner(data, &std::free);
-            return loadImageFromMemory({static_cast<const uint8_t*>(data), size}, space, name);
+            const auto* bytes = static_cast<const uint8_t*>(data);
+            return {bytes, bytes + size};
         }
         std::string decoded = uri;
         cgltf_decode_uri(decoded.data());
         decoded.resize(std::strlen(decoded.c_str()));
-        return loadImage(m_path.parent_path() / decoded, space);
+        const std::filesystem::path file = m_path.parent_path() / decoded;
+        std::ifstream in(file, std::ios::binary);
+        if (!in) fail("Cannot open image '" + file.string() + "'");
+        return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
     }
 
     ModelMaterial convertMaterial(const cgltf_material& m) {
@@ -202,14 +237,14 @@ private:
             out.baseColorFactor = glm::make_vec4(pbr.base_color_factor);
             out.metallic = pbr.metallic_factor;
             out.roughness = pbr.roughness_factor;
-            out.baseColor = textureRef(pbr.base_color_texture, ColorSpace::Srgb, MipFilter::Box);
-            out.metallicRoughness = textureRef(pbr.metallic_roughness_texture, ColorSpace::Linear, MipFilter::Box);
+            out.baseColor = textureRef(pbr.base_color_texture, TextureUsage::Color);
+            out.metallicRoughness = textureRef(pbr.metallic_roughness_texture, TextureUsage::Data);
         }
-        out.normal = textureRef(m.normal_texture, ColorSpace::Linear, MipFilter::NormalMap);
+        out.normal = textureRef(m.normal_texture, TextureUsage::Normal);
         out.normalScale = m.normal_texture.texture ? m.normal_texture.scale : 1.0f;
-        out.occlusion = textureRef(m.occlusion_texture, ColorSpace::Linear, MipFilter::Box);
+        out.occlusion = textureRef(m.occlusion_texture, TextureUsage::Data);
         out.occlusionStrength = m.occlusion_texture.texture ? m.occlusion_texture.scale : 1.0f;
-        out.emissiveTexture = textureRef(m.emissive_texture, ColorSpace::Srgb, MipFilter::Box);
+        out.emissiveTexture = textureRef(m.emissive_texture, TextureUsage::Color);
         out.emissive = glm::make_vec3(m.emissive_factor) *
                        (m.has_emissive_strength ? m.emissive_strength.emissive_strength : 1.0f);
         if (m.has_clearcoat || m.has_transmission || m.has_volume || m.has_sheen || m.has_specular || m.has_ior ||
@@ -343,13 +378,21 @@ private:
     GltfLoadOptions m_options;
     std::unique_ptr<cgltf_data, DataDeleter> m_data;
     ModelData m_model;
-    std::map<std::pair<const cgltf_image*, ColorSpace>, int> m_imageIndex;
+    std::map<std::pair<const cgltf_image*, TextureUsage>, int> m_imageIndex;
 };
 
 } // namespace
 
 ModelData loadGltf(const std::filesystem::path& path, const GltfLoadOptions& options) {
-    return Importer(path, options).run();
+    ModelData model = Importer(path, options).run();
+    const TextureLoadStats& t = model.textureStats;
+    if (options.useCompiledTextures && t.source > 0) {
+        ZODAR_LOG_INFO("'{}': {} of {} textures loaded from source images{}; run "
+                       "'ZodarAssetCompiler model {}' to bake mips and compress them",
+                       path.filename().string(), t.source, t.source + t.compiled,
+                       t.runtimeMips ? " with runtime mip generation" : "", path.filename().string());
+    }
+    return model;
 }
 
 } // namespace zodar

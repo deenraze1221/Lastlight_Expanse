@@ -57,6 +57,7 @@ VulkanContext::VulkanContext(const ContextDesc& desc, const Window* window) : m_
             m_surface = m_window->createSurface(m_instance);
         }
         pickPhysicalDevice();
+        m_useTransferQueue = desc.dedicatedTransferQueue;
         createDevice();
         createAllocator();
         m_timeline = std::make_unique<GpuTimeline>(m_device);
@@ -116,9 +117,12 @@ uint64_t VulkanContext::submitGraphics(const GraphicsSubmit& submit) {
     timeline.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
     signals.push_back(timeline);
 
+    std::vector<VkSemaphoreSubmitInfo> waits(submit.waits.begin(), submit.waits.end());
+    waits.insert(waits.end(), m_pendingWaits.begin(), m_pendingWaits.end());
+
     VkSubmitInfo2 info{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
-    info.waitSemaphoreInfoCount = static_cast<uint32_t>(submit.waits.size());
-    info.pWaitSemaphoreInfos = submit.waits.data();
+    info.waitSemaphoreInfoCount = static_cast<uint32_t>(waits.size());
+    info.pWaitSemaphoreInfos = waits.data();
     info.commandBufferInfoCount = static_cast<uint32_t>(submit.commandBuffers.size());
     info.pCommandBufferInfos = submit.commandBuffers.data();
     info.signalSemaphoreInfoCount = static_cast<uint32_t>(signals.size());
@@ -126,6 +130,24 @@ uint64_t VulkanContext::submitGraphics(const GraphicsSubmit& submit) {
     ZODAR_VK_CHECK(vkQueueSubmit2(m_graphicsQueue, 1, &info, submit.fence));
     m_deletionQueue.onSubmit(value, submit.frameSubmission, m_frameRecording);
     return value;
+}
+
+void VulkanContext::addGraphicsWait(VkSemaphore semaphore, uint64_t value) {
+    for (VkSemaphoreSubmitInfo& w : m_pendingWaits) {
+        if (w.semaphore == semaphore) {
+            w.value = std::max(w.value, value);
+            return;
+        }
+    }
+    VkSemaphoreSubmitInfo wait{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
+    wait.semaphore = semaphore;
+    wait.value = value;
+    wait.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    m_pendingWaits.push_back(wait);
+}
+
+void VulkanContext::removeGraphicsWait(VkSemaphore semaphore) {
+    std::erase_if(m_pendingWaits, [&](const VkSemaphoreSubmitInfo& w) { return w.semaphore == semaphore; });
 }
 
 void VulkanContext::setDebugName(VkObjectType type, uint64_t handle, const char* name) const {
@@ -290,7 +312,7 @@ void VulkanContext::createDevice() {
     const float priority = 1.0f;
     std::set<uint32_t> families{m_graphicsFamily, m_presentFamily};
     if (m_features.asyncCompute) families.insert(m_caps.asyncComputeFamily);
-    if (m_features.dedicatedTransfer) families.insert(m_caps.transferFamily);
+    if (m_features.dedicatedTransfer && m_useTransferQueue) families.insert(m_caps.transferFamily);
     std::vector<VkDeviceQueueCreateInfo> queues;
     for (uint32_t family : families) {
         VkDeviceQueueCreateInfo q{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
@@ -349,7 +371,9 @@ void VulkanContext::createDevice() {
     vkGetDeviceQueue(m_device, m_graphicsFamily, 0, &m_graphicsQueue);
     vkGetDeviceQueue(m_device, m_presentFamily, 0, &m_presentQueue);
     if (m_features.asyncCompute) vkGetDeviceQueue(m_device, m_caps.asyncComputeFamily, 0, &m_computeQueue);
-    if (m_features.dedicatedTransfer) vkGetDeviceQueue(m_device, m_caps.transferFamily, 0, &m_transferQueue);
+    if (m_features.dedicatedTransfer && m_useTransferQueue) {
+        vkGetDeviceQueue(m_device, m_caps.transferFamily, 0, &m_transferQueue);
+    }
     ZODAR_LOG_INFO("Logical device created (graphics family {}, present family {}, compute {}, transfer {})",
                    m_graphicsFamily, m_presentFamily, m_computeQueue ? std::to_string(m_caps.asyncComputeFamily) : "-",
                    m_transferQueue ? std::to_string(m_caps.transferFamily) : "-");

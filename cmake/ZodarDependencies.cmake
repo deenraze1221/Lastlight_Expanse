@@ -82,7 +82,21 @@ FetchContent_Declare(imgui
     SOURCE_SUBDIR  _zodar_unused
     SYSTEM)
 
-FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf imgui)
+# BCn: bcdec decodes (runtime fallback + tests); bc7enc_rdo encodes (asset compiler only).
+# Neither has release tags; pinned by commit. Both MIT / public domain (Unlicense).
+FetchContent_Declare(bcdec
+    GIT_REPOSITORY https://github.com/iOrange/bcdec.git
+    GIT_TAG        80859ed3b7afb1c527a2a99d70c61457bea72d0c
+    SOURCE_SUBDIR  _zodar_unused
+    SYSTEM)
+
+FetchContent_Declare(bc7enc_rdo
+    GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo.git
+    GIT_TAG        b9438627eef73a1157e84201b6fa6eb2ffd6d9f0
+    SOURCE_SUBDIR  _zodar_unused
+    SYSTEM)
+
+FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf imgui bcdec bc7enc_rdo)
 if(ZODAR_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
@@ -110,6 +124,18 @@ add_library(Zodar::stb ALIAS zodar_stb)
 add_library(zodar_cgltf INTERFACE)
 target_include_directories(zodar_cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
 add_library(Zodar::cgltf ALIAS zodar_cgltf)
+
+add_library(zodar_bcdec INTERFACE)
+target_include_directories(zodar_bcdec SYSTEM INTERFACE ${bcdec_SOURCE_DIR})
+add_library(Zodar::bcdec ALIAS zodar_bcdec)
+
+# BC1-5 (rgbcx) and BC7 (bc7enc) block encoders.
+add_library(zodar_bcenc STATIC ${bc7enc_rdo_SOURCE_DIR}/rgbcx.cpp ${bc7enc_rdo_SOURCE_DIR}/bc7enc.cpp)
+target_include_directories(zodar_bcenc SYSTEM PUBLIC ${bc7enc_rdo_SOURCE_DIR})
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(zodar_bcenc PRIVATE -w)
+endif()
+add_library(Zodar::bcenc ALIAS zodar_bcenc)
 
 # Dear ImGui core + SDL3 platform backend + Vulkan renderer backend (via volk).
 add_library(zodar_imgui STATIC

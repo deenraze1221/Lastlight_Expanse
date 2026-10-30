@@ -6,6 +6,7 @@
 #include "Platform/Window.h"
 #include "Renderer/GpuProfiler.h"
 #include "Renderer/Resources/FrameAllocator.h"
+#include "Renderer/Resources/UploadQueue.h"
 #include "Renderer/Vulkan/VulkanCheck.h"
 #include "Renderer/Vulkan/VulkanContext.h"
 #include "Renderer/Vulkan/VulkanSwapchain.h"
@@ -60,7 +61,7 @@ struct Renderer::PendingCapture {
 };
 
 Renderer::Renderer(Window& window, const RendererDesc& desc) : m_window(window) {
-    m_context = std::make_unique<VulkanContext>(ContextDesc{desc.applicationName, desc.enableValidation, desc.synchronizationValidation, desc.pipelineCachePath}, &window);
+    m_context = std::make_unique<VulkanContext>(ContextDesc{desc.applicationName, desc.enableValidation, desc.synchronizationValidation, desc.pipelineCachePath, desc.dedicatedTransferQueue}, &window);
     m_swapchain = std::make_unique<VulkanSwapchain>(*m_context, toExtent(window.framebufferSize()), desc.presentMode);
     m_scratch = std::make_unique<FrameAllocator>(*m_context, kFramesInFlight);
     m_profiler = std::make_unique<GpuProfiler>(*m_context, kFramesInFlight);
@@ -165,6 +166,9 @@ std::optional<FrameContext> Renderer::beginFrame() {
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     ZODAR_VK_CHECK(vkBeginCommandBuffer(frame.commandBuffer, &begin));
+    if (m_uploads) {
+        m_uploads->acquireCompleted(frame.commandBuffer);
+    }
 
     FrameContext ctx;
     ctx.commandBuffer = frame.commandBuffer;

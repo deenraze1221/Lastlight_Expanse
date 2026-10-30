@@ -9,6 +9,7 @@
 #include <vk_mem_alloc.h>
 
 #include <atomic>
+#include <vector>
 #include <memory>
 #include <span>
 #include <cstdint>
@@ -30,6 +31,9 @@ struct ContextDesc {
     bool synchronizationValidation = false;
     // Persistent pipeline cache file. Empty: in-memory cache only.
     std::filesystem::path pipelineCachePath;
+    // Uploads use a dedicated transfer queue when the device has one. false forces the
+    // graphics-queue fallback (for A/B tests of both paths on the same device).
+    bool dedicatedTransferQueue = true;
 };
 
 // One graphics-queue submission. The context appends the timeline signal.
@@ -85,6 +89,10 @@ public:
     // Dedicated queues; VK_NULL_HANDLE when the device has none (use the graphics queue).
     VkQueue asyncComputeQueue() const { return m_computeQueue; }
     VkQueue transferQueue() const { return m_transferQueue; }
+    // Family of the upload queue: the dedicated transfer family, else the graphics family.
+    uint32_t transferQueueFamily() const {
+        return m_transferQueue ? m_caps.transferFamily : m_graphicsFamily;
+    }
     bool validationEnabled() const { return m_validationEnabled; }
     bool isHeadless() const { return m_window == nullptr; }
     bool debugUtilsEnabled() const { return m_debugUtils; }
@@ -106,6 +114,12 @@ public:
     // All graphics-queue work goes through here so the timeline and the deletion queue
     // stay consistent. Returns the timeline value signalled by this submission.
     uint64_t submitGraphics(const GraphicsSubmit& submit);
+    // Every later graphics submission waits until the timeline `semaphore` reaches at least
+    // `value` (e.g. finished uploads on the transfer queue). Values only grow; waiting on an
+    // already signalled value costs nothing, and no submission can overtake the dependency.
+    void addGraphicsWait(VkSemaphore semaphore, uint64_t value);
+    // Stops waiting on `semaphore` (before destroying it; the GPU must be idle).
+    void removeGraphicsWait(VkSemaphore semaphore);
     VkPipelineCache pipelineCache() const { return m_pipelineCache ? m_pipelineCache->handle() : VK_NULL_HANDLE; }
     PipelineCache* pipelineCacheObject() { return m_pipelineCache.get(); }
     GpuTimeline& timeline() { return *m_timeline; }
@@ -150,6 +164,8 @@ private:
     std::unique_ptr<PipelineCache> m_pipelineCache;
     DeletionQueue m_deletionQueue;
     bool m_frameRecording = false;
+    bool m_useTransferQueue = true;
+    std::vector<VkSemaphoreSubmitInfo> m_pendingWaits;
     std::atomic<uint32_t> m_validationErrors{0};
     std::atomic<uint32_t> m_validationWarnings{0};
 };

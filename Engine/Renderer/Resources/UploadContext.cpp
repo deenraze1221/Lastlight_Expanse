@@ -28,7 +28,38 @@ uint32_t formatBytesPerPixel(VkFormat format) {
     }
 }
 
-UploadContext::UploadContext(VulkanContext& context) : m_context(context) {
+FormatBlock formatBlock(VkFormat format) {
+    switch (format) {
+    case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+    case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+    case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+    case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+    case VK_FORMAT_BC4_UNORM_BLOCK:
+    case VK_FORMAT_BC4_SNORM_BLOCK:
+        return {4, 4, 8};
+    case VK_FORMAT_BC2_UNORM_BLOCK:
+    case VK_FORMAT_BC2_SRGB_BLOCK:
+    case VK_FORMAT_BC3_UNORM_BLOCK:
+    case VK_FORMAT_BC3_SRGB_BLOCK:
+    case VK_FORMAT_BC5_UNORM_BLOCK:
+    case VK_FORMAT_BC5_SNORM_BLOCK:
+    case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+    case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+    case VK_FORMAT_BC7_UNORM_BLOCK:
+    case VK_FORMAT_BC7_SRGB_BLOCK:
+        return {4, 4, 16};
+    default:
+        return {1, 1, formatBytesPerPixel(format)};
+    }
+}
+
+VkDeviceSize imageLevelSize(VkFormat format, uint32_t width, uint32_t height) {
+    const FormatBlock b = formatBlock(format);
+    return VkDeviceSize((width + b.width - 1) / b.width) * ((height + b.height - 1) / b.height) * b.bytes;
+}
+
+UploadContext::UploadContext(VulkanContext& context)
+    : m_context(context), m_queue(std::make_unique<UploadQueue>(context)) {
     const VkDevice device = context.device();
     VkCommandPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
@@ -110,23 +141,23 @@ std::vector<uint8_t> UploadContext::readBuffer(const GpuBuffer& buffer) {
     return {data, data + buffer.size()};
 }
 
-std::vector<uint8_t> UploadContext::readImage(const GpuImage& image, VkImageLayout layout, uint32_t mip) {
-    const uint32_t bpp = formatBytesPerPixel(image.format());
-    ZODAR_ENSURE(bpp > 0, "readImage: unsupported format");
+std::vector<uint8_t> UploadContext::readImage(const GpuImage& image, VkImageLayout layout, uint32_t mip, uint32_t layer) {
+    ZODAR_ENSURE(layer < image.layers(), "readImage: layer out of range");
+    ZODAR_ENSURE(formatBlock(image.format()).bytes > 0, "readImage: unsupported format");
     ZODAR_ENSURE(mip < image.mipLevels(), "readImage: mip out of range");
     const uint32_t width = std::max(1u, image.extent().width >> mip);
     const uint32_t height = std::max(1u, image.extent().height >> mip);
-    const VkDeviceSize size = static_cast<VkDeviceSize>(width) * height * bpp;
+    const VkDeviceSize size = imageLevelSize(image.format(), width, height); // Raw blocks for BCn.
 
     GpuBuffer readback(m_context, {size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, MemoryUsage::Readback, "ReadbackImage"});
     const VkImageAspectFlags aspect = isDepthFormat(image.format()) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-    const VkImageSubresourceRange range{aspect, mip, 1, 0, 1};
+    const VkImageSubresourceRange range{aspect, mip, 1, layer, 1};
     immediate([&](VkCommandBuffer cmd) {
         transitionImage(cmd, image.handle(), range, layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                         VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
         VkBufferImageCopy region{};
-        region.imageSubresource = {aspect, mip, 0, 1};
+        region.imageSubresource = {aspect, mip, layer, 1};
         region.imageExtent = {width, height, 1};
         vkCmdCopyImageToBuffer(cmd, image.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback.handle(), 1,
                                &region);
@@ -164,41 +195,68 @@ UploadBatch::~UploadBatch() {
     }
 }
 
+GpuBuffer& UploadBatch::stage(const void* data, VkDeviceSize size) {
+    ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
+    GpuBuffer staging(m_upload.context(), {size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::Upload, "Staging"});
+    if (data) staging.write(data, size);
+    m_work.stagingBytes += size;
+    m_work.staging.push_back(std::move(staging));
+    return m_work.staging.back();
+}
+
 GpuBuffer UploadBatch::createBuffer(const void* data, VkDeviceSize size, VkBufferUsageFlags usage,
                                     const char* debugName) {
-    ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
-    const VulkanContext& context = m_upload.context();
-    GpuBuffer staging(context, {size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::Upload, "Staging"});
-    staging.write(data, size);
-    GpuBuffer target(context, {size, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, MemoryUsage::GpuOnly, debugName});
-
-    const VkBuffer src = staging.handle();
+    const VkBuffer src = stage(data, size).handle();
+    GpuBuffer target(m_upload.context(), {size, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, MemoryUsage::GpuOnly, debugName});
     const VkBuffer dst = target.handle(); // Handles survive moves of the owning objects.
-    m_commands.push_back([src, dst, size](VkCommandBuffer cmd) {
+    m_work.commands.push_back([src, dst, size](VkCommandBuffer cmd) {
         const VkBufferCopy region{0, 0, size};
         vkCmdCopyBuffer(cmd, src, dst, 1, &region);
     });
-    m_staging.push_back(std::move(staging));
+    m_work.exclusiveBuffers.push_back(dst); // Handed to the graphics family after the copy.
     return target;
+}
+
+void UploadBatch::copyToBuffer(const void* data, VkDeviceSize size, const GpuBuffer& target, VkDeviceSize offset) {
+    ZODAR_ENSURE(size > 0, "copyToBuffer with no data");
+    const VkBuffer dst = target.handle();
+    const bool ownBuffer = std::find(m_work.exclusiveBuffers.begin(), m_work.exclusiveBuffers.end(), dst) !=
+                           m_work.exclusiveBuffers.end();
+    ZODAR_ENSURE(!m_upload.queue().dedicated() || target.isConcurrent() || ownBuffer,
+                 "copyToBuffer: with a dedicated transfer queue the target needs BufferDesc::sharedWithTransfer");
+    const VkBuffer src = stage(data, size).handle();
+    m_work.commands.push_back([src, dst, offset, size](VkCommandBuffer cmd) {
+        const VkBufferCopy region{0, offset, size};
+        vkCmdCopyBuffer(cmd, src, dst, 1, &region);
+    });
+}
+
+void UploadBatch::record(std::function<void(VkCommandBuffer)> commands) {
+    ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
+    m_work.commands.push_back(std::move(commands));
+}
+
+void UploadBatch::keepAlive(std::shared_ptr<void> object) {
+    ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
+    m_work.keepAlive.push_back(std::move(object));
 }
 
 void UploadBatch::uploadImage(const GpuImage& image, std::span<const ImageLevelData> levels) {
     ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
     ZODAR_ENSURE(!levels.empty() && levels.size() <= image.mipLevels(), "uploadImage: bad level count");
-    const uint32_t bpp = formatBytesPerPixel(image.format());
-    ZODAR_ENSURE(bpp > 0, "uploadImage: unsupported format");
+    ZODAR_ENSURE(formatBlock(image.format()).bytes > 0, "uploadImage: unsupported format");
 
     VkDeviceSize total = 0;
     for (size_t i = 0; i < levels.size(); ++i) {
         const uint32_t expectedW = std::max(1u, image.extent().width >> i);
         const uint32_t expectedH = std::max(1u, image.extent().height >> i);
         ZODAR_ENSURE(levels[i].width == expectedW && levels[i].height == expectedH, "uploadImage: mip size mismatch");
-        ZODAR_ENSURE(levels[i].bytes.size() == static_cast<size_t>(expectedW) * expectedH * bpp,
+        ZODAR_ENSURE(levels[i].bytes.size() == imageLevelSize(image.format(), expectedW, expectedH),
                      "uploadImage: mip byte size mismatch");
         total += (levels[i].bytes.size() + 15) & ~VkDeviceSize(15); // Keep each level 16-byte aligned.
     }
 
-    GpuBuffer staging(m_upload.context(), {total, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::Upload, "Staging"});
+    GpuBuffer& staging = stage(nullptr, total);
     std::vector<VkBufferImageCopy> regions;
     VkDeviceSize offset = 0;
     for (size_t i = 0; i < levels.size(); ++i) {
@@ -214,42 +272,31 @@ void UploadBatch::uploadImage(const GpuImage& image, std::span<const ImageLevelD
     const VkBuffer src = staging.handle();
     const VkImage dst = image.handle();
     const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, static_cast<uint32_t>(levels.size()), 0, 1};
-    m_commands.push_back([src, dst, range, regions = std::move(regions)](VkCommandBuffer cmd) {
+    m_work.commands.push_back([src, dst, range, regions = std::move(regions)](VkCommandBuffer cmd) {
         transitionImage(cmd, dst, range, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                         VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COPY_BIT,
                         VK_ACCESS_2_TRANSFER_WRITE_BIT);
         vkCmdCopyBufferToImage(cmd, src, dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                static_cast<uint32_t>(regions.size()), regions.data());
-        transitionImage(cmd, dst, range, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     });
-    m_staging.push_back(std::move(staging));
+    // The final layout transition (and queue-family release/acquire) is done by the queue.
+    m_work.images.push_back({dst, range, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+}
+
+UploadTicket UploadBatch::submitAsync() {
+    ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
+    m_submitted = true;
+    if (m_work.commands.empty()) {
+        return {};
+    }
+    return m_upload.queue().submit(std::move(m_work));
 }
 
 void UploadBatch::submit() {
-    ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
-    m_submitted = true;
-    if (m_commands.empty()) {
-        return;
+    const UploadTicket ticket = submitAsync();
+    if (ticket.valid()) {
+        m_upload.queue().wait(ticket);
     }
-    m_upload.immediate([&](VkCommandBuffer cmd) {
-        for (const auto& record : m_commands) {
-            record(cmd);
-        }
-        // Buffer copies become visible to every later consumer (vertex input, shaders, copies).
-        VkMemoryBarrier2 barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
-        barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
-        barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-        barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT;
-        VkDependencyInfo dep{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-        dep.memoryBarrierCount = 1;
-        dep.pMemoryBarriers = &barrier;
-        vkCmdPipelineBarrier2(cmd, &dep);
-    });
-    m_commands.clear();
-    m_staging.clear();
 }
 
 } // namespace zodar::gfx

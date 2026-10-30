@@ -1,10 +1,13 @@
 #include "GpuTestContext.h"
 
+#include "AssetPipeline/TextureCompiler.h"
 #include "Assets/ImageData.h"
+#include "Assets/Ktx2.h"
 #include "Renderer/BindlessRegistry.h"
 #include "Renderer/Texture.h"
 #include "Renderer/Vulkan/VulkanPipeline.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <vector>
 
@@ -156,4 +159,59 @@ TEST_CASE("bindless registry: slot reuse and sampler deduplication") {
     batch2.submit();
     CHECK(c.bindlessIndex() == freed);
     CHECK_THROWS(registry.releaseTexture(9999));
+}
+
+TEST_CASE("textures: compiled BCn KTX2 textures upload byte-exact and sample like the CPU decoder") {
+    zodar::test::ValidationGuard guard;
+    if (!gpu().context->features().bcTextureCompression) {
+        MESSAGE("device cannot sample BCn: Texture decodes to RGBA8 (fallback path)");
+    }
+    BindlessRegistry registry(*gpu().context);
+    const uint32_t nearest = registry.sampler(SamplerDesc::nearest());
+    constexpr uint32_t kSize = 16;
+    ImageData source;
+    source.name = "BcnSource";
+    source.width = source.height = kSize;
+    source.colorSpace = ColorSpace::Linear;
+    std::vector<uint8_t> px(kSize * kSize * 4);
+    for (uint32_t i = 0; i < kSize * kSize; ++i) {
+        px[i * 4 + 0] = uint8_t((i % kSize) * 16);
+        px[i * 4 + 1] = uint8_t((i / kSize) * 16);
+        px[i * 4 + 2] = uint8_t((i * 37) & 0xFF);
+        px[i * 4 + 3] = uint8_t(255 - (i % kSize) * 8);
+    }
+    source.levels.push_back(px);
+
+    for (PixelFormat format : {PixelFormat::Bc7, PixelFormat::Bc1, PixelFormat::Bc3, PixelFormat::Bc4, PixelFormat::Bc5}) {
+        const std::string formatName = toString(format);
+        CAPTURE(formatName);
+        assets::TextureCompileOptions options;
+        options.format = format;
+        options.colorSpace = ColorSpace::Linear;
+        options.quality = assets::EncodeQuality::Fast;
+        // Through the file format, as the engine loads compiled assets.
+        const ImageData compiled = readKtx2(writeKtx2(assets::compileTexture(source, options)), formatName).image;
+        REQUIRE(compiled.levels.size() == 5);
+
+        UploadBatch batch(*gpu().upload);
+        Texture texture(batch, registry, compiled);
+        const UploadTicket ticket = batch.submitAsync();
+        gpu().upload->queue().wait(ticket);
+
+        if (gpu().context->features().bcTextureCompression) {
+            CHECK(texture.format() == textureFormat(format, ColorSpace::Linear));
+            for (uint32_t mip = 0; mip < compiled.levels.size(); ++mip) {
+                CHECK(gpu().upload->readImage(texture.image(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mip) ==
+                      compiled.levels[mip]); // Raw blocks, every baked mip.
+            }
+        }
+        const ImageData decoded = decompressToRgba8(compiled);
+        const auto image = renderSample(registry, kSize, {texture.bindlessIndex(), nearest, 0.0f});
+        int maxDiff = 0;
+        for (size_t i = 0; i < image.size(); ++i) {
+            maxDiff = std::max(maxDiff, std::abs(int(image[i]) - int(decoded.levels[0][i])));
+        }
+        MESSAGE(formatName << ": max |GPU - CPU decode| = " << maxDiff);
+        CHECK(maxDiff <= 3); // Hardware BCn interpolation may differ slightly from bcdec.
+    }
 }

@@ -124,7 +124,7 @@ TEST_CASE("render graph: output is pixel-identical to the reference path") {
         RenderStats stats;
         size_t passes = 0;
         const auto graph = f.renderGraph(view, extent, &stats, &passes);
-        CHECK(passes == 2);
+        CHECK(passes == 6); // Lighting.Upload, .ClusterCull, .Stats, Scene.DepthPrepass, Scene, Resolve
         CHECK(stats.drawCalls == 4);
         CHECK(stats.triangles > 0);
         REQUIRE(reference.size() == graph.size());
@@ -253,13 +253,17 @@ TEST_CASE("gpu profiler: per-pass timestamps from the render graph and memory st
     }
     // Frame 0's results were collected when slot 0 was reused by frame 2.
     const auto& results = profiler.lastResults();
-    REQUIRE(results.size() == 3);
+    REQUIRE(results.size() == 7);
     CHECK(results[0].name == "Frame");
-    CHECK(results[1].name == "Scene");
-    CHECK(results[1].depth == 1);
-    CHECK(results[2].name == "Resolve");
-    CHECK(results[1].ms > 0.0);
-    CHECK(results[0].ms >= results[1].ms);
+    CHECK(results[1].name == "Lighting.Upload");
+    CHECK(results[2].name == "Lighting.ClusterCull");
+    CHECK(results[3].name == "Lighting.Stats");
+    CHECK(results[4].name == "Scene.DepthPrepass");
+    CHECK(results[5].name == "Scene");
+    CHECK(results[5].depth == 1);
+    CHECK(results[6].name == "Resolve");
+    CHECK(results[5].ms > 0.0);
+    CHECK(results[0].ms >= results[5].ms);
     CHECK(profiler.lastFrameMs() == doctest::Approx(results[0].ms));
 
     const GpuMemoryStats memory = queryMemoryStats(*gpu().context);

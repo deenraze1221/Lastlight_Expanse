@@ -1,9 +1,12 @@
 // ZodarBench: deterministic rendering benchmark that writes a JSON report.
 //
 //   ZodarBench [--scene grid|unique|city|model] [--model file.glb] [--objects N] [--blocks N] [--lights N]
-//              [--width W] [--height H] [--warmup N] [--frames N] [--path graph|reference]
+//              [--width W] [--height H] [--warmup N] [--frames N] [--path gpu|graph|reference]
 //              [--present immediate|low-latency|vsync] [--overlay] [--no-validation] [--sync-validation]
-//              [--output report.json] [--screenshot out.ppm]
+//              [--output report.json] [--screenshot out.ppm] [--screenshot-frame N] [--per-frame]
+//              [--frame-cap FPS] [--source-textures] [--no-transfer-queue]
+//              [--environment none|sky|file.hdr] [--lighting-quality low|medium|high|ultra] [--no-prepass]
+//              [--brute-force-lights] [--debug-view NAME] [--no-multiscatter]
 //
 // Scenes:
 //   grid    N instanced objects (2 meshes x 16 materials): GPU throughput, few draw calls.
@@ -11,11 +14,22 @@
 //   city    B x B street blocks of buildings and props, street-level camera: most objects
 //           are off-screen or hidden behind buildings (culling and overdraw).
 //   model   a glTF file.
+//   lights  the grid scene (default 16384 objects) lit by --lights N (default 4096) moving
+//           point and spot lights (75% / 25%): clustered Forward+ throughput.
 // The camera follows a fixed path over the measured frames (orbit; street drive for city),
 // so every run renders the same frames. GPU times come from timestamp queries; on a software rasterizer (llvmpipe)
 // they are reported but flagged and must not be read as GPU performance.
+// --frame-cap paces frames to a fixed rate (SDL_DelayPrecise after present; the wait is not
+// part of the CPU frame time). Use it to compare GPU times of two paths at the same frame
+// rate, so neither path is measured while the GPU is saturated and clocks/queueing differ.
+// Pipeline statistics (scene-pass fragment shader invocations, primitives) are reported
+// when the device supports pipelineStatisticsQuery.
+// --source-textures ignores compiled KTX2 textures (decode PNG/JPEG + runtime mips) and
+// --no-transfer-queue uploads on the graphics queue: A/B switches for the S3 asset path.
+// The report's "assets" section has load/upload times, bytes and texture sources.
 // Exit codes: 0 ok, 1 fatal error, 2 validation errors.
 
+#include "Assets/EnvironmentMaps.h"
 #include "Assets/ModelData.h"
 #include "Assets/Primitives.h"
 #include "Core/Error.h"
@@ -24,7 +38,9 @@
 #include "Debug/DebugOverlay.h"
 #include "Platform/Platform.h"
 #include "Platform/Window.h"
+#include "Renderer/GeometryPool.h"
 #include "Renderer/GpuProfiler.h"
+#include "Renderer/GpuScene.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Model.h"
 #include "Renderer/RenderGraph/RenderGraph.h"
@@ -67,13 +83,24 @@ struct Options {
     uint32_t height = 1080;
     uint32_t warmup = 60;
     uint32_t frames = 600;
-    bool referencePath = false;
+    std::string path = "gpu"; // gpu: GPU-driven (GpuScene); graph: CPU draw list; reference: pre-graph path
     PresentMode present = PresentMode::Immediate;
     bool overlay = false;
+    bool perFrameSeries = false; // Include per-frame visible/draw/triangle series in the report.
     bool validation = true;
     bool syncValidation = false;
     std::filesystem::path output = "zodarbench.json";
     std::optional<std::filesystem::path> screenshot;
+    std::optional<uint32_t> screenshotFrame; // Measured-frame index; default: middle of the path.
+    double frameCap = 0.0;                   // Frames per second; 0 = uncapped.
+    bool sourceTextures = false;
+    bool transferQueue = true;
+    bool lightsSet = false;
+    bool objectsSet = false;
+    std::string environment = "none";
+    LightingSettings lighting;
+    bool bruteForceLights = false;
+    LightingDebugView debugView = LightingDebugView::None;
 };
 
 Options parse(int argc, char** argv) {
@@ -86,29 +113,45 @@ Options parse(int argc, char** argv) {
         };
         if (a == "--scene") o.scene = next();
         else if (a == "--model") { o.model = next(); o.scene = "model"; }
-        else if (a == "--objects") o.objects = static_cast<uint32_t>(std::stoul(next()));
+        else if (a == "--objects") { o.objects = static_cast<uint32_t>(std::stoul(next())); o.objectsSet = true; }
         else if (a == "--blocks") o.blocks = std::max(2u, static_cast<uint32_t>(std::stoul(next())));
-        else if (a == "--lights") o.lights = static_cast<uint32_t>(std::stoul(next()));
+        else if (a == "--lights") { o.lights = static_cast<uint32_t>(std::stoul(next())); o.lightsSet = true; }
+        else if (a == "--environment") o.environment = next();
+        else if (a == "--lighting-quality") o.lighting.quality = parseLightingQuality(next());
+        else if (a == "--no-prepass") o.lighting.depthPrepass = false;
+        else if (a == "--no-multiscatter") o.lighting.multiscatter = false;
+        else if (a == "--brute-force-lights") o.bruteForceLights = true;
+        else if (a == "--debug-view") o.debugView = parseLightingDebugView(next());
         else if (a == "--width") o.width = static_cast<uint32_t>(std::stoul(next()));
         else if (a == "--height") o.height = static_cast<uint32_t>(std::stoul(next()));
         else if (a == "--warmup") o.warmup = static_cast<uint32_t>(std::stoul(next()));
         else if (a == "--frames") o.frames = std::max(1u, static_cast<uint32_t>(std::stoul(next())));
         else if (a == "--path") {
-            const std::string p = next();
-            if (p != "graph" && p != "reference") fail("--path must be graph or reference");
-            o.referencePath = p == "reference";
+            o.path = next();
+            if (o.path != "gpu" && o.path != "graph" && o.path != "reference") fail("--path must be gpu, graph or reference");
         } else if (a == "--present") {
             const std::string p = next();
             o.present = p == "vsync" ? PresentMode::VSync : p == "low-latency" ? PresentMode::LowLatency : PresentMode::Immediate;
         } else if (a == "--overlay") o.overlay = true;
+        else if (a == "--per-frame") o.perFrameSeries = true;
+        else if (a == "--screenshot-frame") o.screenshotFrame = static_cast<uint32_t>(std::stoul(next()));
         else if (a == "--no-validation") o.validation = false;
         else if (a == "--sync-validation") o.syncValidation = true;
+        else if (a == "--frame-cap") {
+            o.frameCap = std::stod(next());
+            if (o.frameCap < 0.0) fail("--frame-cap must be >= 0");
+        } else if (a == "--source-textures") o.sourceTextures = true;
+        else if (a == "--no-transfer-queue") o.transferQueue = false;
         else if (a == "--output") o.output = next();
         else if (a == "--screenshot") o.screenshot = next();
         else fail("Unknown argument '" + std::string(a) + "'");
     }
     if (o.scene == "model" && !o.model) fail("--scene model needs --model <file>");
-    if (o.scene != "grid" && o.scene != "unique" && o.scene != "city" && o.scene != "model") {
+    if (o.scene == "lights" && !o.lightsSet) o.lights = 4096;
+    // Lights scene: 4096 lights with 3 m ranges over a 154 m square (16384 objects) keep the
+    // busiest clusters well below the high preset's 256-light lists at 1080p.
+    if (o.scene == "lights" && !o.objectsSet) o.objects = 16384;
+    if (o.scene != "grid" && o.scene != "unique" && o.scene != "city" && o.scene != "model" && o.scene != "lights") {
         fail("Unknown scene '" + o.scene + "'");
     }
     return o;
@@ -161,8 +204,9 @@ int run(const Options& o) {
     Platform platform;
     Window window({"ZodarBench", o.width, o.height, false});
     Renderer renderer(window, {"ZodarBench", o.validation, o.present,
-                               Platform::userDataPath("ZODAR", "ZodarBench") / "pipeline_cache.bin", o.syncValidation});
+                               Platform::userDataPath("ZODAR", "ZodarBench") / "pipeline_cache.bin", o.syncValidation, o.transferQueue});
     UploadContext upload(renderer.context());
+    renderer.attachUploads(&upload.queue()); // Async uploads are acquired at frame start.
     const char* base = SDL_GetBasePath();
     SceneRenderer scene(renderer.context(), upload,
                         {std::filesystem::path(base ? base : "") / "shaders", VK_FORMAT_R16G16B16A16_SFLOAT,
@@ -183,13 +227,21 @@ int run(const Options& o) {
     uint32_t uniqueMeshes = 2;
     uint32_t uniqueMaterials = 16;
     float cityHalf = 0.0f;
+    // Asset load metrics (CPU parse/decode, staging, transfer wait).
+    double loadMs = 0.0, stageMs = 0.0, transferMs = 0.0;
+    VkDeviceSize stagedBytes = 0, textureBytes = 0;
+    TextureLoadStats textureStats;
+    const auto msSince = [](std::chrono::steady_clock::time_point t) {
+        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count();
+    };
     {
+        const auto stageStart = std::chrono::steady_clock::now();
         UploadBatch batch(upload);
-        if (o.scene == "grid") {
+        if (o.scene == "grid" || o.scene == "lights") {
             meshes.reserve(3);
-            meshes.emplace_back(batch, primitives::cube(0.8f));
-            meshes.emplace_back(batch, primitives::uvSphere(0.45f, 32, 16));
-            meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f));
+            meshes.emplace_back(batch, primitives::cube(0.8f), &scene.geometry());
+            meshes.emplace_back(batch, primitives::uvSphere(0.45f, 32, 16), &scene.geometry());
+            meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f), &scene.geometry());
             std::vector<MaterialHandle> materials;
             for (int i = 0; i < 16; ++i) {
                 MaterialDesc d;
@@ -235,7 +287,7 @@ int run(const Options& o) {
                 mesh.generateTangents();
                 mesh.computeBounds();
                 mesh.name = "Unique" + std::to_string(i);
-                meshes.emplace_back(batch, mesh);
+                meshes.emplace_back(batch, mesh, &scene.geometry());
             }
             const auto side = static_cast<uint32_t>(std::ceil(std::sqrt(static_cast<double>(o.objects))));
             for (uint32_t i = 0; i < o.objects; ++i) {
@@ -245,7 +297,7 @@ int run(const Options& o) {
             }
             uniqueMeshes = o.objects;
             uniqueMaterials = materialCount;
-            meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f));
+            meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f), &scene.geometry());
             MaterialDesc ground;
             ground.baseColorFactor = {0.35f, 0.35f, 0.37f, 1};
             ground.roughness = 0.9f;
@@ -254,9 +306,9 @@ int run(const Options& o) {
         } else if (o.scene == "city") {
             // Street grid: each block holds 2x2 buildings and a ring of props on the sidewalk.
             meshes.reserve(3);
-            meshes.emplace_back(batch, primitives::cube(1.0f));
-            meshes.emplace_back(batch, primitives::uvSphere(0.5f, 16, 8));
-            meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f));
+            meshes.emplace_back(batch, primitives::cube(1.0f), &scene.geometry());
+            meshes.emplace_back(batch, primitives::uvSphere(0.5f, 16, 8), &scene.geometry());
+            meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f), &scene.geometry());
             std::vector<MaterialHandle> facades, props;
             for (uint32_t i = 0; i < 48; ++i) {
                 MaterialDesc d;
@@ -305,13 +357,25 @@ int run(const Options& o) {
             uniqueMeshes = 3;
             cityHalf = half;
         } else {
-            const ModelData data = loadGltf(*o.model);
-            model = std::make_unique<Model>(batch, scene, data);
+            GltfLoadOptions loadOptions;
+            loadOptions.useCompiledTextures = !o.sourceTextures;
+            const auto loadStart = std::chrono::steady_clock::now();
+            const ModelData data = loadGltf(*o.model, loadOptions);
+            loadMs = msSince(loadStart);
+            textureStats = data.textureStats;
+            for (const ImageData& image : data.images) textureBytes += image.byteSize();
+            ModelUploadOptions modelOptions;
+            modelOptions.geometryPool = &scene.geometry();
+            model = std::make_unique<Model>(batch, scene, data, modelOptions);
             model->appendDraws(draws);
             uniqueMeshes = static_cast<uint32_t>(model->meshCount());
             uniqueMaterials = static_cast<uint32_t>(model->materials().size());
         }
-        batch.submit();
+        stagedBytes = batch.stagingBytes();
+        stageMs = msSince(stageStart) - loadMs;
+        const auto transferStart = std::chrono::steady_clock::now();
+        batch.submit(); // Transfer queue + graphics acquire, blocking.
+        transferMs = msSince(transferStart);
     }
     for (const auto& d : draws) bounds.expand(d.mesh->bounds().transformed(d.transform));
     const glm::vec3 centre = bounds.center();
@@ -319,8 +383,35 @@ int run(const Options& o) {
     view.clearColor = {0.05f, 0.06f, 0.08f, 1};
     view.lighting.ambientIntensity = 0.2f;
     view.lighting.sun = {{-0.4f, -1.0f, -0.3f}, {1.0f, 0.95f, 0.9f}, 2.5f, true};
-    const uint32_t lightCount = std::min(o.lights, SceneRenderer::kMaxPointLights);
-    for (uint32_t i = 0; i < lightCount; ++i) {
+    const uint32_t lightCount = o.lights;
+    // Lights scene: dynamic point/spot lights over the grid, moved every frame (see the loop).
+    struct MovingLight {
+        glm::vec3 base;
+        float phase;
+        float speed;
+    };
+    std::vector<MovingLight> moving;
+    const float gridHalf = std::sqrt(float(o.objects)) * 0.6f;
+    for (uint32_t i = 0; o.scene == "lights" && i < lightCount; ++i) {
+        const glm::vec3 origin((hash01(i, 11) * 2.0f - 1.0f) * gridHalf, 0.6f + hash01(i, 12) * 2.5f,
+                               (hash01(i, 13) * 2.0f - 1.0f) * gridHalf);
+        const glm::vec3 color(0.3f + hash01(i, 14), 0.3f + hash01(i, 15), 0.3f + hash01(i, 16));
+        moving.push_back({origin, hash01(i, 17) * 6.2832f, 0.5f + hash01(i, 18)});
+        if (i % 4 == 3) {
+            SpotLight spot;
+            spot.position = origin + glm::vec3(0, 2.0f, 0);
+            spot.direction = {0.2f, -1.0f, 0.1f};
+            spot.color = color;
+            spot.intensity = 6.0f;
+            spot.range = 6.0f;
+            spot.innerConeRadians = 0.3f;
+            spot.outerConeRadians = 0.5f;
+            view.lighting.spotLights.push_back(spot);
+        } else {
+            view.lighting.pointLights.push_back({origin, color, 1.5f, 3.0f});
+        }
+    }
+    for (uint32_t i = 0; o.scene != "lights" && i < lightCount; ++i) {
         const float a = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(std::max(1u, o.lights));
         if (o.scene == "city") {
             // Street lights along the driven street.
@@ -337,25 +428,63 @@ int run(const Options& o) {
         view.camera.projection.nearPlane = 0.1f;
     }
     if (o.scene != "city") view.camera.projection.nearPlane = std::max(0.01f, radius * 0.001f);
-    view.draws = draws;
-    ZODAR_LOG_INFO("Benchmark scene '{}': {} draws, path {}", o.scene, draws.size(), o.referencePath ? "reference" : "graph");
+    if (o.scene == "lights") {
+        view.lighting.sun.enabled = false;
+        view.lighting.ambientIntensity = 0.02f;
+    }
+    scene.setLightingSettings(o.lighting);
+    view.bruteForceLights = o.bruteForceLights;
+    view.debugView = o.debugView;
+    std::unique_ptr<Environment> environment;
+    if (o.environment != "none") {
+        ProceduralSkyDesc sky;
+        sky.sunDirection = view.lighting.sun.direction;
+        const ImageData source = o.environment == "sky" ? proceduralSky(1024, sky) : loadHdrImage(o.environment);
+        environment = scene.ibl().bake(source, iblSettings(o.lighting.quality));
+        view.lighting.environment = environment.get();
+    }
+    // GPU-driven path: register every object once in a persistent GpuScene.
+    std::unique_ptr<GpuScene> gpuScene;
+    if (o.path == "gpu") {
+        gpuScene = std::make_unique<GpuScene>(renderer.context(), scene.materials(),
+                                              std::filesystem::path(base ? base : "") / "shaders", Renderer::kFramesInFlight);
+        for (const MeshDraw& d : draws) gpuScene->add(*d.mesh, d.submesh, d.material, d.transform);
+        view.gpuScene = gpuScene.get();
+    } else {
+        view.draws = draws;
+    }
+    ZODAR_LOG_INFO("Benchmark scene '{}': {} draws, path {}", o.scene, draws.size(), o.path);
 
     // --- Frame loop ------------------------------------------------------------------
     CpuProfiler cpu;
     Stats cpuFrame, gpuFrame;
     std::map<std::string, Stats> gpuPasses, cpuScopes;
     Stats drawCalls, visible, culled, triangles; // Per measured frame (the view changes along the path).
+    std::map<std::string, Stats> fragmentInvocations, rasterPrimitives; // Pipeline statistics per scope.
+    Stats pacingWait;                                                    // --frame-cap wait per measured frame.
+    Stats clusterAssignments;                                            // Light-list entries per frame
+    uint32_t maxLightsInCluster = 0, overflowClusters = 0;
+    // GPU-driven statistics describe the frame rendered statsLatencyFrames earlier: they are
+    // credited to that frame so both paths average over exactly the same frames.
+    std::map<uint32_t, RenderStats> sceneStats;
     RenderStats lastStats;
-    const uint32_t total = o.warmup + o.frames;
+    // A few extra, untimed frames at the end deliver the delayed GPU-driven statistics of
+    // the last measured frames, so every path reports scene statistics for all of them.
+    const uint32_t measuredEnd = o.warmup + o.frames;
+    const uint32_t total = measuredEnd + Renderer::kFramesInFlight;
     auto last = std::chrono::steady_clock::now();
+    const auto capPeriod = o.frameCap > 0.0 ? std::chrono::nanoseconds(static_cast<int64_t>(1e9 / o.frameCap))
+                                            : std::chrono::nanoseconds(0);
+    auto nextDeadline = std::chrono::steady_clock::now() + capPeriod;
     uint32_t rendered = 0;
     while (rendered < total && !window.shouldClose()) {
         window.pollEvents([&](const SDL_Event& e) {
             if (overlay) overlay->processEvent(e);
             if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) window.requestClose();
         });
-        const bool measuring = rendered >= o.warmup;
-        const float t = measuring ? static_cast<float>(rendered - o.warmup) / static_cast<float>(o.frames) : 0.0f;
+        const bool measuring = rendered >= o.warmup && rendered < measuredEnd;
+        const float t = rendered < o.warmup ? 0.0f
+                        : static_cast<float>(std::min(rendered, measuredEnd - 1) - o.warmup) / static_cast<float>(o.frames);
         const float angle = glm::two_pi<float>() * t;
         if (o.scene == "city") {
             // Drive down the central street (x = 0 lies in a street) at eye height.
@@ -366,9 +495,22 @@ int run(const Options& o) {
             view.camera.position = centre + glm::vec3(std::sin(angle), 0.45f, std::cos(angle)) * radius * 1.1f;
             view.camera.lookAt(centre);
         }
+        // Dynamic lights: new positions every frame (deterministic along the path).
+        for (size_t i = 0, p = 0, sp = 0; i < moving.size(); ++i) {
+            const MovingLight& m = moving[i];
+            const float a = m.phase + angle * 8.0f * m.speed;
+            const glm::vec3 pos = m.base + glm::vec3(std::cos(a), 0.3f * std::sin(a * 1.7f), std::sin(a)) * 2.0f;
+            if (i % 4 == 3) {
+                view.lighting.spotLights[sp++].position = pos + glm::vec3(0, 2.0f, 0);
+            } else {
+                view.lighting.pointLights[p++].position = pos;
+            }
+        }
 
         // Screenshot from the middle of the measured path (representative view).
-        if (rendered == o.warmup + o.frames / 2 && o.screenshot) renderer.requestScreenshot(*o.screenshot);
+        if (rendered == o.warmup + o.screenshotFrame.value_or(o.frames / 2) && o.screenshot) {
+            renderer.requestScreenshot(*o.screenshot);
+        }
         cpu.beginFrame();
         const uint32_t waitScope = cpu.begin("Wait + acquire");
         auto frame = renderer.beginFrame();
@@ -378,7 +520,7 @@ int run(const Options& o) {
             continue;
         }
         const FrameInfo info = frame->info();
-        if (o.referencePath) {
+        if (o.path == "reference") {
             const uint32_t s = cpu.begin("Prepare + record");
             lastStats = scene.render(info, frame->extent, view);
             scene.resolve(info, frame->imageView, frame->format, frame->extent);
@@ -417,13 +559,29 @@ int run(const Options& o) {
         renderer.endFrame(*frame);
         cpu.end(s3);
         cpu.endFrame();
+        double waitedMs = 0.0;
+        if (o.frameCap > 0.0) {
+            // Fixed-rate pacing; a late frame restarts the schedule instead of bursting.
+            const auto now = std::chrono::steady_clock::now();
+            if (now < nextDeadline) {
+                SDL_DelayPrecise(static_cast<Uint64>(std::chrono::nanoseconds(nextDeadline - now).count()));
+                waitedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - now).count();
+                nextDeadline += capPeriod;
+            } else {
+                nextDeadline = now + capPeriod;
+            }
+        }
         last = std::chrono::steady_clock::now();
 
+        if (measuring && lastStats.lightingStatsValid) {
+            clusterAssignments.add(lastStats.clusterAssignments);
+            maxLightsInCluster = std::max(maxLightsInCluster, lastStats.maxLightsInCluster);
+            overflowClusters = std::max(overflowClusters, lastStats.overflowClusters);
+        }
+        if (rendered >= lastStats.statsLatencyFrames) {
+            sceneStats[rendered - lastStats.statsLatencyFrames] = lastStats;
+        }
         if (measuring) {
-            drawCalls.add(lastStats.drawCalls);
-            visible.add(lastStats.instances);
-            culled.add(lastStats.culled);
-            triangles.add(static_cast<double>(lastStats.triangles));
             cpuFrame.add(cpu.lastFrameMs());
             for (const auto& s : cpu.lastFrame()) cpuScopes[s.name].add(s.ms);
             // GPU results lag by the frames in flight; they belong to measured frames once
@@ -431,11 +589,23 @@ int run(const Options& o) {
             if (renderer.profiler().enabled() && rendered >= o.warmup + Renderer::kFramesInFlight) {
                 gpuFrame.add(renderer.profiler().lastFrameMs());
                 for (const auto& s : renderer.profiler().lastResults()) gpuPasses[s.name].add(s.ms);
+                for (const auto& s : renderer.profiler().lastStatistics()) {
+                    fragmentInvocations[s.name].add(static_cast<double>(s.fragmentInvocations));
+                    rasterPrimitives[s.name].add(static_cast<double>(s.clippingPrimitives));
+                }
             }
+            if (o.frameCap > 0.0) pacingWait.add(waitedMs);
         }
         ++rendered;
     }
     renderer.waitIdle();
+    for (const auto& [frameIndex, st] : sceneStats) {
+        if (frameIndex < o.warmup || frameIndex >= measuredEnd) continue;
+        drawCalls.add(st.drawCalls);
+        visible.add(st.instances);
+        culled.add(st.culled);
+        triangles.add(static_cast<double>(st.triangles));
+    }
 
     // --- Report ----------------------------------------------------------------------
     const auto& ctx = renderer.context();
@@ -452,7 +622,7 @@ int run(const Options& o) {
     j << "  \"note\": \""
       << (info.isSoftwareRasterizer ? "Software rasterizer: GPU times are NOT GPU performance." : "Hardware GPU.")
       << "\",\n";
-    j << "  \"scene\": \"" << o.scene << "\", \"renderPath\": \"" << (o.referencePath ? "reference" : "graph")
+    j << "  \"scene\": \"" << o.scene << "\", \"renderPath\": \"" << (o.path)
       << "\", \"overlay\": " << (o.overlay ? "true" : "false") << ",\n";
     j << "  \"sceneDetails\": {\"objects\": " << draws.size() << ", \"uniqueMeshes\": " << uniqueMeshes
       << ", \"uniqueMaterials\": " << uniqueMaterials << ", \"pointLights\": " << view.lighting.pointLights.size()
@@ -475,8 +645,54 @@ int run(const Options& o) {
         first = false;
     }
     j << "\n  },\n";
-    j << "  \"perFrame\": {\"drawCalls\": " << drawCalls.json() << ", \"visibleObjects\": " << visible.json()
+    j << "  \"perFrame\": {\"frames\": " << drawCalls.samples.size() << ", \"drawCalls\": " << drawCalls.json() << ", \"visibleObjects\": " << visible.json()
       << ", \"culledObjects\": " << culled.json() << ", \"triangles\": " << triangles.json() << "},\n";
+    if (o.perFrameSeries) {
+        j << "  \"series\": [";
+        bool firstSample = true;
+        for (const auto& [frameIndex, st] : sceneStats) {
+            if (frameIndex < o.warmup || frameIndex >= measuredEnd) continue;
+            j << (firstSample ? "" : ", ") << "[" << frameIndex - o.warmup << ", " << st.instances << ", " << st.drawCalls
+              << ", " << st.triangles << "]";
+            firstSample = false;
+        }
+        j << "],\n";
+    }
+    j << "  \"frameCap\": {\"fps\": " << o.frameCap << ", \"waitMs\": "
+      << (pacingWait.samples.empty() ? "null" : pacingWait.json()) << "},\n";
+    const double pixels = double(renderer.swapchain().extent().width) * double(renderer.swapchain().extent().height);
+    j << "  \"pipelineStatistics\": {\"supported\": " << (renderer.profiler().statisticsEnabled() ? "true" : "false");
+    for (const auto& [name, st] : fragmentInvocations) {
+        j << ", \"" << escape(name) << "\": {\"fragmentInvocations\": " << st.json()
+          << ", \"fragmentInvocationsPerPixel\": " << st.avg() / std::max(pixels, 1.0)
+          << ", \"rasterPrimitives\": " << rasterPrimitives[name].json() << "}";
+    }
+    j << "},\n";
+    j << "  \"assets\": {\"uploadQueue\": \"" << (upload.queue().dedicated() ? "transfer" : "graphics")
+      << "\", \"loadMs\": " << loadMs << ", \"stageMs\": " << stageMs << ", \"transferMs\": " << transferMs
+      << ", \"stagedMiB\": " << stagedBytes / 1048576.0 << ", \"textureMiB\": " << textureBytes / 1048576.0
+      << ", \"textures\": {\"compiled\": " << textureStats.compiled << ", \"source\": " << textureStats.source
+      << ", \"runtimeMips\": " << textureStats.runtimeMips << ", \"stale\": " << textureStats.stale << "}},\n";
+    {
+        const ClusterGrid grid = makeClusterGrid(renderer.swapchain().extent().width, renderer.swapchain().extent().height,
+                                                 clusterConfig(o.lighting.quality), view.camera.projection.nearPlane,
+                                                 o.lighting.clusterFar);
+        j << "  \"lighting\": {\"quality\": \"" << toString(o.lighting.quality) << "\", \"pointLights\": "
+          << view.lighting.pointLights.size() << ", \"spotLights\": " << view.lighting.spotLights.size()
+          << ", \"clusters\": [" << grid.x << ", " << grid.y << ", " << grid.z << "], \"maxLightsPerCluster\": "
+          << clusterConfig(o.lighting.quality).maxLightsPerCluster << ", \"clusterAssignments\": "
+          << (clusterAssignments.samples.empty() ? "null" : clusterAssignments.json())
+          << ", \"maxLightsFoundInCluster\": " << maxLightsInCluster << ", \"overflowClusters\": " << overflowClusters
+          << ", \"bruteForce\": " << (o.bruteForceLights ? "true" : "false")
+          << ", \"depthPrepass\": " << (o.lighting.depthPrepass ? "true" : "false")
+          << ", \"multiscatter\": " << (o.lighting.multiscatter ? "true" : "false")
+          << ", \"debugView\": \"" << toString(o.debugView) << "\", \"environment\": \"" << escape(o.environment)
+          << "\", \"iblBakeMs\": " << (environment ? environment->bakeMs() : 0.0)
+          << ", \"iblMiB\": " << (environment ? environment->gpuBytes() / 1048576.0 : 0.0)
+          << ", \"clusterBuffersMiB\": " << scene.clusteredLighting().gpuBytes() / 1048576.0 << "},\n";
+    }
+    j << "  \"commandDraws\": " << lastStats.commandDraws << ", \"statsLatencyFrames\": " << lastStats.statsLatencyFrames
+      << ",\n";
     j << "  \"lastFrame\": {\"drawCalls\": " << lastStats.drawCalls << ", \"visibleObjects\": " << lastStats.instances
       << ", \"submittedObjects\": " << lastStats.submitted << ", \"culledObjects\": " << lastStats.culled
       << ", \"triangles\": " << lastStats.triangles << "},\n";

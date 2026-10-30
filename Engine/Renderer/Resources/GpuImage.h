@@ -16,9 +16,10 @@ struct ImageDesc {
     VkImageUsageFlags usage = 0;
     uint32_t mipLevels = 1;
     const char* debugName = nullptr;
+    bool cube = false; // 6 layers, CUBE_COMPATIBLE, default view is a cube view
 };
 
-// Move-only owner of a 2D VkImage, its allocation and a view covering all mips.
+// Move-only owner of a 2D (or cube) VkImage, its allocation and a view covering all mips and layers.
 // The aspect (colour or depth/stencil) is derived from the format.
 class GpuImage {
 public:
@@ -40,7 +41,9 @@ public:
     VkExtent2D extent() const { return m_extent; }
     uint32_t mipLevels() const { return m_mipLevels; }
     VkImageAspectFlags aspect() const { return m_aspect; }
-    VkImageSubresourceRange fullRange() const { return {m_aspect, 0, m_mipLevels, 0, 1}; }
+    uint32_t layers() const { return m_layers; }
+    bool isCube() const { return m_layers == 6; }
+    VkImageSubresourceRange fullRange() const { return {m_aspect, 0, m_mipLevels, 0, m_layers}; }
 
 private:
     VkDevice m_device = VK_NULL_HANDLE;
@@ -51,8 +54,13 @@ private:
     VkFormat m_format = VK_FORMAT_UNDEFINED;
     VkExtent2D m_extent{};
     uint32_t m_mipLevels = 0;
+    uint32_t m_layers = 1;
     VkImageAspectFlags m_aspect = 0;
 };
+
+// Additional view of part of an image (caller destroys it with vkDestroyImageView).
+VkImageView createImageView(VkDevice device, VkImage image, VkFormat format, VkImageViewType type,
+                            VkImageSubresourceRange range);
 
 bool isDepthFormat(VkFormat format);
 bool hasStencil(VkFormat format);

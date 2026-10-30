@@ -118,6 +118,9 @@ public:
 
     // Pipeline for drawing `handle` into the scene target formats.
     const GraphicsPipeline& pipeline(MaterialHandle handle);
+    // Depth-only pipeline for the depth prepass (material's vertex shader; masked materials use
+    // the engine alpha test, opaque ones no fragment shader). Not valid for blended materials.
+    const GraphicsPipeline& depthPipeline(MaterialHandle handle);
     uint32_t pipelineCount() const { return static_cast<uint32_t>(m_pipelines.size()); }
 
     // Converts a description into its GPU representation (exposed for tests).
@@ -145,6 +148,8 @@ private:
     std::unordered_map<uint64_t, std::unique_ptr<GraphicsPipeline>> m_pipelines;
     ShaderHandle m_pbr = 0;
     ShaderHandle m_unlit = 0;
+    std::unique_ptr<ShaderModule> m_depthMask;
+    std::unordered_map<uint64_t, std::unique_ptr<GraphicsPipeline>> m_depthPipelines;
 };
 
 } // namespace zodar::gfx

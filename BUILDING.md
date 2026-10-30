@@ -27,9 +27,11 @@ No Vulkan SDK library is linked; the loader is resolved at runtime.
 | cgltf | v1.15 | bbeb5b0b070d |
 | Dear ImGui (+ SDL3 / Vulkan backends) | v1.92.4 | 9a5d5c45f54b |
 | doctest (tests only) | v2.4.12 | 1da23a3e8119 |
+| bcdec (BCn decode: runtime fallback, tests) | — | 80859ed3b7af |
+| bc7enc_rdo (rgbcx BC1–5 + bc7enc BC7; AssetPipeline only) | — | b9438627eef7 |
 
 Headers are 1.4.304 because volk's tags follow header versions; the engine requests and
-requires **API 1.3** plus the baseline in ARCHITECTURE.md (descriptor indexing, timeline semaphores, buffer device address, indirect count). Later stages add meshoptimizer, KTX2 support, FSR, Jolt, miniaudio and ufbx.
+requires **API 1.3** plus the baseline in ARCHITECTURE.md (descriptor indexing, timeline semaphores, buffer device address, indirect count). KTX2 is implemented in the engine (S3); later stages add meshoptimizer, FSR, Jolt, miniaudio and ufbx.
 
 ## Windows 10/11
 
@@ -79,7 +81,7 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 | --- | --- | --- |
 | `ZODAR_BUILD_SAMPLES` | ON | Build `Samples/` |
 | `ZODAR_BUILD_TESTS` | ON | Build `ZodarTests` (doctest) |
-| `ZODAR_BUILD_TOOLS` | ON | Build `Tools/` (ZodarBench) |
+| `ZODAR_BUILD_TOOLS` | ON | Build `Tools/` (ZodarBench, ZodarAssetCompiler) |
 | `ZODAR_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.zodarbench_smoke` (need a video driver) |
 | `ZODAR_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` for engine code |
 
@@ -100,10 +102,14 @@ Exit codes: 0 ok, 1 fatal error, 2 validation errors occurred, 3 screenshot fail
 ```
 ModelViewer [file.gltf|file.glb] [--frames N] [--screenshot F.ppm] [--no-validation]
             [--width W] [--height H] [--yaw DEG] [--pitch DEG] [--zoom F] [--spin DEG_PER_S] [--nearest]
+            [--environment sky|none|file.hdr] [--lighting-quality low|medium|high|ultra]
+            [--debug-view NAME] [--lights N] [--no-prepass]
 ```
 
-Without a file it shows a procedural material demo. Left-drag orbits, wheel zooms, F1 toggles
-the profiler overlay, Esc quits. `--reference-path` uses the pre-render-graph path,
+Without a file it shows a procedural material demo. The environment (default: a procedural sky)
+provides image-based lighting and the background; `--lights N` adds N moving coloured point
+lights. Left-drag orbits, wheel zooms, F1 toggles the profiler overlay, F2 cycles the lighting
+debug views, Esc quits. `--reference-path` uses the pre-render-graph path,
 `--no-overlay` hides the profiler.
 
 ## ZodarBench
@@ -114,9 +120,10 @@ triangles, GPU memory and validation counts.
 
 ```
 ZodarBench [--scene grid|unique|city|model] [--model file.glb] [--objects N] [--blocks N] [--lights N]
-           [--width W] [--height H] [--warmup N] [--frames N] [--path graph|reference]
+           [--width W] [--height H] [--warmup N] [--frames N] [--path gpu|graph|reference]
            [--present immediate|low-latency|vsync] [--overlay] [--no-validation] [--sync-validation]
-           [--output report.json] [--screenshot out.ppm]
+           [--output report.json] [--screenshot out.ppm] [--screenshot-frame N] [--per-frame]
+           [--frame-cap FPS]
 ```
 
 | Scene | Content | Measures |
@@ -126,9 +133,56 @@ ZodarBench [--scene grid|unique|city|model] [--model file.glb] [--objects N] [--
 | `city` | B x B blocks: 4 buildings + 16 props per block, street-level drive | Culling and overdraw: most objects off-screen or hidden |
 | `model` | A glTF file | Real assets |
 
+`--path gpu` (default) renders through a persistent `GpuScene` (GPU culling + indirect
+draws); `graph` uses the CPU draw list on the render graph (S1 path); `reference` the
+pre-graph path. All three render identical images. GPU-driven statistics arrive
+`statsLatencyFrames` frames later; ZodarBench credits them to the frame they describe and
+renders a few untimed extra frames so every path reports statistics for the same measured
+frames. `commandDraws` counts recorded vkCmdDraw* calls (a multi-draw indirect call counts
+once). `--per-frame` adds the per-frame [frame, visible, draws, triangles] series.
+
 `perFrame` reports draw calls, visible/culled objects and triangles averaged over the measured
 frames (the view changes along the path); `lastFrame` keeps the final frame's values. The
 screenshot is taken in the middle of the measured path.
+
+`--frame-cap FPS` paces frames to a fixed rate (`SDL_DelayPrecise` after present; the wait is
+reported as `frameCap.waitMs` and is not part of the CPU frame time). Use the same cap for two
+paths to compare GPU times without either one saturating the GPU (clock and queueing effects).
+`pipelineStatistics` reports scene-pass fragment shader invocations (total and per pixel) and
+rasterized primitives when the device supports `pipelineStatisticsQuery`
+(`"supported": false` otherwise). The `reference` path does not record statistics.
+
+Lighting (S4): `--scene lights` (grid with `--lights N`, default 4096 moving point/spot
+lights), `--lighting-quality low|medium|high|ultra` (cluster presets), `--brute-force-lights`
+(every light for every fragment: A/B against clustering), `--no-prepass`, `--no-multiscatter`,
+`--environment none|sky|file.hdr` (IBL + background; default none) and `--debug-view NAME`
+(none, light-count, cluster-slice, normals, direct, indirect, specular-ibl). The report's
+`lighting` section has the cluster grid, list capacity, assignments, the longest list,
+overflowing clusters, IBL bake time/memory and cluster buffer memory. GPU passes are timed
+individually (`Lighting.ClusterCull`, `Scene.DepthPrepass`, ...).
+
+`--source-textures` ignores compiled KTX2 textures (PNG/JPEG decode + runtime mips) and
+`--no-transfer-queue` uploads on the graphics queue. The `assets` section reports the upload
+queue used, `loadMs` (parse + decode/KTX2 read), `stageMs`, `transferMs` (blocking upload),
+staged/texture MiB and how many textures came from the compiled cache.
+
+## ZodarAssetCompiler
+
+Offline texture compilation: baked mips + BCn + KTX2.
+
+```
+ZodarAssetCompiler model <model.gltf|glb> [--quality fast|normal|high] [--threads N] [--force] [--report r.json]
+ZodarAssetCompiler texture <in.png|jpg|tga|bmp> <out.ktx2> [--format bc7|bc1|bc3|bc4|bc5|rgba8]
+                   [--srgb|--linear] [--normal] [--no-mips] [--quality ...] [--threads N]
+ZodarAssetCompiler info <file.ktx2>
+```
+
+`model` writes every texture of the model to `<model file>.zodar/image<N>_<usage>.ktx2`
+(colour: BC7 sRGB; data and normal maps: BC7 linear with the box / normal-vector mip filter)
+and prints size and PSNR per texture. `loadGltf` (ModelViewer, ZodarBench, games) picks the
+compiled files up automatically while the source images are unchanged; edit a source image and
+the stale file is ignored until the model is recompiled. Output is identical for any thread
+count. Independent validation: `ktx validate <file.ktx2>` from KTX-Software, if installed.
 
 Use `--no-validation` for timing runs (validation layers add CPU cost) and a separate run with
 validation for correctness. Reports from a software rasterizer set `"softwareRasterizer": true`.

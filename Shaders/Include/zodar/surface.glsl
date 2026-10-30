@@ -9,6 +9,12 @@ layout(location = 1) in vec3 vNormal;
 layout(location = 2) in vec4 vTangent;
 layout(location = 3) in vec2 vUv0;
 layout(location = 4) in vec4 vColor;
+layout(location = 5) flat in uint vMaterialIndex;
+
+// Material of the instance being shaded (index written per instance, see vertex.glsl).
+ZodarMaterial zodarMaterial() {
+    return zodarMaterials[vMaterialIndex];
+}
 
 // Base colour (factor * texture * vertex colour), with alpha-mask discard applied.
 vec4 zodarBaseColor(ZodarMaterial m) {
