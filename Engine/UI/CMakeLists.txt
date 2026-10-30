@@ -13,7 +13,12 @@ add_library(ZodarUI STATIC
     Context.cpp
     Widgets/Label.cpp
     Widgets/Image.cpp
-    Widgets/Button.cpp)
+    Widgets/Button.cpp
+    Startup.cpp
+    LogBuffer.cpp
+    WindowPlan.cpp
+    Widgets/ProgressBar.cpp
+    Screens/LoadingScreen.cpp)
 add_library(Zodar::UI ALIAS ZodarUI)
 
 target_link_libraries(ZodarUI

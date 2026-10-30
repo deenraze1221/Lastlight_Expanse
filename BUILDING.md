@@ -149,6 +149,18 @@ ZodarUISandbox [--scale F] [--user-scale F] [--size WxH] [--frames N] [--screens
                [--check] [--software] [--resources DIR]
 ```
 
+Loading window (Stage UI-2), driven by **mock** startup data (scripted example values, not engine
+progress; the window title and every log line say so):
+
+```
+ZodarUISandbox --screen loading [--scenario normal|slow-shaders|failure|indeterminate]
+               [--at SECONDS] [--speed F] [--monitor WxH] [--open-log] [--exit-after-launcher]
+```
+
+`--at` freezes mock time (screenshots), `--monitor` simulates a monitor size, `--speed` speeds up
+a live run. A live run shows the loading window, then resizes and re-centres the same window for
+the launcher placeholder. `ctest` runs one `ui.loading_*` test per scenario and `ui.loading_flow`.
+
 `--scale` overrides the OS display scale (test profiles 1.0 / 1.33 / 2.0; any value works),
 `--check` verifies token colours at known pixels (exit code 4 on mismatch), `--software` forces
 SDL's software renderer. `ctest` runs it offscreen as `ui.sandbox_smoke`.

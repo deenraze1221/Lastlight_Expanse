@@ -1,6 +1,7 @@
 // ZODAR UI Sandbox (TEMPORARY): component gallery for Stage 1 review. Draws the Zodar::UI
 // draw lists with SDL3's 2D renderer. Everything shown is real UI-module output; no engine
 // progress or project data is displayed.
+#include "LoadingDemo.h"
 #include "SdlInput.h"
 #include "SdlRendererBackend.h"
 
@@ -42,6 +43,14 @@ struct Options {
     bool check = false;
     bool software = false;
     std::string resources;
+    // Stage 2: --screen loading (MOCK startup data).
+    std::string screen = "gallery";
+    std::string scenario = "normal";
+    std::optional<double> at;
+    double speed = 1.0;
+    std::optional<std::pair<int, int>> monitor;
+    bool exitAfterLauncher = false;
+    bool openLog = false;
 };
 
 Options parse(int argc, char** argv) {
@@ -64,9 +73,23 @@ Options parse(int argc, char** argv) {
         else if (a == "--check") o.check = true;
         else if (a == "--software") o.software = true;
         else if (a == "--resources") o.resources = next();
+        else if (a == "--screen") o.screen = next();
+        else if (a == "--scenario") o.scenario = next();
+        else if (a == "--at") o.at = std::stod(next());
+        else if (a == "--speed") o.speed = std::stod(next());
+        else if (a == "--monitor") {
+            const std::string v = next();
+            int w = 0, h = 0;
+            if (std::sscanf(v.c_str(), "%dx%d", &w, &h) != 2) fail("--monitor expects WxH");
+            o.monitor = std::make_pair(w, h);
+        } else if (a == "--exit-after-launcher") o.exitAfterLauncher = true;
+        else if (a == "--open-log") o.openLog = true;
         else if (a == "--help") {
             std::printf("ZodarUISandbox [--scale F] [--user-scale F] [--size WxH] [--frames N] [--screenshot F.png]\n"
-                        "               [--check] [--software] [--resources DIR]\n");
+                        "               [--check] [--software] [--resources DIR]\n"
+                        "               [--screen gallery|loading] [--scenario normal|slow-shaders|failure|indeterminate]\n"
+                        "               [--at SECONDS] [--speed F] [--monitor WxH] [--open-log] [--exit-after-launcher]\n"
+                        "  --screen loading uses MOCK startup data (scripted example values, not engine progress).\n");
             std::exit(0);
         } else fail("unknown argument: " + a);
     }
@@ -315,7 +338,54 @@ bool readPixels(SDL_Renderer* renderer, std::vector<uint8_t>& rgba, int& w, int&
     return true;
 }
 
+int runLoading(const Options& opt) {
+    sandbox::LoadingDemoOptions lo;
+    lo.scenario = opt.scenario;
+    lo.at = opt.at;
+    lo.speed = opt.speed;
+    if (opt.monitor) lo.monitor = Size2{static_cast<float>(opt.monitor->first), static_cast<float>(opt.monitor->second)};
+    lo.software = opt.software;
+    lo.frames = opt.frames;
+    lo.exitAfterLauncher = opt.exitAfterLauncher;
+    lo.openLog = opt.openLog;
+    lo.resources = resourceDir(opt);
+    return sandbox::runLoadingDemo(lo, [&](SDL_Renderer* renderer, const std::vector<sandbox::PixelProbe>& probes) {
+        int code = 0;
+        std::vector<uint8_t> rgba;
+        int rw = 0, rh = 0;
+        if ((opt.check || !opt.screenshot.empty()) && !readPixels(renderer, rgba, rw, rh)) {
+            ZODAR_LOG_ERROR("SDL_RenderReadPixels failed: {}", SDL_GetError());
+            return 3;
+        }
+        if (!rgba.empty() && !opt.screenshot.empty()) {
+            if (!stbi_write_png(opt.screenshot.c_str(), rw, rh, 4, rgba.data(), rw * 4)) code = 3;
+            else ZODAR_LOG_INFO("Screenshot written: {} ({}x{})", opt.screenshot, rw, rh);
+        }
+        if (opt.check && !rgba.empty()) {
+            int failures = 0;
+            for (const sandbox::PixelProbe& p : probes) {
+                if (p.x < 0 || p.y < 0 || p.x >= rw || p.y >= rh) {
+                    ZODAR_LOG_ERROR("check '{}' outside the window", p.name);
+                    ++failures;
+                    continue;
+                }
+                const uint8_t* px = rgba.data() + (static_cast<size_t>(p.y) * rw + p.x) * 4;
+                const Color got{px[0], px[1], px[2], 255};
+                if (got != p.expected) {
+                    ZODAR_LOG_ERROR("check '{}' at ({}, {}): expected {} got {}", p.name, p.x, p.y, hex(p.expected), hex(got));
+                    ++failures;
+                }
+            }
+            ZODAR_LOG_INFO("Pixel checks: {} probes, {} failures", probes.size(), failures);
+            if (failures > 0) code = 4;
+        }
+        return code;
+    });
+}
+
 int run(const Options& opt) {
+    if (opt.screen == "loading") return runLoading(opt);
+    if (opt.screen != "gallery") fail("unknown --screen (gallery | loading): " + opt.screen);
     if (!SDL_Init(SDL_INIT_VIDEO)) fail(std::string("SDL_Init failed: ") + SDL_GetError());
 
     const float initialScale = opt.displayScale.value_or(1.0f) * opt.userScale;

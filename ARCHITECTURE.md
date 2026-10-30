@@ -50,7 +50,7 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | Renderer/Vulkan | `DeviceCapabilities`, `GpuTimeline`, `PipelineCache` | Capability table + feature resolution with fallbacks; graphics timeline semaphore; validated on-disk pipeline cache |
 | Core | `Profiler` | CPU scope timers, frame-time history with percentiles |
 | Debug | `DebugOverlay` | ImGui profiler overlay (F1), headless capable, drawn as a render-graph pass |
-| UI | `Theme`, `DrawList`, `TextureStore`, `Layout`, `Scale`, `Font`, `Svg`, `Input`, `Context`, `Widgets/*` | Engine/tooling UI (ZODAR Tooling & UI track). Depends only on Core + Platform; no SDL3, no Renderer. Produces plain draw lists (sRGB colours) and CPU images; see [Docs/UI_SPEC.md](Docs/UI_SPEC.md) |
+| UI | `Theme`, `DrawList`, `TextureStore`, `Layout`, `Scale`, `Font`, `Svg`, `Input`, `Context`, `Startup`, `LogBuffer`, `WindowPlan`, `Widgets/*`, `Screens/LoadingScreen` | Engine/tooling UI (ZODAR Tooling & UI track). Depends only on Core + Platform; no SDL3, no Renderer. Produces plain draw lists (sRGB colours) and CPU images; see [Docs/UI_SPEC.md](Docs/UI_SPEC.md) |
 | Renderer | `SceneRenderer` | Forward renderer: HDR colour + reverse-Z depth targets, frame/instance buffers, culling, sorting, instancing, sun + point lights, resolve |
 | | `MaterialSystem` | Named shaders, 128 B GPU material table, pipeline cache (shader × alpha mode × sidedness) |
 | | `BindlessRegistry` | Global set 0: 4096 textures, 64 samplers, material table |
@@ -75,6 +75,11 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
   Vulkan UI render-graph pass exists.
 - Scaling is continuous (display scale x user scale, or fit-to-design for fixed compositions);
   glyph atlases and SVG rasters are generated for the scale in use.
+- Engine state reaches the UI only through interfaces (`ui::IStartupProgress`, `ui::LogBuffer`).
+  The UI never invents progress: without exact values it shows an indeterminate animation.
+  Mock implementations live only in tests and the sandbox and label themselves as mock data.
+- Window placement is computed by pure functions (`ui::WindowPlan`); applying it to a real
+  window needs the deferred `Platform::Window` additions.
 
 ## Vulkan decisions
 

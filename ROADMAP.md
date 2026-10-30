@@ -74,8 +74,8 @@ services until the engine systems exist; no fabricated progress is shown in rele
 
 | Stage | Contents | Status |
 | --- | --- | --- |
-| UI-1 Foundation | `Zodar::UI` (theme tokens, layout, scaling, fonts, SVG, draw lists, Button), temporary SDL sandbox, tests, Windows build | In progress — awaiting review |
-| UI-2 Loading window | Single window: loading at 960×540 / 1280×720 / 1920×1080, then resize + re-centre for the launcher; "Preparing shaders" without fabricated counts | Planned (needs small additive Platform::Window API, separate approval) |
+| UI-1 Foundation | `Zodar::UI` (theme tokens, layout, scaling, fonts, SVG, draw lists, Button), temporary SDL sandbox, tests, Windows build | Done (`ui/stage1`) |
+| UI-2 Loading window | Single window: loading at 960×540 / 1280×720 / 1920×1080, then resize + re-centre for the launcher; "Preparing shaders" without fabricated counts | UI side done — awaiting review. Demonstrated in the sandbox with mock data; the `Platform::Window` additions (borderless, size, centre, display scale) are deferred and need separate approval |
 | UI-3 Launcher | Recent projects, templates (mock data) | Planned |
 | UI-4 Create Project + Settings | After mockup approval; mock services | Planned |
 | UI-5 Engine integration | Vulkan UI render-graph pass, real startup progress, settings storage, log viewer | Planned (as engine systems become ready) |

@@ -80,12 +80,55 @@ Original Brand Pack files, byte-for-byte (SHA-256 in `Resources/UI/MANIFEST.sha2
 Content boxes used for cropping (SVG units, from the Figma brand file): icon `59,87 394×338`,
 lockup `32,110 450×290` — **unconfirmed** as official clear-space rules.
 
-## Known limitations (Stage 1)
+## Loading window (Stage UI-2)
+
+Design canvas 960×540, scaled to fit the window (`ScalePolicy::FitDesign`).
+
+| Item | Value | Status |
+| --- | --- | --- |
+| Window sizes | 1920×1080 → 960×540, 2560×1440 → 1280×720, 3840×2160 → 1920×1080 | Confirmed (spec) |
+| Other monitors | Largest profile ≤ half the monitor; < 1080p → 960×540; shrunk to 90% of the usable area if needed | **Unconfirmed** |
+| Window style | Borderless, centred in the usable area, never fullscreen | Confirmed (spec) |
+| Launcher window after loading | Largest 16:9 fitting 85% of the usable area, capped at 1920×1080 × display scale, centred, bordered + resizable | **Unconfirmed** |
+| Artwork | Original `Loading.svg` (pattern + logo) with the "C++" tag removed (shapes inside 870,25 60×25) | Confirmed (spec: remove C++ tag) |
+| Stages | Analyzing system · Preparing shaders · Extracting resources · Configuring settings · Preparing engine · Initializing components | Confirmed (spec + rename) |
+| Progress bar | 2 units high, x 64–896, `brand/accent`; track `brand/surface`; smooth toward reported values only | Confirmed (spec); height/track colour from prototype |
+| No exact progress | Indeterminate sweep (28% segment, 1.4 s), no percentage, no counts | Confirmed (spec) |
+| Status text | Rajdhani Regular 13, 24% spacing, uppercase, `ui/text-secondary`; counts right-aligned, `ui/text-muted` | Face confirmed; size/spacing from prototype |
+| First-launch hint | "First launch — shaders are being cached", after 30 s in Preparing shaders, `brand/accent`, Rajdhani Regular 12 | Text/trigger confirmed; style from prototype |
+| Version | "ZODAR Engine v0.1  ·  C++" (version from the build), Rajdhani Regular 11, `ui/text-muted`, bottom left | Confirmed (spec + C++ placement); size from prototype |
+| Percentage | Bottom right, only with exact overall progress | From prototype |
+| Failure | Bar turns `brand/error`; "<Stage> failed" in `brand/primary`; Open log (Secondary) + Retry (Primary) on the status row | **Unconfirmed**: text colour (error red on #111 is low contrast for small text), button size (standard 40-unit controls) |
+| Log panel | x 64–896, y 40 to 16 above the bar, `brand/surface` + `ui/border`; newest lines at the bottom; errors `brand/error` | **Unconfirmed** |
+| Completed | Bar full; window becomes the launcher after 0.6 s | **Unconfirmed** (delay) |
+
+### SVG mask investigation (Loading.svg)
+
+- nanosvg has no `<mask>` support and draws a mask's contents as ordinary shapes. Unhandled,
+  `Loading.svg` renders four solid white 962×130 bars over the artwork.
+- Fix: `<mask>` definitions are removed from the in-memory SVG text before parsing
+  (`stripMaskDefinitions`). The file on disk is unchanged (SHA-256 checked).
+- Remaining difference: the pattern outlines use masks to keep only the inner half of a 2 px
+  stroke. Without the mask the full 2 px stroke is drawn centred on the outline, so lines are
+  ~1 px wider and ~0.5 px further out: 22,651 vs 17,450 lit pattern pixels at 960×540 (+30%).
+  Colour is identical (`#151515` on `#111111`); the difference is visible only with strong
+  contrast enhancement.
+- Whole artwork vs the designer's export (`Loading.png`, 960×540, status area and C++ tag
+  excluded): mean difference 0.22/255; 1.04% of pixels differ by more than 3/255; 0.02% by more
+  than 32/255 (anti-aliasing on logo edges).
+- Not done (needs a decision): halving masked stroke widths would match the line weight but not
+  its 0.5 px inward offset.
+
+## Known limitations
 
 - Text: Latin + Latin-1 + common punctuation only; no complex shaping (no HarfBuzz). Missing
   characters render as U+FFFD.
 - Layout: a wrapping container reports its wrapped height only when its main size is Fixed.
-- nanosvg does not support SVG `mask`/`clip-path`. The two logos do not use them; `Loading.svg`
-  draws its background outlines with masks, so it must be checked before Stage UI-2 uses it.
+- nanosvg does not support SVG `mask`/`clip-path`. Masks are stripped before parsing; masked
+  elements render unmasked (see the Loading.svg investigation above).
+- Mock startup data exists only in the sandbox/tests; no engine progress source exists yet, so
+  the real loading window cannot run until `IStartupProgress` is implemented by the engine.
+- Window placement is demonstrated only in the sandbox (SDL); the engine's `Platform::Window`
+  cannot yet be borderless, resized or centred (deferred).
 - Temporary SDL backend: no anti-aliasing, so 2 px rounded corners show small steps at high
   scale. Colours are blended in sRGB space. The Vulkan UI pass will replace it.
