@@ -1,0 +1,28 @@
+import {districtIndex} from './power-grid.js';
+import * as T from 'three';
+import {CityWeatherDetails} from './city-weather.js';
+import {AtmosphereParticles} from './atmosphere-particles.js';
+// Decorative details never obstruct the tested player routes. Shared geometry/materials.
+export function createAtmosphere(scene,layout){
+ const box=new T.BoxGeometry(1,1,1),parts=[],mats={wood:new T.MeshStandardMaterial({color:'#67513c'}),black:new T.MeshStandardMaterial({color:'#242c2b'}),rubble:new T.MeshStandardMaterial({color:'#787568'}),rust:new T.MeshStandardMaterial({color:'#765340'}),paper:new T.MeshStandardMaterial({color:'#b4ad8b'})};
+ const batches=new Map();const put=(mat,x,y,z,w,h,d,ry=0)=>{if(!batches.has(mat))batches.set(mat,[]);const o=new T.Object3D();o.position.set(x,y,z);o.scale.set(w,h,d);o.rotation.y=ry;o.updateMatrix();batches.get(mat).push(o.matrix);};
+ for(const b of layout.buildings){if(b.type==='grocery')continue;const front=b.z+b.d/2;
+  if(b.id%3===0)for(const side of [-1,1]){const x=b.x+side*b.w*.3;put('black',x,4.7,front+.082,.75,1,.016);for(let n=0;n<3;n++)put('wood',x,4.35+n*.30,front+.11,.98,.13,.045,0);}
+  for(let n=0;n<3;n++){const x=b.x-b.w*.46+n*.14;put('black',x,.4+n*.27,front+.004,.012,.36,.008,.05);}
+ }
+ for(const p of layout.props){if(p.type==='dumpster'){for(let n=0;n<4;n++){const dx=.65+(n%2)*.22,dz=(Math.floor(n/2)-.5)*.35;put(n%2?'paper':'black',p.x+dx,.025,p.z+dz,.14,.035,.11,n);}}if(['car','van','hatchback'].includes(p.type)&&p.variant%4===0){put('rust',p.x,.925,p.z+.8,.55,.018,.45);}}
+ const scarShape=new T.Shape();scarShape.moveTo(-.32,-.5);scarShape.lineTo(.22,-.42);scarShape.lineTo(.4,-.14);scarShape.lineTo(.18,.12);scarShape.lineTo(.3,.44);scarShape.lineTo(-.16,.5);scarShape.lineTo(-.38,.15);scarShape.closePath();const scarGeometry=new T.ShapeGeometry(scarShape),scarMaterial=new T.MeshStandardMaterial({color:'#4d4c40',roughness:1,polygonOffset:true,polygonOffsetFactor:-3});for(const b of layout.buildings){if(b.type==='grocery')continue;for(const side of [-1,1]){const scar=new T.Mesh(scarGeometry,scarMaterial);scar.position.set(b.x+side*b.w*.40,1.2+(b.id%3)*.3,b.z+b.d/2+.012);scar.scale.setScalar(.65+(b.id%4)*.1);scene.add(scar);}for(let n=0;n<3;n++){const x=b.x-b.w*.43+n*.19,z=b.z+b.d/2+.38;if(!layout.colliders.some(c=>c.minY<.3&&c.maxY>0&&x>c.minX-.1&&x<c.maxX+.1&&z>c.minZ-.1&&z<c.maxZ+.1))put('rubble',x,.06,z,.12,.12,.15,n*.7);}}
+ for(const [mat,records]of batches){const mesh=new T.InstancedMesh(box,mats[mat],records.length);records.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));mesh.name='weathering/'+mat;scene.add(mesh);}
+ const warm=new T.PointLight('#ffd48c',16,16,2);warm.position.set(layout.shop.terminal.x+1,2.6,layout.shop.terminal.z+1);scene.add(warm);
+ // Shared radial decals and world-space light halos add depth without more point lights.
+ const lampProps=layout.props.filter(p=>p.type==='lamp'),pixels=new Uint8Array(32*32*4);
+ for(let y=0;y<32;y++)for(let x=0;x<32;x++){const radius=Math.hypot((x-15.5)/15.5,(y-15.5)/15.5),alpha=Math.max(0,1-radius);pixels.set([255,255,255,Math.round(alpha*alpha*255)],(y*32+x)*4);}
+ const haloMap=new T.DataTexture(pixels,32,32);haloMap.needsUpdate=true;
+ const pools=new T.InstancedMesh(new T.PlaneGeometry(1,1),new T.MeshBasicMaterial({map:haloMap,transparent:true,opacity:.22,blending:T.AdditiveBlending,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}),lampProps.length),glowPositions=[],glowColors=[],lampDummy=new T.Object3D();
+ lampProps.forEach((p,i)=>{const color=new T.Color(i%3?'#d7bd85':'#8daac8');lampDummy.position.set(p.x,.012,p.z);lampDummy.rotation.x=-Math.PI/2;lampDummy.scale.set(5.4,5.4,1);lampDummy.updateMatrix();pools.setMatrixAt(i,lampDummy.matrix);pools.setColorAt(i,color);glowPositions.push(p.x,4.7,p.z);glowColors.push(color.r,color.g,color.b);});
+ pools.name='street-light-pools';scene.add(pools);const haloGeometry=new T.BufferGeometry();haloGeometry.setAttribute('position',new T.Float32BufferAttribute(glowPositions,3));haloGeometry.setAttribute('color',new T.Float32BufferAttribute(glowColors,3));const halos=new T.Points(haloGeometry,new T.PointsMaterial({map:haloMap,size:.85,vertexColors:true,transparent:true,opacity:.4,blending:T.AdditiveBlending,depthWrite:false}));halos.name='street-lamp-halos';scene.add(halos);
+ const lamps=[];for(const p of layout.props.filter(p=>p.type==='lamp').filter((_,i)=>i%12===0)){const l=new T.PointLight('#e0c495',8,13,2);l.position.set(p.x,4.7,p.z);l.userData.district=districtIndex(p.x,p.z);scene.add(l);lamps.push(l);}
+ const weatherDetails=new CityWeatherDetails(scene,layout);
+ const particles=new AtmosphereParticles(scene,layout.buildings,lamps);
+ return {update(time,powered,quality='medium',position={x:0,z:0},dt=0,weather='overcast',night=false){const cut=scene.userData.powerCut?.value??-1;if(pools.userData.cut!==cut){pools.userData.cut=cut;lampProps.forEach((p,i)=>{const c=new T.Color(i%3?'#d7bd85':'#8daac8');if(districtIndex(p.x,p.z)===cut)c.multiplyScalar(.03);pools.setColorAt(i,c);halos.geometry.attributes.color.setXYZ(i,c.r,c.g,c.b);});pools.instanceColor.needsUpdate=true;halos.geometry.attributes.color.needsUpdate=true;}pools.visible=halos.visible=quality!=='low';pools.material.opacity=night?.32:.09;halos.material.opacity=night?.5:.15;weatherDetails.update(dt,time,weather,quality,night);particles.update(dt,position,quality,powered);lamps.forEach((l,i)=>{l.visible=l.userData.district!==cut&&quality!=='low'&&(quality!=='medium'||i%2===0);l.intensity=quality==='low'||quality==='medium'&&i%2?0:powered?8:5*(i===0&&Math.sin(time*9)*Math.sin(time*2)>.72?.15:1);});warm.intensity=powered?23:16;}};
+}
