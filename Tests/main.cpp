@@ -4,9 +4,9 @@
 #include "Core/Log.h"
 
 int main(int argc, char** argv) {
-    raven::log::init({spdlog::level::warn, ""});
+    zodar::log::init({spdlog::level::warn, ""});
     doctest::Context context(argc, argv);
     const int result = context.run();
-    raven::log::shutdown();
+    zodar::log::shutdown();
     return result;
 }

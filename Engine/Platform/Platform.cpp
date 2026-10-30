@@ -5,14 +5,14 @@
 
 #include <SDL3/SDL.h>
 
-namespace raven {
+namespace zodar {
 
 Platform::Platform() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fail(std::string("SDL_Init failed: ") + SDL_GetError());
     }
     const int version = SDL_GetVersion();
-    RAVEN_LOG_INFO("SDL {}.{}.{} initialized (video driver: {})", SDL_VERSIONNUM_MAJOR(version),
+    ZODAR_LOG_INFO("SDL {}.{}.{} initialized (video driver: {})", SDL_VERSIONNUM_MAJOR(version),
                    SDL_VERSIONNUM_MINOR(version), SDL_VERSIONNUM_MICRO(version), videoDriver());
 }
 
@@ -25,9 +25,9 @@ const char* Platform::videoDriver() const {
     return driver ? driver : "none";
 }
 
-} // namespace raven
+} // namespace zodar
 
-namespace raven {
+namespace zodar {
 
 std::filesystem::path Platform::userDataPath(const std::string& organization, const std::string& application) {
     char* path = SDL_GetPrefPath(organization.c_str(), application.c_str());
@@ -39,4 +39,4 @@ std::filesystem::path Platform::userDataPath(const std::string& organization, co
     return result;
 }
 
-} // namespace raven
+} // namespace zodar

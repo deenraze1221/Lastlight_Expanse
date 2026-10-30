@@ -5,12 +5,12 @@
 #include "Renderer/RenderGraph/RenderGraph.h"
 #include "Renderer/Resources/FrameAllocator.h"
 
-using namespace raven;
-using namespace raven::gfx;
-using raven::test::gpu;
+using namespace zodar;
+using namespace zodar::gfx;
+using zodar::test::gpu;
 
 TEST_CASE("debug overlay: profiler window renders headless through the render graph") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     BindlessRegistry bindless(*gpu().context);
     RenderGraphResources graphResources(*gpu().context, bindless);
     const VkExtent2D extent{480, 360};
@@ -25,7 +25,7 @@ TEST_CASE("debug overlay: profiler window renders headless through the render gr
     size_t lastPassCount = 0;
     for (uint64_t frame = 0; frame < 3; ++frame) { // Several frames: font upload + steady state.
         cpu.beginFrame();
-        { RAVEN_CPU_SCOPE(cpu, "Update"); }
+        { ZODAR_CPU_SCOPE(cpu, "Update"); }
         cpu.endFrame();
         overlay.newFrame(extent, 1.0f / 60.0f);
         debug::ProfilerSnapshot snapshot;

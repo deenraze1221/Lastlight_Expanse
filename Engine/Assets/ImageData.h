@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace raven {
+namespace zodar {
 
 // How texel values are interpreted; decides the GPU format and correct mip filtering.
 enum class ColorSpace {
@@ -37,9 +37,9 @@ struct ImageData {
                            ColorSpace colorSpace, std::string name = {});
 };
 
-// Decodes PNG, JPEG, TGA or BMP into RGBA8 (single level). Throws raven::Error with the
+// Decodes PNG, JPEG, TGA or BMP into RGBA8 (single level). Throws zodar::Error with the
 // file name and decoder reason on failure.
 ImageData loadImage(const std::filesystem::path& path, ColorSpace colorSpace);
 ImageData loadImageFromMemory(std::span<const uint8_t> bytes, ColorSpace colorSpace, const std::string& name);
 
-} // namespace raven
+} // namespace zodar

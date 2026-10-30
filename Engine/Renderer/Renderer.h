@@ -12,11 +12,11 @@
 #include <optional>
 #include <string>
 
-namespace raven {
+namespace zodar {
 class Window;
 }
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class FrameAllocator;
 class GpuProfiler;
@@ -24,7 +24,7 @@ class VulkanContext;
 class VulkanSwapchain;
 
 struct RendererDesc {
-    std::string applicationName = "RAVEN Application";
+    std::string applicationName = "ZODAR Application";
     bool enableValidation = true;
     PresentMode presentMode = PresentMode::VSync;
     std::filesystem::path pipelineCachePath; // Empty: no disk cache.
@@ -112,4 +112,4 @@ private:
     bool m_lastScreenshotOk = false;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 namespace {
 
 constexpr VkAccessFlags2 kWriteAccess =
@@ -37,7 +37,7 @@ GraphPlan planGraph(const std::vector<PlanResource>& resources, const std::vecto
     for (size_t p = passes.size(); p-- > 0;) {
         bool needed = passes[p].sideEffect;
         for (const PlanUse& use : passes[p].uses) {
-            RAVEN_ENSURE(use.resource < resources.size(), "pass '" + passes[p].name + "' uses an unknown resource");
+            ZODAR_ENSURE(use.resource < resources.size(), "pass '" + passes[p].name + "' uses an unknown resource");
             if (isWriteUsage(use.usage) && neededResource[use.resource]) {
                 needed = true;
             }
@@ -186,4 +186,4 @@ GraphPlan planGraph(const std::vector<PlanResource>& resources, const std::vecto
     return plan;
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

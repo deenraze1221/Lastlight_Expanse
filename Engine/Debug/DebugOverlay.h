@@ -11,17 +11,17 @@
 
 union SDL_Event;
 
-namespace raven {
+namespace zodar {
 class Window;
 }
 
-namespace raven::gfx {
+namespace zodar::gfx {
 class RenderGraph;
 class VulkanContext;
 struct RGImage;
 }
 
-namespace raven::debug {
+namespace zodar::debug {
 
 // Everything the profiler window shows for one frame. Filled by the application.
 struct ProfilerSnapshot {
@@ -62,4 +62,4 @@ private:
     bool m_frameStarted = false;
 };
 
-} // namespace raven::debug
+} // namespace zodar::debug

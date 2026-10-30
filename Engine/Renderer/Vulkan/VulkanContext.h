@@ -15,14 +15,14 @@
 #include <filesystem>
 #include <string>
 
-namespace raven {
+namespace zodar {
 class Window;
 }
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 struct ContextDesc {
-    std::string applicationName = "RAVEN Application";
+    std::string applicationName = "ZODAR Application";
     // Requests VK_LAYER_KHRONOS_validation. If the layer is missing a warning is
     // logged and the context continues without it.
     bool enableValidation = true;
@@ -154,4 +154,4 @@ private:
     std::atomic<uint32_t> m_validationWarnings{0};
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

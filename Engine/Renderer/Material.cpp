@@ -6,7 +6,7 @@
 #include "Renderer/Texture.h"
 #include "Renderer/Vulkan/VulkanContext.h"
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 MaterialSystem::MaterialSystem(const VulkanContext& context, BindlessRegistry& bindless, VkPipelineLayout layout,
                                TargetFormats formats, DefaultTextureSlots defaults,
@@ -53,7 +53,7 @@ uint32_t MaterialSystem::textureSlot(const TextureBinding& binding, uint32_t fal
     if (!binding.texture) {
         return fallback;
     }
-    RAVEN_ENSURE(binding.texture->isValid(), "material references an empty texture");
+    ZODAR_ENSURE(binding.texture->isValid(), "material references an empty texture");
     return binding.texture->bindlessIndex();
 }
 
@@ -84,7 +84,7 @@ GpuMaterial MaterialSystem::toGpu(const MaterialDesc& d) {
 }
 
 MaterialHandle MaterialSystem::createMaterial(const MaterialDesc& desc) {
-    RAVEN_ENSURE(desc.shader < m_shaders.size(), "material '" + desc.name + "' uses an unknown shader");
+    ZODAR_ENSURE(desc.shader < m_shaders.size(), "material '" + desc.name + "' uses an unknown shader");
     if (m_materials.size() >= kMaxMaterials) {
         fail("Material table is full");
     }
@@ -118,8 +118,8 @@ const GraphicsPipeline& MaterialSystem::pipeline(MaterialHandle handle) {
                                   (m.doubleSided ? "/2s" : "");
     desc.debugName = debugName.c_str();
     auto pipeline = std::make_unique<GraphicsPipeline>(m_context, desc);
-    RAVEN_LOG_DEBUG("Created pipeline {}", debugName);
+    ZODAR_LOG_DEBUG("Created pipeline {}", debugName);
     return *m_pipelines.emplace(key, std::move(pipeline)).first->second;
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

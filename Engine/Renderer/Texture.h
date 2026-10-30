@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <string>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class BindlessRegistry;
 class UploadBatch;
@@ -41,4 +41,4 @@ private:
     std::string m_name;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

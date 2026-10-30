@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class VulkanContext;
 
@@ -64,4 +64,4 @@ void transitionImage(VkCommandBuffer cmd, VkImage image, VkImageSubresourceRange
                      VkImageLayout to, VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess,
                      VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess);
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-namespace raven::test {
+namespace zodar::test {
 
 // One headless Vulkan device shared by all GPU tests (created in main).
 struct GpuTestEnvironment {
@@ -18,7 +18,7 @@ struct GpuTestEnvironment {
 
 GpuTestEnvironment& gpu();
 
-// Compiled SPIR-V directory: $RAVEN_SHADER_DIR, else the build-time path if it exists,
+// Compiled SPIR-V directory: $ZODAR_SHADER_DIR, else the build-time path if it exists,
 // else "shaders" next to the test executable (packaged builds).
 std::string shaderDir();
 
@@ -32,4 +32,4 @@ private:
     uint32_t m_errors;
 };
 
-} // namespace raven::test
+} // namespace zodar::test

@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // Engine conventions: right-handed world, +Y up, a camera looks along its local -Z.
 // Projections target Vulkan clip space (Y down, depth 0..1) with **reverse Z**:
@@ -40,4 +40,4 @@ public:
     glm::mat4 projectionMatrix(float aspect) const;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

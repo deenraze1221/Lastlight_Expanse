@@ -3,7 +3,7 @@
 #include "Core/Error.h"
 #include "Renderer/Resources/UploadContext.h"
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 GpuMesh::GpuMesh(UploadBatch& batch, const MeshData& data)
     : m_submeshes(data.submeshes), m_bounds(data.bounds), m_vertexCount(static_cast<uint32_t>(data.vertices.size())),
@@ -12,7 +12,7 @@ GpuMesh::GpuMesh(UploadBatch& batch, const MeshData& data)
     if (!error.empty()) {
         fail("Mesh '" + data.name + "' is invalid: " + error);
     }
-    RAVEN_ENSURE(!data.vertices.empty() && !data.indices.empty(), "mesh '" + data.name + "' is empty");
+    ZODAR_ENSURE(!data.vertices.empty() && !data.indices.empty(), "mesh '" + data.name + "' is empty");
     if (m_submeshes.empty()) {
         m_submeshes.push_back({0, m_indexCount, 0, data.bounds});
     }
@@ -24,4 +24,4 @@ GpuMesh::GpuMesh(UploadBatch& batch, const MeshData& data)
                                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT, ibName.c_str());
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

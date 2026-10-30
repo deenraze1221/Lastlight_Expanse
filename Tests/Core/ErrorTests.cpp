@@ -4,18 +4,18 @@
 
 #include <string>
 
-TEST_CASE("error: fail throws raven::Error with source location") {
+TEST_CASE("error: fail throws zodar::Error with source location") {
     try {
-        raven::fail("boom");
+        zodar::fail("boom");
         FAIL("fail() returned");
-    } catch (const raven::Error& e) {
+    } catch (const zodar::Error& e) {
         const std::string message = e.what();
         CHECK(message.find("boom") != std::string::npos);
         CHECK(message.find("ErrorTests.cpp") != std::string::npos);
     }
 }
 
-TEST_CASE("error: RAVEN_ENSURE passes and fails") {
-    CHECK_NOTHROW(RAVEN_ENSURE(1 + 1 == 2, "math"));
-    CHECK_THROWS_AS(RAVEN_ENSURE(1 + 1 == 3, "math"), raven::Error);
+TEST_CASE("error: ZODAR_ENSURE passes and fails") {
+    CHECK_NOTHROW(ZODAR_ENSURE(1 + 1 == 2, "math"));
+    CHECK_THROWS_AS(ZODAR_ENSURE(1 + 1 == 3, "math"), zodar::Error);
 }

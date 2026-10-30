@@ -4,13 +4,13 @@
 
 #include <filesystem>
 
-namespace raven {
+namespace zodar {
 
 void fail(std::string_view message, std::source_location location) {
     const auto file = std::filesystem::path(location.file_name()).filename().string();
     auto text = fmt::format("{} ({}:{})", message, file, location.line());
-    RAVEN_LOG_ERROR("{}", text);
+    ZODAR_LOG_ERROR("{}", text);
     throw Error(text);
 }
 
-} // namespace raven
+} // namespace zodar

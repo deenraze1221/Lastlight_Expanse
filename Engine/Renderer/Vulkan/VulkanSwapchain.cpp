@@ -4,7 +4,7 @@
 #include "Renderer/Vulkan/VulkanCheck.h"
 #include "Renderer/Vulkan/VulkanContext.h"
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 bool isSrgbFormat(VkFormat format) {
     switch (format) {
@@ -70,17 +70,17 @@ void VulkanSwapchain::create(VkExtent2D framebuffer, VkSwapchainKHR oldSwapchain
     const VkDevice device = m_context.device();
 
     VkSurfaceCapabilitiesKHR caps;
-    RAVEN_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps));
+    ZODAR_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps));
 
     uint32_t formatCount = 0;
-    RAVEN_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, nullptr));
+    ZODAR_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, nullptr));
     std::vector<VkSurfaceFormatKHR> formats(formatCount);
-    RAVEN_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.data()));
+    ZODAR_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.data()));
 
     uint32_t modeCount = 0;
-    RAVEN_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, nullptr));
+    ZODAR_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, nullptr));
     std::vector<VkPresentModeKHR> modes(modeCount);
-    RAVEN_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.data()));
+    ZODAR_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.data()));
 
     const VkSurfaceFormatKHR surfaceFormat = chooseSurfaceFormat(formats);
     m_format = surfaceFormat.format;
@@ -116,12 +116,12 @@ void VulkanSwapchain::create(VkExtent2D framebuffer, VkSwapchainKHR oldSwapchain
     info.clipped = VK_TRUE;
     info.oldSwapchain = oldSwapchain;
 
-    RAVEN_VK_CHECK(vkCreateSwapchainKHR(device, &info, nullptr, &m_swapchain));
+    ZODAR_VK_CHECK(vkCreateSwapchainKHR(device, &info, nullptr, &m_swapchain));
 
     uint32_t imageCount = 0;
-    RAVEN_VK_CHECK(vkGetSwapchainImagesKHR(device, m_swapchain, &imageCount, nullptr));
+    ZODAR_VK_CHECK(vkGetSwapchainImagesKHR(device, m_swapchain, &imageCount, nullptr));
     m_images.resize(imageCount);
-    RAVEN_VK_CHECK(vkGetSwapchainImagesKHR(device, m_swapchain, &imageCount, m_images.data()));
+    ZODAR_VK_CHECK(vkGetSwapchainImagesKHR(device, m_swapchain, &imageCount, m_images.data()));
 
     for (VkImage image : m_images) {
         VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
@@ -130,16 +130,16 @@ void VulkanSwapchain::create(VkExtent2D framebuffer, VkSwapchainKHR oldSwapchain
         view.format = m_format;
         view.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         VkImageView handle = VK_NULL_HANDLE;
-        RAVEN_VK_CHECK(vkCreateImageView(device, &view, nullptr, &handle));
+        ZODAR_VK_CHECK(vkCreateImageView(device, &view, nullptr, &handle));
         m_views.push_back(handle);
 
         VkSemaphoreCreateInfo semaphoreInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         VkSemaphore semaphore = VK_NULL_HANDLE;
-        RAVEN_VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &semaphore));
+        ZODAR_VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &semaphore));
         m_renderFinished.push_back(semaphore);
     }
 
-    RAVEN_LOG_INFO("Swapchain {}x{}, {} images, present mode {}, format {}{}", m_extent.width, m_extent.height,
+    ZODAR_LOG_INFO("Swapchain {}x{}, {} images, present mode {}, format {}{}", m_extent.width, m_extent.height,
                    imageCount, presentModeName(m_presentMode), static_cast<int>(m_format),
                    isSrgbFormat(m_format) ? " (sRGB)" : " (UNORM: output is encoded in the shader)");
 }
@@ -157,4 +157,4 @@ void VulkanSwapchain::destroyImageResources() {
     m_images.clear();
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

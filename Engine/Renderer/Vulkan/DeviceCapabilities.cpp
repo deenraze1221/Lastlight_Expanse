@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 std::vector<std::string> missingBaseline(const DeviceCapabilities& c, bool needsPresentation) {
     std::vector<std::string> missing;
@@ -200,4 +200,4 @@ DeviceCapabilities queryCapabilities(VkPhysicalDevice device, VkSurfaceKHR surfa
     return c;
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

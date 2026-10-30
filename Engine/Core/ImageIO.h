@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <span>
 
-namespace raven {
+namespace zodar {
 
 // Writes tightly packed 8-bit RGBA pixels as a binary PPM (alpha is dropped).
 // PPM keeps Milestone 1 free of an image-encoding dependency; it is used for
@@ -13,4 +13,4 @@ namespace raven {
 bool writePpm(const std::filesystem::path& path, uint32_t width, uint32_t height,
               std::span<const uint8_t> rgba);
 
-} // namespace raven
+} // namespace zodar

@@ -7,11 +7,11 @@
 #include <cstring>
 #include <utility>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 GpuBuffer::GpuBuffer(const VulkanContext& context, const BufferDesc& desc)
     : m_allocator(context.allocator()), m_size(desc.size) {
-    RAVEN_ENSURE(desc.size > 0, "buffer size must be non-zero");
+    ZODAR_ENSURE(desc.size > 0, "buffer size must be non-zero");
 
     VkBufferCreateInfo info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     info.size = desc.size;
@@ -33,7 +33,7 @@ GpuBuffer::GpuBuffer(const VulkanContext& context, const BufferDesc& desc)
     }
 
     VmaAllocationInfo allocInfo{};
-    RAVEN_VK_CHECK(vmaCreateBuffer(m_allocator, &info, &alloc, &m_buffer, &m_allocation, &allocInfo));
+    ZODAR_VK_CHECK(vmaCreateBuffer(m_allocator, &info, &alloc, &m_buffer, &m_allocation, &allocInfo));
     m_mapped = allocInfo.pMappedData;
     if (desc.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) {
         VkBufferDeviceAddressInfo addressInfo{VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO};
@@ -83,14 +83,14 @@ void GpuBuffer::reset() {
 }
 
 void GpuBuffer::write(const void* data, VkDeviceSize size, VkDeviceSize offset) {
-    RAVEN_ENSURE(m_mapped != nullptr, "write() needs a host-visible buffer");
-    RAVEN_ENSURE(offset + size <= m_size, "buffer write out of range");
+    ZODAR_ENSURE(m_mapped != nullptr, "write() needs a host-visible buffer");
+    ZODAR_ENSURE(offset + size <= m_size, "buffer write out of range");
     std::memcpy(static_cast<uint8_t*>(m_mapped) + offset, data, static_cast<size_t>(size));
-    RAVEN_VK_CHECK(vmaFlushAllocation(m_allocator, m_allocation, offset, size));
+    ZODAR_VK_CHECK(vmaFlushAllocation(m_allocator, m_allocation, offset, size));
 }
 
 void GpuBuffer::invalidate() {
-    RAVEN_VK_CHECK(vmaInvalidateAllocation(m_allocator, m_allocation, 0, VK_WHOLE_SIZE));
+    ZODAR_VK_CHECK(vmaInvalidateAllocation(m_allocator, m_allocation, 0, VK_WHOLE_SIZE));
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

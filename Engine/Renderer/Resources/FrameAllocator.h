@@ -8,7 +8,7 @@
 #include <span>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class VulkanContext;
 
@@ -74,4 +74,4 @@ private:
     uint32_t m_slot = 0;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

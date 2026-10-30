@@ -10,14 +10,14 @@
 
 #include <vector>
 
-using namespace raven;
-using namespace raven::gfx;
-using raven::test::gpu;
+using namespace zodar;
+using namespace zodar::gfx;
+using zodar::test::gpu;
 
 namespace {
 
 struct GraphFixture {
-    SceneRenderer scene{*gpu().context, *gpu().upload, {raven::test::shaderDir()}};
+    SceneRenderer scene{*gpu().context, *gpu().upload, {zodar::test::shaderDir()}};
     RenderGraphResources graphResources{*gpu().context, scene.bindless()};
     FrameAllocator scratch{*gpu().context, 2};
     GpuMesh cube, sphere, plane;
@@ -106,7 +106,7 @@ SceneView camera() {
 } // namespace
 
 TEST_CASE("render graph: output is pixel-identical to the reference path") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     GraphFixture f;
     const glm::mat4 faceCamera = glm::rotate(glm::mat4(1), glm::radians(90.0f), glm::vec3(1, 0, 0));
     std::vector<MeshDraw> draws = {
@@ -135,7 +135,7 @@ TEST_CASE("render graph: output is pixel-identical to the reference path") {
 }
 
 TEST_CASE("render graph: chained transient passes, culling and pooled memory") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     GraphFixture f;
     const VkExtent2D extent{32, 32};
     GpuImage out = f.makeOutput(extent);
@@ -213,7 +213,7 @@ TEST_CASE("render graph: chained transient passes, culling and pooled memory") {
 #include "Renderer/GpuProfiler.h"
 
 TEST_CASE("gpu profiler: per-pass timestamps from the render graph and memory stats") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     GraphFixture f;
     GpuProfiler profiler(*gpu().context, 2);
     if (!profiler.enabled()) {

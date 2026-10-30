@@ -8,7 +8,7 @@
 #include <bit>
 #include <utility>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 bool isDepthFormat(VkFormat format) {
     switch (format) {
@@ -37,8 +37,8 @@ uint32_t fullMipCount(uint32_t width, uint32_t height) {
 GpuImage::GpuImage(const VulkanContext& context, const ImageDesc& desc)
     : m_device(context.device()), m_allocator(context.allocator()), m_format(desc.format),
       m_extent{desc.width, desc.height}, m_mipLevels(desc.mipLevels) {
-    RAVEN_ENSURE(desc.width > 0 && desc.height > 0, "image extent must be non-zero");
-    RAVEN_ENSURE(desc.mipLevels >= 1 && desc.mipLevels <= fullMipCount(desc.width, desc.height),
+    ZODAR_ENSURE(desc.width > 0 && desc.height > 0, "image extent must be non-zero");
+    ZODAR_ENSURE(desc.mipLevels >= 1 && desc.mipLevels <= fullMipCount(desc.width, desc.height),
                  "invalid mip count");
 
     m_aspect = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -67,7 +67,7 @@ GpuImage::GpuImage(const VulkanContext& context, const ImageDesc& desc)
     if (desc.usage & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
         alloc.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
     }
-    RAVEN_VK_CHECK(vmaCreateImage(m_allocator, &info, &alloc, &m_image, &m_allocation, nullptr));
+    ZODAR_VK_CHECK(vmaCreateImage(m_allocator, &info, &alloc, &m_image, &m_allocation, nullptr));
 
     VkImageViewCreateInfo viewInfo{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     viewInfo.image = m_image;
@@ -146,4 +146,4 @@ void transitionImage(VkCommandBuffer cmd, VkImage image, VkImageSubresourceRange
     vkCmdPipelineBarrier2(cmd, &dependency);
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

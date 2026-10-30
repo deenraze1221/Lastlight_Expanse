@@ -1,4 +1,4 @@
-// Milestone 2 sample: glTF viewer / material demo on the RAVEN scene renderer.
+// Milestone 2 sample: glTF viewer / material demo on the ZODAR scene renderer.
 //
 //   ModelViewer [model.gltf|.glb] [--frames N] [--screenshot out.ppm] [--no-validation] [--sync-validation]
 //               [--width W] [--height H] [--yaw DEG] [--pitch DEG] [--zoom F] [--spin DEG_PER_S]
@@ -43,8 +43,8 @@
 
 namespace {
 
-using namespace raven;
-using namespace raven::gfx;
+using namespace zodar;
+using namespace zodar::gfx;
 
 struct Options {
     std::optional<std::filesystem::path> model;
@@ -139,9 +139,9 @@ struct DemoScene {
 
 int run(const Options& options) {
     Platform platform;
-    Window window({"RAVEN Engine - Model Viewer", options.width, options.height, true});
+    Window window({"ZODAR Engine - Model Viewer", options.width, options.height, true});
     Renderer renderer(window, {"ModelViewer", options.validation, PresentMode::VSync,
-                               Platform::userDataPath("RAVEN", "ModelViewer") / "pipeline_cache.bin", options.syncValidation});
+                               Platform::userDataPath("ZODAR", "ModelViewer") / "pipeline_cache.bin", options.syncValidation});
     UploadContext upload(renderer.context());
 
     const char* base = SDL_GetBasePath();
@@ -156,7 +156,7 @@ int run(const Options& options) {
     CpuProfiler cpuProfiler;
     History cpuFrameMs;
     History gpuFrameMs;
-    RAVEN_LOG_INFO("Render path: {}", options.referencePath ? "reference (hand-written barriers)" : "render graph");
+    ZODAR_LOG_INFO("Render path: {}", options.referencePath ? "reference (hand-written barriers)" : "render graph");
 
     std::unique_ptr<Model> model;
     std::unique_ptr<DemoScene> demo;
@@ -174,7 +174,7 @@ int run(const Options& options) {
             model = std::make_unique<Model>(batch, scene, data, uploadOptions);
             model->appendDraws(draws);
             bounds = model->bounds();
-            RAVEN_LOG_INFO("Loaded '{}': {} meshes, {} textures, {} materials, {} draws", data.name, model->meshCount(),
+            ZODAR_LOG_INFO("Loaded '{}': {} meshes, {} textures, {} materials, {} draws", data.name, model->meshCount(),
                            model->textureCount(), model->materials().size(), draws.size());
         } else {
             demo = std::make_unique<DemoScene>(batch, scene);
@@ -182,7 +182,7 @@ int run(const Options& options) {
             bounds = demo->bounds;
         }
         batch.submit();
-        RAVEN_LOG_INFO("Scene ready in {:.0f} ms",
+        ZODAR_LOG_INFO("Scene ready in {:.0f} ms",
                        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
     }
 
@@ -297,7 +297,7 @@ int run(const Options& options) {
         ++statsFrames;
         const double elapsed = std::chrono::duration<double>(now - statsStart).count();
         if (elapsed >= 2.0) {
-            RAVEN_LOG_INFO("{:.1f} FPS | draws {} (instances {}, culled {})", statsFrames / elapsed,
+            ZODAR_LOG_INFO("{:.1f} FPS | draws {} (instances {}, culled {})", statsFrames / elapsed,
                            lastStats.drawCalls, lastStats.instances, lastStats.culled);
             statsStart = now;
             statsFrames = 0;
@@ -306,10 +306,10 @@ int run(const Options& options) {
     }
 
     renderer.waitIdle();
-    RAVEN_LOG_INFO("Rendered {} frames; last frame: {} draw calls, {} instances, {} culled", renderer.frameNumber(),
+    ZODAR_LOG_INFO("Rendered {} frames; last frame: {} draw calls, {} instances, {} culled", renderer.frameNumber(),
                    lastStats.drawCalls, lastStats.instances, lastStats.culled);
     if (renderer.context().validationEnabled() && renderer.context().validationErrorCount() > 0) {
-        RAVEN_LOG_ERROR("{} Vulkan validation errors were reported", renderer.context().validationErrorCount());
+        ZODAR_LOG_ERROR("{} Vulkan validation errors were reported", renderer.context().validationErrorCount());
         return 2;
     }
     if (options.screenshot && !renderer.lastScreenshotSucceeded()) return 3;
@@ -319,14 +319,14 @@ int run(const Options& options) {
 } // namespace
 
 int main(int argc, char** argv) {
-    raven::log::init({spdlog::level::info, ""});
+    zodar::log::init({spdlog::level::info, ""});
     int exitCode = EXIT_FAILURE;
     try {
         exitCode = run(parseOptions(argc, argv));
     } catch (const std::exception& e) {
-        RAVEN_LOG_ERROR("Fatal: {}", e.what());
+        ZODAR_LOG_ERROR("Fatal: {}", e.what());
     }
-    RAVEN_LOG_INFO("Shutdown complete (exit code {})", exitCode);
-    raven::log::shutdown();
+    ZODAR_LOG_INFO("Shutdown complete (exit code {})", exitCode);
+    zodar::log::shutdown();
     return exitCode;
 }

@@ -7,7 +7,7 @@
 
 #include <cstring>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 uint32_t formatBytesPerPixel(VkFormat format) {
     switch (format) {
@@ -33,7 +33,7 @@ UploadContext::UploadContext(VulkanContext& context) : m_context(context) {
     VkCommandPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
     poolInfo.queueFamilyIndex = context.graphicsQueueFamily();
-    RAVEN_VK_CHECK(vkCreateCommandPool(device, &poolInfo, nullptr, &m_pool));
+    ZODAR_VK_CHECK(vkCreateCommandPool(device, &poolInfo, nullptr, &m_pool));
 
     VkCommandBufferAllocateInfo allocInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
     allocInfo.commandPool = m_pool;
@@ -57,13 +57,13 @@ UploadContext::~UploadContext() {
 }
 
 void UploadContext::immediate(const std::function<void(VkCommandBuffer)>& record) {
-    RAVEN_ENSURE(!m_recording, "UploadContext is already recording (nested batch?)");
+    ZODAR_ENSURE(!m_recording, "UploadContext is already recording (nested batch?)");
     const VkDevice device = m_context.device();
-    RAVEN_VK_CHECK(vkResetCommandPool(device, m_pool, 0));
+    ZODAR_VK_CHECK(vkResetCommandPool(device, m_pool, 0));
 
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    RAVEN_VK_CHECK(vkBeginCommandBuffer(m_cmd, &begin));
+    ZODAR_VK_CHECK(vkBeginCommandBuffer(m_cmd, &begin));
     m_recording = true;
     try {
         record(m_cmd);
@@ -73,7 +73,7 @@ void UploadContext::immediate(const std::function<void(VkCommandBuffer)>& record
         throw;
     }
     m_recording = false;
-    RAVEN_VK_CHECK(vkEndCommandBuffer(m_cmd));
+    ZODAR_VK_CHECK(vkEndCommandBuffer(m_cmd));
 
     VkCommandBufferSubmitInfo cmdInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
     cmdInfo.commandBuffer = m_cmd;
@@ -84,8 +84,8 @@ void UploadContext::immediate(const std::function<void(VkCommandBuffer)>& record
     // vkWaitSemaphores host waits and reports false WAW hazards on reused readback memory).
     submit.fence = m_fence;
     m_context.submitGraphics(submit);
-    RAVEN_VK_CHECK(vkWaitForFences(device, 1, &m_fence, VK_TRUE, UINT64_MAX));
-    RAVEN_VK_CHECK(vkResetFences(device, 1, &m_fence));
+    ZODAR_VK_CHECK(vkWaitForFences(device, 1, &m_fence, VK_TRUE, UINT64_MAX));
+    ZODAR_VK_CHECK(vkResetFences(device, 1, &m_fence));
     m_context.collectGarbage();
 }
 
@@ -112,8 +112,8 @@ std::vector<uint8_t> UploadContext::readBuffer(const GpuBuffer& buffer) {
 
 std::vector<uint8_t> UploadContext::readImage(const GpuImage& image, VkImageLayout layout, uint32_t mip) {
     const uint32_t bpp = formatBytesPerPixel(image.format());
-    RAVEN_ENSURE(bpp > 0, "readImage: unsupported format");
-    RAVEN_ENSURE(mip < image.mipLevels(), "readImage: mip out of range");
+    ZODAR_ENSURE(bpp > 0, "readImage: unsupported format");
+    ZODAR_ENSURE(mip < image.mipLevels(), "readImage: mip out of range");
     const uint32_t width = std::max(1u, image.extent().width >> mip);
     const uint32_t height = std::max(1u, image.extent().height >> mip);
     const VkDeviceSize size = static_cast<VkDeviceSize>(width) * height * bpp;
@@ -159,14 +159,14 @@ UploadBatch::~UploadBatch() {
         try {
             submit();
         } catch (const std::exception& e) {
-            RAVEN_LOG_ERROR("UploadBatch submit in destructor failed: {}", e.what());
+            ZODAR_LOG_ERROR("UploadBatch submit in destructor failed: {}", e.what());
         }
     }
 }
 
 GpuBuffer UploadBatch::createBuffer(const void* data, VkDeviceSize size, VkBufferUsageFlags usage,
                                     const char* debugName) {
-    RAVEN_ENSURE(!m_submitted, "UploadBatch already submitted");
+    ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
     const VulkanContext& context = m_upload.context();
     GpuBuffer staging(context, {size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::Upload, "Staging"});
     staging.write(data, size);
@@ -183,17 +183,17 @@ GpuBuffer UploadBatch::createBuffer(const void* data, VkDeviceSize size, VkBuffe
 }
 
 void UploadBatch::uploadImage(const GpuImage& image, std::span<const ImageLevelData> levels) {
-    RAVEN_ENSURE(!m_submitted, "UploadBatch already submitted");
-    RAVEN_ENSURE(!levels.empty() && levels.size() <= image.mipLevels(), "uploadImage: bad level count");
+    ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
+    ZODAR_ENSURE(!levels.empty() && levels.size() <= image.mipLevels(), "uploadImage: bad level count");
     const uint32_t bpp = formatBytesPerPixel(image.format());
-    RAVEN_ENSURE(bpp > 0, "uploadImage: unsupported format");
+    ZODAR_ENSURE(bpp > 0, "uploadImage: unsupported format");
 
     VkDeviceSize total = 0;
     for (size_t i = 0; i < levels.size(); ++i) {
         const uint32_t expectedW = std::max(1u, image.extent().width >> i);
         const uint32_t expectedH = std::max(1u, image.extent().height >> i);
-        RAVEN_ENSURE(levels[i].width == expectedW && levels[i].height == expectedH, "uploadImage: mip size mismatch");
-        RAVEN_ENSURE(levels[i].bytes.size() == static_cast<size_t>(expectedW) * expectedH * bpp,
+        ZODAR_ENSURE(levels[i].width == expectedW && levels[i].height == expectedH, "uploadImage: mip size mismatch");
+        ZODAR_ENSURE(levels[i].bytes.size() == static_cast<size_t>(expectedW) * expectedH * bpp,
                      "uploadImage: mip byte size mismatch");
         total += (levels[i].bytes.size() + 15) & ~VkDeviceSize(15); // Keep each level 16-byte aligned.
     }
@@ -228,7 +228,7 @@ void UploadBatch::uploadImage(const GpuImage& image, std::span<const ImageLevelD
 }
 
 void UploadBatch::submit() {
-    RAVEN_ENSURE(!m_submitted, "UploadBatch already submitted");
+    ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
     m_submitted = true;
     if (m_commands.empty()) {
         return;
@@ -252,4 +252,4 @@ void UploadBatch::submit() {
     m_staging.clear();
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

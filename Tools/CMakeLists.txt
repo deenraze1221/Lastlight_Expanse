@@ -1,1 +1,1 @@
-add_subdirectory(RavenBench)
+add_subdirectory(ZodarBench)

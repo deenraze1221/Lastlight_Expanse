@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // Timeline semaphore that counts submissions on one queue. Values increase by one per
 // submission; on a single queue they also complete in order.
@@ -29,4 +29,4 @@ private:
     uint64_t m_lastReserved = 0;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

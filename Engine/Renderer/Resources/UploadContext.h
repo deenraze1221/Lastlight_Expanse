@@ -11,7 +11,7 @@
 #include <vector>
 #include <algorithm>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class VulkanContext;
 
@@ -88,4 +88,4 @@ private:
     bool m_submitted = false;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

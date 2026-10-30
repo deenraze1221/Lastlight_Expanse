@@ -4,7 +4,7 @@
 #include <functional>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // Defers destruction of GPU objects until the GPU timeline has passed every submission
 // that may reference them.
@@ -45,4 +45,4 @@ private:
     std::vector<Item> m_scheduled; // Sorted by value (submissions are monotonic).
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

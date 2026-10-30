@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 Frustum::Frustum(const glm::mat4& m) {
     const glm::vec4 row0{m[0][0], m[1][0], m[2][0], m[3][0]};
@@ -37,4 +37,4 @@ bool Frustum::intersects(const Bounds& b) const {
     return true;
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

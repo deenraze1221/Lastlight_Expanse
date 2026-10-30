@@ -10,7 +10,7 @@
 #include <cmath>
 #include <vector>
 
-using namespace raven;
+using namespace zodar;
 
 TEST_CASE("image: mip chain sizes for non-square, non-power-of-two images") {
     ImageData image = ImageData::solid(7, 3, 10, 20, 30, 255, ColorSpace::Linear);
@@ -67,6 +67,6 @@ TEST_CASE("image: PNG decode and error reporting") {
     CHECK(image.levels[0][3] == 255);
 
     const std::vector<uint8_t> garbage(64, 0xAB);
-    CHECK_THROWS_AS(loadImageFromMemory(garbage, ColorSpace::Srgb, "garbage.png"), raven::Error);
-    CHECK_THROWS_AS(loadImage("does/not/exist.png", ColorSpace::Srgb), raven::Error);
+    CHECK_THROWS_AS(loadImageFromMemory(garbage, ColorSpace::Srgb, "garbage.png"), zodar::Error);
+    CHECK_THROWS_AS(loadImage("does/not/exist.png", ColorSpace::Srgb), zodar::Error);
 }

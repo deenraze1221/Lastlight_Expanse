@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class BindlessRegistry;
 class VulkanContext;
@@ -205,4 +205,4 @@ private:
     bool m_executed = false;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

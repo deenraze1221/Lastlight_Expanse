@@ -4,15 +4,15 @@
 
 #include <thread>
 
-using namespace raven;
+using namespace zodar;
 
 TEST_CASE("cpu profiler: nested scopes and frame totals") {
     CpuProfiler p;
     p.beginFrame();
     {
-        RAVEN_CPU_SCOPE(p, "Outer");
+        ZODAR_CPU_SCOPE(p, "Outer");
         {
-            RAVEN_CPU_SCOPE(p, "Inner");
+            ZODAR_CPU_SCOPE(p, "Inner");
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
     }

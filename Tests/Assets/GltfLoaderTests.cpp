@@ -2,6 +2,7 @@
 
 #include "Assets/ModelData.h"
 #include "Core/Error.h"
+#include "../Support/TempFile.h"
 
 #include <stb_image_write.h>
 
@@ -11,7 +12,7 @@
 #include <string>
 #include <vector>
 
-using namespace raven;
+using namespace zodar;
 
 namespace {
 
@@ -35,12 +36,6 @@ void append(std::vector<uint8_t>& buffer, std::initializer_list<T> values) {
         const auto* p = reinterpret_cast<const uint8_t*>(&v);
         buffer.insert(buffer.end(), p, p + sizeof(T));
     }
-}
-
-std::filesystem::path writeFile(const std::string& name, const std::string& text) {
-    const auto path = std::filesystem::temp_directory_path() / name;
-    std::ofstream(path) << text;
-    return path;
 }
 
 // Quad in the XY plane made of two primitives with different materials, a parent node with
@@ -102,8 +97,9 @@ std::string testGltf() {
 } // namespace
 
 TEST_CASE("gltf: meshes, materials, embedded image, sampler and node hierarchy") {
-    const auto path = writeFile("raven_test.gltf", testGltf());
-    const ModelData model = loadGltf(path);
+    const zodar::test::TempFile file("zodar_test.gltf");
+    file.write(testGltf());
+    const ModelData model = loadGltf(file.path());
 
     REQUIRE(model.meshes.size() == 1);
     const MeshData& mesh = model.meshes[0];
@@ -147,22 +143,24 @@ TEST_CASE("gltf: meshes, materials, embedded image, sampler and node hierarchy")
     CHECK(corner.z == doctest::Approx(3.0f));
     CHECK(model.bounds.max.x == doctest::Approx(3.0f));
     CHECK(model.warnings.empty());
-    std::filesystem::remove(path);
+    CHECK(file.remove()); // The loader released the file.
 }
 
 TEST_CASE("gltf: clear errors for missing, malformed and unsupported files") {
-    CHECK_THROWS_AS(loadGltf("does/not/exist.gltf"), raven::Error);
-    const auto broken = writeFile("raven_broken.gltf", "{ not json");
-    CHECK_THROWS_AS(loadGltf(broken), raven::Error);
-    const auto draco = writeFile("raven_required.gltf",
-                                 R"({"asset":{"version":"2.0"},"extensionsUsed":["KHR_draco_mesh_compression"],)"
-                                 R"("extensionsRequired":["KHR_draco_mesh_compression"]})");
+    CHECK_THROWS_AS(loadGltf("does/not/exist.gltf"), zodar::Error);
+    const zodar::test::TempFile broken("zodar_broken.gltf");
+    broken.write("{ not json");
+    CHECK_THROWS_AS(loadGltf(broken.path()), zodar::Error);
+    const zodar::test::TempFile draco("zodar_required.gltf");
+    draco.write(R"({"asset":{"version":"2.0"},"extensionsUsed":["KHR_draco_mesh_compression"],)"
+                R"("extensionsRequired":["KHR_draco_mesh_compression"]})");
     try {
-        loadGltf(draco);
+        loadGltf(draco.path());
         FAIL("expected an error");
-    } catch (const raven::Error& e) {
+    } catch (const zodar::Error& e) {
         CHECK(std::string(e.what()).find("KHR_draco_mesh_compression") != std::string::npos);
     }
-    std::filesystem::remove(broken);
-    std::filesystem::remove(draco);
+    // Error paths must release the file too.
+    CHECK(broken.remove());
+    CHECK(draco.remove());
 }

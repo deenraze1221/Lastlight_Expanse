@@ -9,7 +9,7 @@
 
 #include <fstream>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 std::vector<uint32_t> loadSpirv(const std::filesystem::path& path) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -34,7 +34,7 @@ ShaderModule::ShaderModule(VkDevice device, const std::vector<uint32_t>& spirv) 
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     info.codeSize = spirv.size() * sizeof(uint32_t);
     info.pCode = spirv.data();
-    RAVEN_VK_CHECK(vkCreateShaderModule(m_device, &info, nullptr, &m_module));
+    ZODAR_VK_CHECK(vkCreateShaderModule(m_device, &info, nullptr, &m_module));
 }
 
 ShaderModule::~ShaderModule() {
@@ -43,8 +43,8 @@ ShaderModule::~ShaderModule() {
 
 GraphicsPipeline::GraphicsPipeline(const VulkanContext& context, const GraphicsPipelineDesc& desc)
     : m_device(context.device()), m_pushConstantStages(desc.pushConstantStages) {
-    RAVEN_ENSURE(desc.vertexShader && desc.fragmentShader, "pipeline needs vertex and fragment shaders");
-    RAVEN_ENSURE(desc.colorFormat != VK_FORMAT_UNDEFINED, "pipeline needs a colour format");
+    ZODAR_ENSURE(desc.vertexShader && desc.fragmentShader, "pipeline needs vertex and fragment shaders");
+    ZODAR_ENSURE(desc.colorFormat != VK_FORMAT_UNDEFINED, "pipeline needs a colour format");
 
     if (desc.sharedLayout) {
         m_layout = desc.sharedLayout;
@@ -55,7 +55,7 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context, const GraphicsP
         layoutInfo.pSetLayouts = desc.setLayouts.data();
         layoutInfo.pushConstantRangeCount = desc.pushConstantSize > 0 ? 1 : 0;
         layoutInfo.pPushConstantRanges = &range;
-        RAVEN_VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_layout));
+        ZODAR_VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_layout));
         m_ownsLayout = true;
     }
 
@@ -177,4 +177,4 @@ GraphicsPipeline::~GraphicsPipeline() {
     }
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

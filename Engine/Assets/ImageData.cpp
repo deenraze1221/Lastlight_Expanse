@@ -15,7 +15,7 @@
 #define STBI_NO_STDIO
 #include <stb_image.h>
 
-namespace raven {
+namespace zodar {
 namespace {
 
 float srgbToLinear(float c) {
@@ -44,7 +44,7 @@ uint8_t toByte(float v) {
 } // namespace
 
 void ImageData::generateMips(MipFilter filter) {
-    RAVEN_ENSURE(!levels.empty() && levels[0].size() == static_cast<size_t>(width) * height * 4,
+    ZODAR_ENSURE(!levels.empty() && levels[0].size() == static_cast<size_t>(width) * height * 4,
                  "generateMips: image '" + name + "' has no valid base level");
     levels.resize(1);
     const auto& lut = srgbTable();
@@ -145,4 +145,4 @@ ImageData loadImage(const std::filesystem::path& path, ColorSpace colorSpace) {
     return loadImageFromMemory(bytes, colorSpace, path.string());
 }
 
-} // namespace raven
+} // namespace zodar

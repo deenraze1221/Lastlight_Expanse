@@ -6,7 +6,7 @@
 #include <mutex>
 #include <vector>
 
-namespace raven::log {
+namespace zodar::log {
 namespace {
 
 std::mutex g_mutex;
@@ -18,7 +18,7 @@ std::shared_ptr<spdlog::logger> makeLogger(const Config& config) {
     if (!config.filePath.empty()) {
         sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(config.filePath, true));
     }
-    auto logger = std::make_shared<spdlog::logger>("RAVEN", sinks.begin(), sinks.end());
+    auto logger = std::make_shared<spdlog::logger>("ZODAR", sinks.begin(), sinks.end());
     logger->set_pattern("[%H:%M:%S.%e] [%^%l%$] %v");
     logger->set_level(config.level);
     logger->flush_on(spdlog::level::warn);
@@ -53,4 +53,4 @@ spdlog::logger& engine() {
     return *g_logger;
 }
 
-} // namespace raven::log
+} // namespace zodar::log

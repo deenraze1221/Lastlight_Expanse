@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace raven {
+namespace zodar {
 
 // Scoped CPU timers collected per frame. Single-threaded by design (frame thread); a
 // multi-threaded variant comes with multi-threaded recording.
@@ -71,8 +71,8 @@ private:
     size_t m_count = 0;
 };
 
-} // namespace raven
+} // namespace zodar
 
-#define RAVEN_CPU_CONCAT_INNER(a, b) a##b
-#define RAVEN_CPU_CONCAT(a, b) RAVEN_CPU_CONCAT_INNER(a, b)
-#define RAVEN_CPU_SCOPE(profiler, name) ::raven::CpuProfiler::Timer RAVEN_CPU_CONCAT(ravenCpuScope, __LINE__)(profiler, name)
+#define ZODAR_CPU_CONCAT_INNER(a, b) a##b
+#define ZODAR_CPU_CONCAT(a, b) ZODAR_CPU_CONCAT_INNER(a, b)
+#define ZODAR_CPU_SCOPE(profiler, name) ::zodar::CpuProfiler::Timer ZODAR_CPU_CONCAT(zodarCpuScope, __LINE__)(profiler, name)

@@ -2,7 +2,7 @@
 
 #include "Renderer/Resources/UploadContext.h"
 
-namespace raven::gfx {
+namespace zodar::gfx {
 namespace {
 
 AddressMode toAddress(ModelSampler::Wrap w) {
@@ -97,4 +97,4 @@ void Model::appendDraws(std::vector<MeshDraw>& draws, const glm::mat4& transform
     }
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

@@ -14,7 +14,7 @@
 
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 namespace {
 
 VkExtent2D toExtent(FramebufferSize size) {
@@ -70,7 +70,7 @@ Renderer::Renderer(Window& window, const RendererDesc& desc) : m_window(window) 
         destroyFrameResources();
         throw;
     }
-    RAVEN_LOG_INFO("Renderer ready ({} frames in flight)", kFramesInFlight);
+    ZODAR_LOG_INFO("Renderer ready ({} frames in flight)", kFramesInFlight);
 }
 
 Renderer::~Renderer() {
@@ -91,16 +91,16 @@ void Renderer::createFrameResources() {
         VkCommandPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
         poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
         poolInfo.queueFamilyIndex = m_context->graphicsQueueFamily();
-        RAVEN_VK_CHECK(vkCreateCommandPool(device, &poolInfo, nullptr, &frame.commandPool));
+        ZODAR_VK_CHECK(vkCreateCommandPool(device, &poolInfo, nullptr, &frame.commandPool));
 
         VkCommandBufferAllocateInfo allocInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
         allocInfo.commandPool = frame.commandPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocInfo.commandBufferCount = 1;
-        RAVEN_VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, &frame.commandBuffer));
+        ZODAR_VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, &frame.commandBuffer));
 
         VkSemaphoreCreateInfo semaphoreInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-        RAVEN_VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frame.imageAvailable));
+        ZODAR_VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frame.imageAvailable));
 
     }
 }
@@ -160,11 +160,11 @@ std::optional<FrameContext> Renderer::beginFrame() {
 
     m_context->setFrameRecording(true);
     m_scratch->beginFrame(m_frameSlot);
-    RAVEN_VK_CHECK(vkResetCommandPool(device, frame.commandPool, 0));
+    ZODAR_VK_CHECK(vkResetCommandPool(device, frame.commandPool, 0));
 
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    RAVEN_VK_CHECK(vkBeginCommandBuffer(frame.commandBuffer, &begin));
+    ZODAR_VK_CHECK(vkBeginCommandBuffer(frame.commandBuffer, &begin));
 
     FrameContext ctx;
     ctx.commandBuffer = frame.commandBuffer;
@@ -200,7 +200,7 @@ void Renderer::endFrame(const FrameContext& ctx) {
                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                      VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_NONE);
     }
-    RAVEN_VK_CHECK(vkEndCommandBuffer(cmd));
+    ZODAR_VK_CHECK(vkEndCommandBuffer(cmd));
 
     VkSemaphoreSubmitInfo wait{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
     wait.semaphore = frame.imageAvailable;
@@ -255,7 +255,7 @@ void Renderer::recordCapture(const FrameContext& ctx) {
     m_screenshotRequest.reset();
 
     if (!m_swapchain->supportsReadback()) {
-        RAVEN_LOG_ERROR("Screenshot '{}' skipped: swapchain images do not support transfer reads", request.string());
+        ZODAR_LOG_ERROR("Screenshot '{}' skipped: swapchain images do not support transfer reads", request.string());
         m_lastScreenshotOk = false;
         imageBarrier(cmd, ctx.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
@@ -273,7 +273,7 @@ void Renderer::recordCapture(const FrameContext& ctx) {
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    RAVEN_VK_CHECK(vmaCreateBuffer(capture->allocator, &bufferInfo, &allocInfo, &capture->buffer,
+    ZODAR_VK_CHECK(vmaCreateBuffer(capture->allocator, &bufferInfo, &allocInfo, &capture->buffer,
                                    &capture->allocation, nullptr));
 
     imageBarrier(cmd, ctx.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -321,7 +321,7 @@ void Renderer::recordCapture(const FrameContext& ctx) {
 void Renderer::finishCapture(const FrameContext& ctx, uint64_t submittedValue) {
     auto capture = std::move(m_capture);
     m_context->timeline().wait(submittedValue);
-    RAVEN_VK_CHECK(vmaInvalidateAllocation(capture->allocator, capture->allocation, 0, VK_WHOLE_SIZE));
+    ZODAR_VK_CHECK(vmaInvalidateAllocation(capture->allocator, capture->allocation, 0, VK_WHOLE_SIZE));
 
     VmaAllocationInfo info;
     vmaGetAllocationInfo(capture->allocator, capture->allocation, &info);
@@ -338,11 +338,11 @@ void Renderer::finishCapture(const FrameContext& ctx, uint64_t submittedValue) {
 
     m_lastScreenshotOk = writePpm(capture->path, ctx.extent.width, ctx.extent.height, rgba);
     if (m_lastScreenshotOk) {
-        RAVEN_LOG_INFO("Screenshot saved: {} ({}x{}, frame {})", capture->path.string(), ctx.extent.width,
+        ZODAR_LOG_INFO("Screenshot saved: {} ({}x{}, frame {})", capture->path.string(), ctx.extent.width,
                        ctx.extent.height, ctx.frameNumber);
     } else {
-        RAVEN_LOG_ERROR("Failed to write screenshot '{}'", capture->path.string());
+        ZODAR_LOG_ERROR("Failed to write screenshot '{}'", capture->path.string());
     }
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

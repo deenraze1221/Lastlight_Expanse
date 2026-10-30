@@ -31,7 +31,7 @@ struct Options {
     uint64_t maxFrames = 0; // 0 = run until the window closes.
     std::optional<std::filesystem::path> screenshot;
     bool validation = true;
-    raven::gfx::PresentMode presentMode = raven::gfx::PresentMode::VSync;
+    zodar::gfx::PresentMode presentMode = zodar::gfx::PresentMode::VSync;
     uint32_t width = 1280;
     uint32_t height = 720;
 };
@@ -42,7 +42,7 @@ Options parseOptions(int argc, char** argv) {
         const std::string_view arg = argv[i];
         const auto next = [&]() -> std::string {
             if (i + 1 >= argc) {
-                raven::fail("Missing value for " + std::string(arg));
+                zodar::fail("Missing value for " + std::string(arg));
             }
             return argv[++i];
         };
@@ -58,12 +58,12 @@ Options parseOptions(int argc, char** argv) {
             options.height = static_cast<uint32_t>(std::stoul(next()));
         } else if (arg == "--present") {
             const std::string mode = next();
-            if (mode == "vsync") options.presentMode = raven::gfx::PresentMode::VSync;
-            else if (mode == "low-latency") options.presentMode = raven::gfx::PresentMode::LowLatency;
-            else if (mode == "immediate") options.presentMode = raven::gfx::PresentMode::Immediate;
-            else raven::fail("Unknown present mode '" + mode + "'");
+            if (mode == "vsync") options.presentMode = zodar::gfx::PresentMode::VSync;
+            else if (mode == "low-latency") options.presentMode = zodar::gfx::PresentMode::LowLatency;
+            else if (mode == "immediate") options.presentMode = zodar::gfx::PresentMode::Immediate;
+            else zodar::fail("Unknown present mode '" + mode + "'");
         } else {
-            raven::fail("Unknown argument '" + std::string(arg) + "'");
+            zodar::fail("Unknown argument '" + std::string(arg) + "'");
         }
     }
     return options;
@@ -80,23 +80,23 @@ struct PushConstants {
 };
 
 int run(const Options& options) {
-    raven::Platform platform;
-    raven::Window window({"RAVEN Engine - Hello Triangle", options.width, options.height, true});
-    raven::gfx::Renderer renderer(window, {"HelloTriangle", options.validation, options.presentMode});
+    zodar::Platform platform;
+    zodar::Window window({"ZODAR Engine - Hello Triangle", options.width, options.height, true});
+    zodar::gfx::Renderer renderer(window, {"HelloTriangle", options.validation, options.presentMode});
     const VkDevice device = renderer.context().device();
 
     const auto shaders = shaderDirectory();
-    raven::gfx::ShaderModule vertex(device, raven::gfx::loadSpirv(shaders / "triangle.vert.spv"));
-    raven::gfx::ShaderModule fragment(device, raven::gfx::loadSpirv(shaders / "triangle.frag.spv"));
+    zodar::gfx::ShaderModule vertex(device, zodar::gfx::loadSpirv(shaders / "triangle.vert.spv"));
+    zodar::gfx::ShaderModule fragment(device, zodar::gfx::loadSpirv(shaders / "triangle.frag.spv"));
 
-    raven::gfx::GraphicsPipelineDesc pipelineDesc;
+    zodar::gfx::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc.vertexShader = vertex.handle();
     pipelineDesc.fragmentShader = fragment.handle();
     pipelineDesc.colorFormat = renderer.swapchain().format();
     pipelineDesc.pushConstantSize = sizeof(PushConstants);
     pipelineDesc.pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT;
     pipelineDesc.debugName = "Triangle";
-    raven::gfx::GraphicsPipeline pipeline(renderer.context(), pipelineDesc);
+    zodar::gfx::GraphicsPipeline pipeline(renderer.context(), pipelineDesc);
 
     using Clock = std::chrono::steady_clock;
     const auto start = Clock::now();
@@ -155,7 +155,7 @@ int run(const Options& options) {
         const auto now = Clock::now();
         const double elapsed = std::chrono::duration<double>(now - statsStart).count();
         if (elapsed >= 2.0) {
-            RAVEN_LOG_INFO("{:.1f} FPS ({:.2f} ms/frame)", statsFrames / elapsed, 1000.0 * elapsed / statsFrames);
+            ZODAR_LOG_INFO("{:.1f} FPS ({:.2f} ms/frame)", statsFrames / elapsed, 1000.0 * elapsed / statsFrames);
             statsStart = now;
             statsFrames = 0;
         }
@@ -165,11 +165,11 @@ int run(const Options& options) {
     }
 
     renderer.waitIdle();
-    RAVEN_LOG_INFO("Rendered {} frames", renderer.frameNumber());
+    ZODAR_LOG_INFO("Rendered {} frames", renderer.frameNumber());
 
     const auto& context = renderer.context();
     if (context.validationEnabled() && context.validationErrorCount() > 0) {
-        RAVEN_LOG_ERROR("{} Vulkan validation errors were reported", context.validationErrorCount());
+        ZODAR_LOG_ERROR("{} Vulkan validation errors were reported", context.validationErrorCount());
         return 2;
     }
     if (options.screenshot && !renderer.lastScreenshotSucceeded()) {
@@ -181,17 +181,17 @@ int run(const Options& options) {
 } // namespace
 
 int main(int argc, char** argv) {
-    raven::log::init({spdlog::level::info, ""});
-    RAVEN_LOG_INFO("RAVEN Engine {}.{}.{}", RAVEN_VERSION_MAJOR, RAVEN_VERSION_MINOR, RAVEN_VERSION_PATCH);
+    zodar::log::init({spdlog::level::info, ""});
+    ZODAR_LOG_INFO("ZODAR Engine {}.{}.{}", ZODAR_VERSION_MAJOR, ZODAR_VERSION_MINOR, ZODAR_VERSION_PATCH);
 
     int exitCode = EXIT_FAILURE;
     try {
         exitCode = run(parseOptions(argc, argv));
     } catch (const std::exception& e) {
-        RAVEN_LOG_ERROR("Fatal: {}", e.what());
+        ZODAR_LOG_ERROR("Fatal: {}", e.what());
         exitCode = EXIT_FAILURE;
     }
-    RAVEN_LOG_INFO("Shutdown complete (exit code {})", exitCode);
-    raven::log::shutdown();
+    ZODAR_LOG_INFO("Shutdown complete (exit code {})", exitCode);
+    zodar::log::shutdown();
     return exitCode;
 }

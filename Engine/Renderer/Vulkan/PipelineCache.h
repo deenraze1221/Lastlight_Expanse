@@ -8,7 +8,7 @@
 #include <span>
 #include <string>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // Validates a serialized VkPipelineCache blob against the current device before it is
 // handed to the driver (drivers are not required to reject foreign or corrupted data
@@ -41,4 +41,4 @@ private:
     size_t m_loadedBytes = 0;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

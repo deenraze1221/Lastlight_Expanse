@@ -3,8 +3,8 @@
 #include "Renderer/Camera.h"
 #include "Renderer/Frustum.h"
 
-using namespace raven;
-using namespace raven::gfx;
+using namespace zodar;
+using namespace zodar::gfx;
 
 namespace {
 

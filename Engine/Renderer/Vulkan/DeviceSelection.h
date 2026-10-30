@@ -6,7 +6,7 @@
 #include <span>
 #include <string>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // Hardware-independent summary of a physical device used for ranking.
 struct DeviceCandidate {
@@ -22,4 +22,4 @@ int64_t scoreDevice(const DeviceCandidate& candidate);
 // Index of the best usable candidate, or -1.
 int pickBestDevice(std::span<const DeviceCandidate> candidates);
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

@@ -1,6 +1,6 @@
 #include "Renderer/RenderGraph/ResourceState.h"
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 bool isWriteUsage(ResourceUsage u) {
     switch (u) {
@@ -101,4 +101,4 @@ const char* toString(ResourceUsage u) {
     return "?";
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

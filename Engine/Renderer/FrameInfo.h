@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class FrameAllocator;
 class GpuProfiler;
@@ -18,4 +18,4 @@ struct FrameInfo {
     GpuProfiler* profiler = nullptr;   // Optional GPU timestamps.
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

@@ -4,7 +4,7 @@
 
 #include <limits>
 
-namespace raven {
+namespace zodar {
 
 // Axis-aligned bounding box. Default-constructed boxes are empty.
 struct Bounds {
@@ -39,4 +39,4 @@ struct Bounds {
     }
 };
 
-} // namespace raven
+} // namespace zodar

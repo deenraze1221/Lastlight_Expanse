@@ -9,7 +9,7 @@
 #include <exception>
 #include <filesystem>
 
-namespace raven::test {
+namespace zodar::test {
 
 GpuTestEnvironment& gpu() {
     static GpuTestEnvironment environment;
@@ -21,34 +21,34 @@ std::filesystem::path g_executableDir;
 }
 
 std::string shaderDir() {
-    if (const char* env = std::getenv("RAVEN_SHADER_DIR")) {
+    if (const char* env = std::getenv("ZODAR_SHADER_DIR")) {
         return env;
     }
-    if (std::filesystem::exists(RAVEN_TEST_SHADER_DIR)) {
-        return RAVEN_TEST_SHADER_DIR;
+    if (std::filesystem::exists(ZODAR_TEST_SHADER_DIR)) {
+        return ZODAR_TEST_SHADER_DIR;
     }
     return (g_executableDir / "shaders").string();
 }
 
-} // namespace raven::test
+} // namespace zodar::test
 
 int main(int argc, char** argv) {
-    raven::log::init({spdlog::level::warn, ""});
-    raven::test::g_executableDir = std::filesystem::absolute(std::filesystem::path(argv[0])).parent_path();
+    zodar::log::init({spdlog::level::warn, ""});
+    zodar::test::g_executableDir = std::filesystem::absolute(std::filesystem::path(argv[0])).parent_path();
     int result = 1;
     try {
-        auto& env = raven::test::gpu();
-        env.context = std::make_unique<raven::gfx::VulkanContext>(raven::gfx::ContextDesc{"RavenGpuTests", true, true}, nullptr);
-        env.upload = std::make_unique<raven::gfx::UploadContext>(*env.context);
+        auto& env = zodar::test::gpu();
+        env.context = std::make_unique<zodar::gfx::VulkanContext>(zodar::gfx::ContextDesc{"ZodarGpuTests", true, true}, nullptr);
+        env.upload = std::make_unique<zodar::gfx::UploadContext>(*env.context);
         if (!env.context->validationEnabled()) {
-            RAVEN_LOG_WARN("Validation layers unavailable: GPU tests run without validation checks");
+            ZODAR_LOG_WARN("Validation layers unavailable: GPU tests run without validation checks");
         }
-        std::printf("[RavenGpuTests] device: %s | validation: %s\n", env.context->deviceInfo().name.c_str(),
+        std::printf("[ZodarGpuTests] device: %s | validation: %s\n", env.context->deviceInfo().name.c_str(),
                     env.context->validationEnabled() ? "core + synchronization" : "UNAVAILABLE");
 
         doctest::Context doctest(argc, argv);
         result = doctest.run();
-        std::printf("[RavenGpuTests] validation messages: %u errors, %u warnings\n",
+        std::printf("[ZodarGpuTests] validation messages: %u errors, %u warnings\n",
                     env.context->validationErrorCount(), env.context->validationWarningCount());
         if (env.context->validationErrorCount() > 0) {
             result = 1;
@@ -57,9 +57,9 @@ int main(int argc, char** argv) {
         env.upload.reset();
         env.context.reset();
     } catch (const std::exception& e) {
-        RAVEN_LOG_ERROR("GPU test setup failed: {}", e.what());
+        ZODAR_LOG_ERROR("GPU test setup failed: {}", e.what());
         result = 1;
     }
-    raven::log::shutdown();
+    zodar::log::shutdown();
     return result;
 }

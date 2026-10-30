@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <functional>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 enum class Filter { Nearest, Linear };
 enum class AddressMode { Repeat, MirroredRepeat, ClampToEdge };
@@ -37,4 +37,4 @@ struct SamplerDescHash {
     size_t operator()(const SamplerDesc& d) const noexcept;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

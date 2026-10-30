@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-namespace raven {
+namespace zodar {
 
 void MeshData::computeBounds() {
     bounds = {};
@@ -89,4 +89,4 @@ std::string MeshData::validate() const {
     return {};
 }
 
-} // namespace raven
+} // namespace zodar

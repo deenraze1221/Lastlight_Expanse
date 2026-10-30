@@ -6,7 +6,7 @@
 #include <bit>
 #include <cstring>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 namespace {
 
@@ -19,11 +19,11 @@ constexpr VkBufferUsageFlags kUsage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT 
 
 FrameAllocator::FrameAllocator(const VulkanContext& context, uint32_t framesInFlight, VkDeviceSize blockSize)
     : m_context(context), m_blockSize(blockSize), m_slots(framesInFlight) {
-    RAVEN_ENSURE(framesInFlight > 0 && blockSize > 0, "invalid FrameAllocator configuration");
+    ZODAR_ENSURE(framesInFlight > 0 && blockSize > 0, "invalid FrameAllocator configuration");
 }
 
 void FrameAllocator::beginFrame(uint32_t slot) {
-    RAVEN_ENSURE(slot < m_slots.size(), "FrameAllocator slot out of range");
+    ZODAR_ENSURE(slot < m_slots.size(), "FrameAllocator slot out of range");
     m_slot = slot;
     Slot& s = m_slots[slot];
     for (auto& block : s.blocks) {
@@ -33,8 +33,8 @@ void FrameAllocator::beginFrame(uint32_t slot) {
 }
 
 FrameAllocator::Allocation FrameAllocator::allocate(VkDeviceSize size, VkDeviceSize alignment) {
-    RAVEN_ENSURE(size > 0, "zero-sized frame allocation");
-    RAVEN_ENSURE(std::has_single_bit(alignment), "alignment must be a power of two");
+    ZODAR_ENSURE(size > 0, "zero-sized frame allocation");
+    ZODAR_ENSURE(std::has_single_bit(alignment), "alignment must be a power of two");
     Slot& s = m_slots[m_slot];
     while (true) {
         if (s.current == s.blocks.size()) {
@@ -60,7 +60,7 @@ FrameAllocator::Allocation FrameAllocator::allocate(VkDeviceSize size, VkDeviceS
 }
 
 void FrameAllocator::write(const Allocation& allocation, const void* data, VkDeviceSize size, VkDeviceSize offset) {
-    RAVEN_ENSURE(offset + size <= allocation.size, "frame allocation write out of range");
+    ZODAR_ENSURE(offset + size <= allocation.size, "frame allocation write out of range");
     for (auto& block : m_slots[m_slot].blocks) {
         if (block.buffer.handle() == allocation.buffer) {
             block.buffer.write(data, size, allocation.offset + offset);
@@ -88,4 +88,4 @@ VkDeviceSize FrameAllocator::bytesReserved() const {
     return total;
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

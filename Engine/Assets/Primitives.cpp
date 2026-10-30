@@ -2,7 +2,7 @@
 
 #include <glm/gtc/constants.hpp>
 
-namespace raven::primitives {
+namespace zodar::primitives {
 namespace {
 
 void finish(MeshData& mesh) {
@@ -101,4 +101,4 @@ MeshData uvSphere(float radius, uint32_t segments, uint32_t rings) {
     return mesh;
 }
 
-} // namespace raven::primitives
+} // namespace zodar::primitives

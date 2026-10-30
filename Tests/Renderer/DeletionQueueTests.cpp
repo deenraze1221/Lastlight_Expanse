@@ -4,7 +4,7 @@
 
 #include <vector>
 
-using raven::gfx::DeletionQueue;
+using zodar::gfx::DeletionQueue;
 
 TEST_CASE("deletion queue: items wait for their submission to complete") {
     DeletionQueue q;

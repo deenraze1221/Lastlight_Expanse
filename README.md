@@ -1,4 +1,6 @@
-# RAVEN Engine
+# ZODAR Engine
+
+> Formerly named RAVEN Engine (renamed after stage S1; commit history before the rename uses the old name).
 
 Modular C++20 game engine with its own Vulkan 1.3 renderer. Built to be reused across
 multiple games; **DEAD SECTOR** (currently HTML/Three.js) is the first game that will be
@@ -9,7 +11,7 @@ foundation, style-neutral 3D renderer core (GPU resources, reverse-Z cameras, me
 textures, data-driven materials, forward lighting, glTF 2.0), and the S1 infrastructure:
 device capability table with fallbacks, timeline semaphores and deferred deletion, frame
 scratch memory, render graph v1, GPU/CPU profiling, on-disk pipeline cache, ImGui profiler
-overlay and the RavenBench benchmark. GPU-driven rendering, advanced lighting, shadows and
+overlay and the ZodarBench benchmark. GPU-driven rendering, advanced lighting, shadows and
 post-processing follow (S2–S11). No physics, audio or game code yet — see [ROADMAP.md](ROADMAP.md).
 
 ## Quick start
@@ -42,9 +44,9 @@ Engine/Assets/          CPU meshes/images/models, primitives, glTF import
 Engine/Platform/        SDL3 platform + window, Vulkan surface glue
 Engine/Renderer/        Frame loop, scene renderer, materials, textures, meshes; RenderGraph/, Resources/, Vulkan/
 Engine/Debug/           ImGui profiler overlay (engine tool)
-Shaders/                Engine shader library (Include/raven/*.glsl) and built-in shaders
+Shaders/                Engine shader library (Include/zodar/*.glsl) and built-in shaders
 Samples/                HelloTriangle (M1), ModelViewer (M2)
-Tools/RavenBench/       Deterministic benchmark with JSON reports
+Tools/ZodarBench/       Deterministic benchmark with JSON reports
 Tests/                  doctest unit tests + GPU smoke test registration
 Docs/                   Design and migration documents
 ```

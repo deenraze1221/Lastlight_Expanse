@@ -11,7 +11,7 @@
 #include <set>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 namespace {
 
 constexpr const char* kValidationLayer = "VK_LAYER_KHRONOS_validation";
@@ -98,13 +98,13 @@ void VulkanContext::destroy() {
     if (m_instance) {
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
-        RAVEN_LOG_INFO("Vulkan context destroyed (validation: {} errors, {} warnings)",
+        ZODAR_LOG_INFO("Vulkan context destroyed (validation: {} errors, {} warnings)",
                        m_validationErrors.load(), m_validationWarnings.load());
     }
 }
 
 void VulkanContext::waitIdle() const {
-    RAVEN_VK_CHECK(vkDeviceWaitIdle(m_device));
+    ZODAR_VK_CHECK(vkDeviceWaitIdle(m_device));
 }
 
 uint64_t VulkanContext::submitGraphics(const GraphicsSubmit& submit) {
@@ -123,7 +123,7 @@ uint64_t VulkanContext::submitGraphics(const GraphicsSubmit& submit) {
     info.pCommandBufferInfos = submit.commandBuffers.data();
     info.signalSemaphoreInfoCount = static_cast<uint32_t>(signals.size());
     info.pSignalSemaphoreInfos = signals.data();
-    RAVEN_VK_CHECK(vkQueueSubmit2(m_graphicsQueue, 1, &info, submit.fence));
+    ZODAR_VK_CHECK(vkQueueSubmit2(m_graphicsQueue, 1, &info, submit.fence));
     m_deletionQueue.onSubmit(value, submit.frameSubmission, m_frameRecording);
     return value;
 }
@@ -148,7 +148,7 @@ void VulkanContext::createInstance(const ContextDesc& desc) {
     }
 
     const uint32_t loaderVersion = volkGetInstanceVersion();
-    RAVEN_LOG_INFO("Vulkan loader version {}", versionString(loaderVersion));
+    ZODAR_LOG_INFO("Vulkan loader version {}", versionString(loaderVersion));
     if (loaderVersion < VK_API_VERSION_1_3) {
         fail("Vulkan 1.3 is required; the installed loader supports " + versionString(loaderVersion));
     }
@@ -168,10 +168,10 @@ void VulkanContext::createInstance(const ContextDesc& desc) {
     m_validationEnabled = false;
     if (desc.enableValidation) {
         if (!hasLayer(kValidationLayer)) {
-            RAVEN_LOG_WARN("Validation requested but {} is not installed; continuing without it",
+            ZODAR_LOG_WARN("Validation requested but {} is not installed; continuing without it",
                            kValidationLayer);
         } else if (!m_debugUtils) {
-            RAVEN_LOG_WARN("Validation requested but {} is unavailable; continuing without it",
+            ZODAR_LOG_WARN("Validation requested but {} is unavailable; continuing without it",
                            VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         } else {
             layers.push_back(kValidationLayer);
@@ -182,8 +182,8 @@ void VulkanContext::createInstance(const ContextDesc& desc) {
     VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
     app.pApplicationName = desc.applicationName.c_str();
     app.applicationVersion = VK_MAKE_API_VERSION(0, 0, 1, 0);
-    app.pEngineName = "RAVEN Engine";
-    app.engineVersion = VK_MAKE_API_VERSION(0, RAVEN_VERSION_MAJOR, RAVEN_VERSION_MINOR, RAVEN_VERSION_PATCH);
+    app.pEngineName = "ZODAR Engine";
+    app.engineVersion = VK_MAKE_API_VERSION(0, ZODAR_VERSION_MAJOR, ZODAR_VERSION_MINOR, ZODAR_VERSION_PATCH);
     app.apiVersion = VK_API_VERSION_1_3;
 
     VkDebugUtilsMessengerCreateInfoEXT messengerInfo{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
@@ -212,25 +212,25 @@ void VulkanContext::createInstance(const ContextDesc& desc) {
         info.pNext = &validationFeatures;
     }
 
-    RAVEN_VK_CHECK(vkCreateInstance(&info, nullptr, &m_instance));
+    ZODAR_VK_CHECK(vkCreateInstance(&info, nullptr, &m_instance));
     volkLoadInstanceOnly(m_instance);
 
     if (m_validationEnabled) {
-        RAVEN_VK_CHECK(vkCreateDebugUtilsMessengerEXT(m_instance, &messengerInfo, nullptr, &m_debugMessenger));
+        ZODAR_VK_CHECK(vkCreateDebugUtilsMessengerEXT(m_instance, &messengerInfo, nullptr, &m_debugMessenger));
     }
-    RAVEN_LOG_INFO("Vulkan instance created (API 1.3, validation {}, {})",
+    ZODAR_LOG_INFO("Vulkan instance created (API 1.3, validation {}, {})",
                    m_validationEnabled ? (desc.synchronizationValidation ? "on + sync" : "on") : "off",
                    m_window ? "windowed" : "headless");
 }
 
 void VulkanContext::pickPhysicalDevice() {
     uint32_t count = 0;
-    RAVEN_VK_CHECK(vkEnumeratePhysicalDevices(m_instance, &count, nullptr));
+    ZODAR_VK_CHECK(vkEnumeratePhysicalDevices(m_instance, &count, nullptr));
     if (count == 0) {
         fail("No Vulkan physical devices found");
     }
     std::vector<VkPhysicalDevice> devices(count);
-    RAVEN_VK_CHECK(vkEnumeratePhysicalDevices(m_instance, &count, devices.data()));
+    ZODAR_VK_CHECK(vkEnumeratePhysicalDevices(m_instance, &count, devices.data()));
 
     std::vector<DeviceCandidate> candidates;
     std::vector<DeviceCapabilities> caps;
@@ -242,7 +242,7 @@ void VulkanContext::pickPhysicalDevice() {
         for (const auto& m : missing) {
             missingText += (missingText.empty() ? "" : ", ") + m;
         }
-        RAVEN_LOG_INFO("  GPU candidate: {} ({}, Vulkan {}, score {}{}{})", c.name, deviceTypeName(c.type),
+        ZODAR_LOG_INFO("  GPU candidate: {} ({}, Vulkan {}, score {}{}{})", c.name, deviceTypeName(c.type),
                        versionString(c.apiVersion), scoreDevice(candidate), missing.empty() ? "" : ", missing: ",
                        missingText);
         candidates.push_back(candidate);
@@ -251,7 +251,7 @@ void VulkanContext::pickPhysicalDevice() {
 
     const int best = pickBestDevice(candidates);
     if (best < 0) {
-        fail("No GPU meets the RAVEN baseline (Vulkan 1.3 with dynamic rendering, synchronization2, descriptor "
+        fail("No GPU meets the ZODAR baseline (Vulkan 1.3 with dynamic rendering, synchronization2, descriptor "
              "indexing, timeline semaphores, buffer device address and indirect drawing); see the log for details");
     }
     m_physicalDevice = devices[static_cast<size_t>(best)];
@@ -275,14 +275,14 @@ void VulkanContext::pickPhysicalDevice() {
     m_deviceInfo.samplerAnisotropy = m_features.anisotropicFiltering;
     m_deviceInfo.maxSamplerAnisotropy = m_caps.maxSamplerAnisotropy;
 
-    RAVEN_LOG_INFO("Selected GPU: {} ({}), driver {} {}", m_deviceInfo.name, deviceTypeName(m_deviceInfo.type),
+    ZODAR_LOG_INFO("Selected GPU: {} ({}), driver {} {}", m_deviceInfo.name, deviceTypeName(m_deviceInfo.type),
                    m_deviceInfo.driverName, m_deviceInfo.driverInfo);
     if (m_deviceInfo.isSoftwareRasterizer) {
-        RAVEN_LOG_WARN("Rendering on a software rasterizer: output is valid, performance numbers are not");
+        ZODAR_LOG_WARN("Rendering on a software rasterizer: output is valid, performance numbers are not");
     }
-    RAVEN_LOG_INFO("Optional features:");
+    ZODAR_LOG_INFO("Optional features:");
     for (const auto& entry : m_features.entries()) {
-        RAVEN_LOG_INFO("  {:<38} {}", entry.name, entry.enabled ? "yes" : fmt::format("no -> {}", entry.fallback));
+        ZODAR_LOG_INFO("  {:<38} {}", entry.name, entry.enabled ? "yes" : fmt::format("no -> {}", entry.fallback));
     }
 }
 
@@ -343,14 +343,14 @@ void VulkanContext::createDevice() {
     info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     info.ppEnabledExtensionNames = extensions.data();
 
-    RAVEN_VK_CHECK(vkCreateDevice(m_physicalDevice, &info, nullptr, &m_device));
+    ZODAR_VK_CHECK(vkCreateDevice(m_physicalDevice, &info, nullptr, &m_device));
     volkLoadDevice(m_device);
 
     vkGetDeviceQueue(m_device, m_graphicsFamily, 0, &m_graphicsQueue);
     vkGetDeviceQueue(m_device, m_presentFamily, 0, &m_presentQueue);
     if (m_features.asyncCompute) vkGetDeviceQueue(m_device, m_caps.asyncComputeFamily, 0, &m_computeQueue);
     if (m_features.dedicatedTransfer) vkGetDeviceQueue(m_device, m_caps.transferFamily, 0, &m_transferQueue);
-    RAVEN_LOG_INFO("Logical device created (graphics family {}, present family {}, compute {}, transfer {})",
+    ZODAR_LOG_INFO("Logical device created (graphics family {}, present family {}, compute {}, transfer {})",
                    m_graphicsFamily, m_presentFamily, m_computeQueue ? std::to_string(m_caps.asyncComputeFamily) : "-",
                    m_transferQueue ? std::to_string(m_caps.transferFamily) : "-");
 }
@@ -370,7 +370,7 @@ void VulkanContext::createAllocator() {
     if (m_features.memoryBudget) {
         info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
     }
-    RAVEN_VK_CHECK(vmaCreateAllocator(&info, &m_allocator));
+    ZODAR_VK_CHECK(vmaCreateAllocator(&info, &m_allocator));
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -381,12 +381,12 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::debugCallback(VkDebugUtilsMessageS
     const char* id = data->pMessageIdName ? data->pMessageIdName : "";
     if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
         self->m_validationErrors.fetch_add(1);
-        RAVEN_LOG_ERROR("[Vulkan] {} {}", id, data->pMessage);
+        ZODAR_LOG_ERROR("[Vulkan] {} {}", id, data->pMessage);
     } else {
         self->m_validationWarnings.fetch_add(1);
-        RAVEN_LOG_WARN("[Vulkan] {} {}", id, data->pMessage);
+        ZODAR_LOG_WARN("[Vulkan] {} {}", id, data->pMessage);
     }
     return VK_FALSE;
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

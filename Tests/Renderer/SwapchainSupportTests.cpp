@@ -4,7 +4,7 @@
 
 #include <vector>
 
-using namespace raven::gfx;
+using namespace zodar::gfx;
 
 TEST_CASE("swapchain: prefers sRGB BGRA, falls back to first format") {
     const std::vector<VkSurfaceFormatKHR> formats = {

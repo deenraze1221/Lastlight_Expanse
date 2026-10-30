@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 namespace {
 
 bool contains(std::span<const VkPresentModeKHR> modes, VkPresentModeKHR mode) {
@@ -60,4 +60,4 @@ const char* toString(PresentMode mode) {
     return "unknown";
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

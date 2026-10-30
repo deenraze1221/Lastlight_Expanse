@@ -15,10 +15,10 @@
 #include <algorithm>
 #include <cstddef>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 namespace {
 
-// std140 mirror of RavenFrame in raven/scene.glsl.
+// std140 mirror of ZodarFrame in zodar/scene.glsl.
 struct GpuPointLight {
     glm::vec4 positionRange;
     glm::vec4 colorIntensity;
@@ -41,7 +41,7 @@ struct GpuInstance {
     glm::mat4 normalMatrix;
 };
 
-// Mirrors RavenDraw in raven/scene.glsl.
+// Mirrors ZodarDraw in zodar/scene.glsl.
 struct PushConstants {
     VkDeviceAddress frameAddress;
     VkDeviceAddress instanceAddress;
@@ -81,7 +81,7 @@ struct DrawEntry {
 
 SceneRenderer::SceneRenderer(VulkanContext& context, UploadContext& upload, const SceneRendererDesc& desc)
     : m_context(context), m_upload(upload), m_desc(desc) {
-    RAVEN_ENSURE(desc.framesInFlight >= 1, "framesInFlight must be at least 1");
+    ZODAR_ENSURE(desc.framesInFlight >= 1, "framesInFlight must be at least 1");
     m_bindless = std::make_unique<BindlessRegistry>(context);
     {
         UploadBatch batch(upload);
@@ -121,7 +121,7 @@ void SceneRenderer::createLayouts() {
     info.pSetLayouts = &setLayout;
     info.pushConstantRangeCount = 1;
     info.pPushConstantRanges = &push;
-    RAVEN_VK_CHECK(vkCreatePipelineLayout(m_context.device(), &info, nullptr, &m_sceneLayout));
+    ZODAR_VK_CHECK(vkCreatePipelineLayout(m_context.device(), &info, nullptr, &m_sceneLayout));
 }
 
 void SceneRenderer::ensureTargets(VkExtent2D extent) {
@@ -149,13 +149,13 @@ void SceneRenderer::ensureTargets(VkExtent2D extent) {
                                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                    1, "SceneDepth"});
     m_colorSlot = m_bindless->registerTexture(m_color.view());
-    RAVEN_LOG_DEBUG("Scene targets {}x{}", extent.width, extent.height);
+    ZODAR_LOG_DEBUG("Scene targets {}x{}", extent.width, extent.height);
 }
 
 SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkExtent2D extent, const SceneView& view,
                                                    RenderStats& stats) {
-    RAVEN_ENSURE(frame.scratch != nullptr, "scene rendering needs a frame scratch allocator");
-    RAVEN_ENSURE(extent.width > 0 && extent.height > 0, "render extent must be non-zero");
+    ZODAR_ENSURE(frame.scratch != nullptr, "scene rendering needs a frame scratch allocator");
+    ZODAR_ENSURE(extent.width > 0 && extent.height > 0, "render extent must be non-zero");
     PreparedScene prepared;
 
     // --- Frame constants -----------------------------------------------------------
@@ -178,7 +178,7 @@ SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkEx
     data.sunColor = glm::vec4(sun.color * sun.intensity, 0.0f);
     const auto pointCount = static_cast<uint32_t>(std::min<size_t>(view.lighting.pointLights.size(), kMaxPointLights));
     if (view.lighting.pointLights.size() > kMaxPointLights) {
-        RAVEN_LOG_WARN("{} point lights submitted; only {} are used", view.lighting.pointLights.size(), kMaxPointLights);
+        ZODAR_LOG_WARN("{} point lights submitted; only {} are used", view.lighting.pointLights.size(), kMaxPointLights);
     }
     data.lightCounts = glm::uvec4(pointCount, 0, 0, 0);
     for (uint32_t i = 0; i < pointCount; ++i) {
@@ -194,7 +194,7 @@ SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkEx
     entries.reserve(view.draws.size());
     for (const MeshDraw& draw : view.draws) {
         ++stats.submitted;
-        RAVEN_ENSURE(draw.mesh != nullptr && draw.submesh < draw.mesh->submeshes().size(), "invalid MeshDraw");
+        ZODAR_ENSURE(draw.mesh != nullptr && draw.submesh < draw.mesh->submeshes().size(), "invalid MeshDraw");
         const Bounds world = draw.mesh->submeshes()[draw.submesh].bounds.transformed(draw.transform);
         if (view.frustumCulling && !world.isEmpty() && !frustum.intersects(world)) {
             ++stats.culled;
@@ -389,7 +389,7 @@ void SceneRenderer::recordResolve(VkCommandBuffer cmd, uint32_t sourceIndex, VkF
 }
 
 void SceneRenderer::resolve(const FrameInfo& frame, VkImageView target, VkFormat targetFormat, VkExtent2D extent) {
-    RAVEN_ENSURE(m_color.isValid(), "resolve() called before render()");
+    ZODAR_ENSURE(m_color.isValid(), "resolve() called before render()");
     const VkCommandBuffer cmd = frame.commandBuffer;
     VkRenderingAttachmentInfo color{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
     color.imageView = target;
@@ -410,4 +410,4 @@ void SceneRenderer::resolve(const FrameInfo& frame, VkImageView target, VkFormat
     vkCmdEndRendering(cmd);
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

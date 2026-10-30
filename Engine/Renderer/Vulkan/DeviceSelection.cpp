@@ -1,6 +1,6 @@
 #include "Renderer/Vulkan/DeviceSelection.h"
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 int64_t scoreDevice(const DeviceCandidate& c) {
     if (!c.meetsBaseline) {
@@ -32,4 +32,4 @@ int pickBestDevice(std::span<const DeviceCandidate> candidates) {
     return bestScore < 0 ? -1 : best;
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

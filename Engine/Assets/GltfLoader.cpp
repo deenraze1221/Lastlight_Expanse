@@ -14,7 +14,7 @@
 #include <memory>
 #include <utility>
 
-namespace raven {
+namespace zodar {
 namespace {
 
 const char* resultName(cgltf_result r) {
@@ -73,7 +73,7 @@ public:
         }
         collectNodes();
         for (const auto& w : m_model.warnings) {
-            RAVEN_LOG_WARN("glTF '{}': {}", m_model.name, w);
+            ZODAR_LOG_WARN("glTF '{}': {}", m_model.name, w);
         }
         return std::move(m_model);
     }
@@ -164,7 +164,7 @@ private:
             const auto* bytes = static_cast<const uint8_t*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
             return loadImageFromMemory({bytes, image.buffer_view->size}, space, name);
         }
-        RAVEN_ENSURE(image.uri != nullptr, "glTF image has neither a URI nor a buffer view");
+        ZODAR_ENSURE(image.uri != nullptr, "glTF image has neither a URI nor a buffer view");
         const std::string uri = image.uri;
         if (uri.rfind("data:", 0) == 0) {
             const size_t comma = uri.find(',');
@@ -352,4 +352,4 @@ ModelData loadGltf(const std::filesystem::path& path, const GltfLoadOptions& opt
     return Importer(path, options).run();
 }
 
-} // namespace raven
+} // namespace zodar

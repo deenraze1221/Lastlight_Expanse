@@ -1,9 +1,9 @@
-add_library(RavenPlatform STATIC
+add_library(ZodarPlatform STATIC
     Platform.cpp
     Window.cpp)
-add_library(Raven::Platform ALIAS RavenPlatform)
+add_library(Zodar::Platform ALIAS ZodarPlatform)
 
-target_link_libraries(RavenPlatform
-    PUBLIC Raven::Core Raven::volk
+target_link_libraries(ZodarPlatform
+    PUBLIC Zodar::Core Zodar::volk
     PRIVATE SDL3::SDL3)
-raven_set_warnings(RavenPlatform)
+zodar_set_warnings(ZodarPlatform)

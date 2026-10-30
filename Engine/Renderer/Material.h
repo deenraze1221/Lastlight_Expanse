@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class BindlessRegistry;
 class Texture;
@@ -33,7 +33,7 @@ struct TextureBinding {
 };
 
 // Style-neutral material description. The shader decides how parameters are used:
-// engine shaders implement PBR metallic-roughness ("raven/pbr") and unlit ("raven/unlit");
+// engine shaders implement PBR metallic-roughness ("zodar/pbr") and unlit ("zodar/unlit");
 // games register their own shaders and may use custom0/custom1 freely.
 struct MaterialDesc {
     std::string name;
@@ -59,7 +59,7 @@ struct MaterialDesc {
     glm::vec4 custom1{0.0f};
 };
 
-// GPU layout of one material (std430). Mirrors RavenMaterial in raven/scene.glsl.
+// GPU layout of one material (std430). Mirrors ZodarMaterial in zodar/scene.glsl.
 struct GpuMaterial {
     glm::vec4 baseColorFactor;
     glm::vec4 emissiveAlphaCutoff;
@@ -70,7 +70,7 @@ struct GpuMaterial {
     glm::vec4 custom0;
     glm::vec4 custom1;
 };
-static_assert(sizeof(GpuMaterial) == 128, "GpuMaterial must match raven/scene.glsl");
+static_assert(sizeof(GpuMaterial) == 128, "GpuMaterial must match zodar/scene.glsl");
 
 enum MaterialFlags : uint32_t {
     kMaterialAlphaMask = 1u,
@@ -88,8 +88,8 @@ struct DefaultTextureSlots {
 class MaterialSystem {
 public:
     static constexpr uint32_t kMaxMaterials = 4096;
-    static constexpr const char* kPbrShader = "raven/pbr";
-    static constexpr const char* kUnlitShader = "raven/unlit";
+    static constexpr const char* kPbrShader = "zodar/pbr";
+    static constexpr const char* kUnlitShader = "zodar/unlit";
 
     struct TargetFormats {
         VkFormat color = VK_FORMAT_UNDEFINED;
@@ -104,7 +104,7 @@ public:
     MaterialSystem& operator=(const MaterialSystem&) = delete;
 
     // Registers a vertex/fragment SPIR-V pair under a unique name. Paths are relative to
-    // the shader directory unless absolute. Engine shaders use the "raven/" prefix.
+    // the shader directory unless absolute. Engine shaders use the "zodar/" prefix.
     ShaderHandle registerShader(const std::string& name, const std::filesystem::path& vertexSpv,
                                 const std::filesystem::path& fragmentSpv);
     ShaderHandle findShader(const std::string& name) const;
@@ -147,4 +147,4 @@ private:
     ShaderHandle m_unlit = 0;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

@@ -2,7 +2,7 @@
 
 #include "Renderer/Vulkan/VulkanCheck.h"
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 GpuTimeline::GpuTimeline(VkDevice device) : m_device(device) {
     VkSemaphoreTypeCreateInfo type{VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO};
@@ -10,7 +10,7 @@ GpuTimeline::GpuTimeline(VkDevice device) : m_device(device) {
     type.initialValue = 0;
     VkSemaphoreCreateInfo info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     info.pNext = &type;
-    RAVEN_VK_CHECK(vkCreateSemaphore(device, &info, nullptr, &m_semaphore));
+    ZODAR_VK_CHECK(vkCreateSemaphore(device, &info, nullptr, &m_semaphore));
 }
 
 GpuTimeline::~GpuTimeline() {
@@ -19,7 +19,7 @@ GpuTimeline::~GpuTimeline() {
 
 uint64_t GpuTimeline::completedValue() const {
     uint64_t value = 0;
-    RAVEN_VK_CHECK(vkGetSemaphoreCounterValue(m_device, m_semaphore, &value));
+    ZODAR_VK_CHECK(vkGetSemaphoreCounterValue(m_device, m_semaphore, &value));
     return value;
 }
 
@@ -28,7 +28,7 @@ void GpuTimeline::wait(uint64_t value) const {
     info.semaphoreCount = 1;
     info.pSemaphores = &m_semaphore;
     info.pValues = &value;
-    RAVEN_VK_CHECK(vkWaitSemaphores(m_device, &info, UINT64_MAX));
+    ZODAR_VK_CHECK(vkWaitSemaphores(m_device, &info, UINT64_MAX));
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

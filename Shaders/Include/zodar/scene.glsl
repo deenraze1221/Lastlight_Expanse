@@ -1,20 +1,20 @@
-// RAVEN scene shader interface. Matches Engine/Renderer/SceneRenderer.h and Material.h.
+// ZODAR scene shader interface. Matches Engine/Renderer/SceneRenderer.h and Material.h.
 // Every material shader (engine or game) uses this layout:
 //   set 0: bindless textures/samplers + material table
 //   push constants: addresses of frame constants and instance data, material index
-#ifndef RAVEN_SCENE_GLSL
-#define RAVEN_SCENE_GLSL
+#ifndef ZODAR_SCENE_GLSL
+#define ZODAR_SCENE_GLSL
 
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_buffer_reference_uvec2 : require
 
-#include "raven/bindless.glsl"
+#include "zodar/bindless.glsl"
 
-#define RAVEN_MATERIAL_ALPHA_MASK    1u
-#define RAVEN_MATERIAL_ALPHA_BLEND   2u
-#define RAVEN_MATERIAL_DOUBLE_SIDED  4u
+#define ZODAR_MATERIAL_ALPHA_MASK    1u
+#define ZODAR_MATERIAL_ALPHA_BLEND   2u
+#define ZODAR_MATERIAL_DOUBLE_SIDED  4u
 
-struct RavenMaterial {
+struct ZodarMaterial {
     vec4 baseColorFactor;
     vec4 emissiveAlphaCutoff;   // rgb: emissive radiance, a: alpha cutoff
     float metallic;
@@ -37,19 +37,19 @@ struct RavenMaterial {
     vec4 custom1;
 };
 
-layout(set = 0, binding = 2, std430) readonly buffer RavenMaterials {
-    RavenMaterial ravenMaterials[];
+layout(set = 0, binding = 2, std430) readonly buffer ZodarMaterials {
+    ZodarMaterial zodarMaterials[];
 };
 
-#define RAVEN_MAX_POINT_LIGHTS 64
+#define ZODAR_MAX_POINT_LIGHTS 64
 
-struct RavenPointLight {
+struct ZodarPointLight {
     vec4 positionRange;   // xyz: world position, w: range (0 = unbounded)
     vec4 colorIntensity;  // rgb: colour, a: intensity
 };
 
 // Per-frame constants, read through a buffer device address (frame scratch memory).
-layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer RavenFrameBuffer {
+layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer ZodarFrameBuffer {
     mat4 view;
     mat4 projection;
     mat4 viewProjection;
@@ -59,29 +59,29 @@ layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer Ra
     vec4 sunDirection;     // xyz: direction the light travels, w: 1 if enabled
     vec4 sunColor;         // rgb * intensity
     uvec4 lightCounts;     // x: point lights
-    RavenPointLight pointLights[RAVEN_MAX_POINT_LIGHTS];
+    ZodarPointLight pointLights[ZODAR_MAX_POINT_LIGHTS];
 };
 
-struct RavenInstance {
+struct ZodarInstance {
     mat4 model;
     mat4 normalMatrix;
 };
 
-layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer RavenInstanceBuffer {
-    RavenInstance instances[];
+layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer ZodarInstanceBuffer {
+    ZodarInstance instances[];
 };
 
-layout(push_constant) uniform RavenDraw {
-    uvec2 frameAddress;     // RavenFrameBuffer
-    uvec2 instanceAddress;  // RavenInstanceBuffer; indexed with gl_InstanceIndex
+layout(push_constant) uniform ZodarDraw {
+    uvec2 frameAddress;     // ZodarFrameBuffer
+    uvec2 instanceAddress;  // ZodarInstanceBuffer; indexed with gl_InstanceIndex
     uint materialIndex;
-} ravenDraw;
+} zodarDraw;
 
-#define ravenFrame RavenFrameBuffer(ravenDraw.frameAddress)
-#define ravenInstances RavenInstanceBuffer(ravenDraw.instanceAddress).instances
+#define zodarFrame ZodarFrameBuffer(zodarDraw.frameAddress)
+#define zodarInstances ZodarInstanceBuffer(zodarDraw.instanceAddress).instances
 
-RavenMaterial ravenMaterial() {
-    return ravenMaterials[ravenDraw.materialIndex];
+ZodarMaterial zodarMaterial() {
+    return zodarMaterials[zodarDraw.materialIndex];
 }
 
 #endif

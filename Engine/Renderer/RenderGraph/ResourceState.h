@@ -2,7 +2,7 @@
 
 #include <volk.h>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // How a pass uses a resource. Each usage maps to a synchronization2 stage/access mask
 // and (for images) a layout.
@@ -34,4 +34,4 @@ AccessState usageState(ResourceUsage usage);
 VkImageUsageFlags imageUsageFlags(ResourceUsage usage);
 const char* toString(ResourceUsage usage);
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

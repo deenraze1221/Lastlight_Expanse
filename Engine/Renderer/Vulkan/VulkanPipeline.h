@@ -6,7 +6,7 @@
 #include <filesystem>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class VulkanContext;
 
@@ -30,7 +30,7 @@ private:
 
 enum class VertexInput {
     None,         // Vertices generated in the shader (fullscreen passes).
-    EngineVertex, // raven::Vertex at binding 0: position, normal, tangent, uv0, color (locations 0-4).
+    EngineVertex, // zodar::Vertex at binding 0: position, normal, tangent, uv0, color (locations 0-4).
 };
 
 enum class BlendMode {
@@ -83,4 +83,4 @@ private:
     VkShaderStageFlags m_pushConstantStages = 0;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

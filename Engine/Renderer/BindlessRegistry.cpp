@@ -9,7 +9,7 @@
 #include <bit>
 #include <string>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 namespace {
 
 VkFilter toVk(Filter f) {
@@ -66,7 +66,7 @@ BindlessRegistry::BindlessRegistry(const VulkanContext& context) : m_context(con
     layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
     layoutInfo.bindingCount = 3;
     layoutInfo.pBindings = bindings;
-    RAVEN_VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &m_layout));
+    ZODAR_VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &m_layout));
 
     const VkDescriptorPoolSize sizes[3] = {{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kMaxTextures},
                                            {VK_DESCRIPTOR_TYPE_SAMPLER, kMaxSamplers},
@@ -117,7 +117,7 @@ uint32_t BindlessRegistry::registerTexture(VkImageView view) {
 }
 
 void BindlessRegistry::updateTexture(uint32_t slot, VkImageView view) {
-    RAVEN_ENSURE(slot < m_nextTexture, "updateTexture: slot was never registered");
+    ZODAR_ENSURE(slot < m_nextTexture, "updateTexture: slot was never registered");
     VkDescriptorImageInfo image{VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     write.dstSet = m_set;
@@ -130,8 +130,8 @@ void BindlessRegistry::updateTexture(uint32_t slot, VkImageView view) {
 }
 
 void BindlessRegistry::releaseTexture(uint32_t slot) {
-    RAVEN_ENSURE(slot < m_nextTexture, "releaseTexture: invalid slot");
-    RAVEN_ENSURE(std::find(m_freeTextures.begin(), m_freeTextures.end(), slot) == m_freeTextures.end(),
+    ZODAR_ENSURE(slot < m_nextTexture, "releaseTexture: invalid slot");
+    ZODAR_ENSURE(std::find(m_freeTextures.begin(), m_freeTextures.end(), slot) == m_freeTextures.end(),
                  "releaseTexture: slot released twice");
     m_freeTextures.push_back(slot);
 }
@@ -161,7 +161,7 @@ uint32_t BindlessRegistry::sampler(const SamplerDesc& desc) {
     create.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
 
     VkSampler handle = VK_NULL_HANDLE;
-    RAVEN_VK_CHECK(vkCreateSampler(m_context.device(), &create, nullptr, &handle));
+    ZODAR_VK_CHECK(vkCreateSampler(m_context.device(), &create, nullptr, &handle));
     const auto slot = static_cast<uint32_t>(m_samplers.size());
     m_samplers.push_back(handle);
     m_samplerSlots.emplace(desc, slot);
@@ -189,4 +189,4 @@ void BindlessRegistry::setMaterialBuffer(VkBuffer buffer, VkDeviceSize size) {
     vkUpdateDescriptorSets(m_context.device(), 1, &write, 0, nullptr);
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

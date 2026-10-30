@@ -4,7 +4,7 @@
 
 #include <glm/glm.hpp>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // View frustum planes extracted from a reverse-Z view-projection matrix (Vulkan clip
 // space). Planes point inwards; an infinite far plane is detected and skipped.
@@ -20,4 +20,4 @@ private:
     int m_planeCount = 0;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

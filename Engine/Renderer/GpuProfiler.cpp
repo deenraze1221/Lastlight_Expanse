@@ -6,7 +6,7 @@
 
 #include <vk_mem_alloc.h>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 GpuProfiler::GpuProfiler(const VulkanContext& context, uint32_t framesInFlight, uint32_t maxScopes)
     : m_device(context.device()), m_maxScopes(maxScopes), m_framesInFlight(framesInFlight) {
@@ -22,7 +22,7 @@ GpuProfiler::GpuProfiler(const VulkanContext& context, uint32_t framesInFlight, 
         VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
         info.queryType = VK_QUERY_TYPE_TIMESTAMP;
         info.queryCount = maxScopes * 2;
-        RAVEN_VK_CHECK(vkCreateQueryPool(m_device, &info, nullptr, &slot.pool));
+        ZODAR_VK_CHECK(vkCreateQueryPool(m_device, &info, nullptr, &slot.pool));
     }
 }
 
@@ -62,7 +62,7 @@ void GpuProfiler::beginFrame(VkCommandBuffer cmd, uint32_t slotIndex) {
     if (!m_enabled) {
         return;
     }
-    RAVEN_ENSURE(slotIndex < m_slots.size(), "GpuProfiler slot out of range");
+    ZODAR_ENSURE(slotIndex < m_slots.size(), "GpuProfiler slot out of range");
     Slot& slot = m_slots[slotIndex];
     collect(slot);
     slot.scopes.clear();
@@ -108,4 +108,4 @@ GpuMemoryStats queryMemoryStats(const VulkanContext& context) {
     return stats;
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

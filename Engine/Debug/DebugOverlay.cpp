@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace raven::debug {
+namespace zodar::debug {
 namespace {
 
 void checkResult(VkResult result) {
@@ -48,7 +48,7 @@ std::string bytes(uint64_t b) {
 DebugOverlay::DebugOverlay(gfx::VulkanContext& context, Window* window, VkFormat targetFormat, uint32_t imageCount)
     : m_context(context), m_window(window), m_format(targetFormat) {
     IMGUI_CHECKVERSION();
-    RAVEN_ENSURE(ImGui::GetCurrentContext() == nullptr, "only one DebugOverlay may exist at a time");
+    ZODAR_ENSURE(ImGui::GetCurrentContext() == nullptr, "only one DebugOverlay may exist at a time");
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr; // No imgui.ini next to the executable.
@@ -131,7 +131,7 @@ void DebugOverlay::drawProfiler(const ProfilerSnapshot& s) {
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(400, 0), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.85f);
-    if (!ImGui::Begin("RAVEN Profiler (F1)")) {
+    if (!ImGui::Begin("ZODAR Profiler (F1)")) {
         ImGui::End();
         return;
     }
@@ -192,7 +192,7 @@ void DebugOverlay::drawProfiler(const ProfilerSnapshot& s) {
 }
 
 void DebugOverlay::addToGraph(gfx::RenderGraph& graph, const gfx::RGImage& target) {
-    RAVEN_ENSURE(m_frameStarted, "DebugOverlay::addToGraph without newFrame()");
+    ZODAR_ENSURE(m_frameStarted, "DebugOverlay::addToGraph without newFrame()");
     ImGui::Render();
     m_frameStarted = false;
     ImDrawData* data = ImGui::GetDrawData();
@@ -205,4 +205,4 @@ void DebugOverlay::addToGraph(gfx::RenderGraph& graph, const gfx::RGImage& targe
         [](gfx::PassContext& ctx) { ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ctx.cmd()); });
 }
 
-} // namespace raven::debug
+} // namespace zodar::debug

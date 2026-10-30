@@ -1,4 +1,4 @@
-# Building RAVEN Engine
+# Building ZODAR Engine
 
 ## Requirements
 
@@ -13,7 +13,7 @@
 
 No Vulkan SDK library is linked; the loader is resolved at runtime.
 
-## Pinned dependencies (fetched by `cmake/RavenDependencies.cmake`)
+## Pinned dependencies (fetched by `cmake/ZodarDependencies.cmake`)
 
 | Library | Tag | Commit |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ requires **API 1.3** plus the baseline in ARCHITECTURE.md (descriptor indexing, 
 2. Open **x64 Native Tools Command Prompt for VS 2022**:
 
 ```bat
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DRAVEN_GPU_TESTS=ON
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DZODAR_GPU_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 build\bin\HelloTriangle.exe
@@ -56,7 +56,7 @@ sudo apt install build-essential cmake ninja-build git glslang-tools \
 ```
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DRAVEN_GPU_TESTS=ON
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DZODAR_GPU_TESTS=ON
 ```
 
 ```bash
@@ -77,11 +77,11 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `RAVEN_BUILD_SAMPLES` | ON | Build `Samples/` |
-| `RAVEN_BUILD_TESTS` | ON | Build `RavenTests` (doctest) |
-| `RAVEN_BUILD_TOOLS` | ON | Build `Tools/` (RavenBench) |
-| `RAVEN_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.ravenbench_smoke` (need a video driver) |
-| `RAVEN_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` for engine code |
+| `ZODAR_BUILD_SAMPLES` | ON | Build `Samples/` |
+| `ZODAR_BUILD_TESTS` | ON | Build `ZodarTests` (doctest) |
+| `ZODAR_BUILD_TOOLS` | ON | Build `Tools/` (ZodarBench) |
+| `ZODAR_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.zodarbench_smoke` (need a video driver) |
+| `ZODAR_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` for engine code |
 
 ## HelloTriangle arguments
 
@@ -106,17 +106,29 @@ Without a file it shows a procedural material demo. Left-drag orbits, wheel zoom
 the profiler overlay, Esc quits. `--reference-path` uses the pre-render-graph path,
 `--no-overlay` hides the profiler.
 
-## RavenBench
+## ZodarBench
 
 Deterministic benchmark (fixed camera orbit) writing a JSON report: CPU/GPU frame times
 (avg/p50/p95/p99/max), per-pass GPU times, CPU scopes, draw calls, visible/culled objects,
 triangles, GPU memory and validation counts.
 
 ```
-RavenBench [--scene grid|model] [--model file.glb] [--objects N] [--lights N] [--width W] [--height H]
-           [--warmup N] [--frames N] [--path graph|reference] [--present immediate|low-latency|vsync]
-           [--overlay] [--no-validation] [--output report.json] [--screenshot out.ppm]
+ZodarBench [--scene grid|unique|city|model] [--model file.glb] [--objects N] [--blocks N] [--lights N]
+           [--width W] [--height H] [--warmup N] [--frames N] [--path graph|reference]
+           [--present immediate|low-latency|vsync] [--overlay] [--no-validation] [--sync-validation]
+           [--output report.json] [--screenshot out.ppm]
 ```
+
+| Scene | Content | Measures |
+| --- | --- | --- |
+| `grid` (default) | N objects from 2 meshes x 16 materials, orbit camera | GPU throughput with few (instanced) draw calls |
+| `unique` | N objects, each with its own deformed mesh and material, orbit camera | CPU cost per draw call / state change |
+| `city` | B x B blocks: 4 buildings + 16 props per block, street-level drive | Culling and overdraw: most objects off-screen or hidden |
+| `model` | A glTF file | Real assets |
+
+`perFrame` reports draw calls, visible/culled objects and triangles averaged over the measured
+frames (the view changes along the path); `lastFrame` keeps the final frame's values. The
+screenshot is taken in the middle of the measured path.
 
 Use `--no-validation` for timing runs (validation layers add CPU cost) and a separate run with
 validation for correctness. Reports from a software rasterizer set `"softwareRasterizer": true`.
@@ -130,7 +142,7 @@ sudo apt install g++-mingw-w64-x86-64-posix
 ```
 
 ```bash
-cmake -S . -B build-windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake -DRAVEN_GPU_TESTS=ON
+cmake -S . -B build-windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake -DZODAR_GPU_TESTS=ON
 ```
 
 ```bash
@@ -138,8 +150,8 @@ cmake --build build-windows
 ```
 
 Executables in `build-windows/bin` are statically linked (only Windows system DLLs). Copy them
-with the `shaders/` folder; `RavenGpuTests` finds shaders next to the executable or via
-`RAVEN_SHADER_DIR`.
+with the `shaders/` folder; `ZodarGpuTests` finds shaders next to the executable or via
+`ZODAR_SHADER_DIR`.
 Khronos sample models (e.g. `DamagedHelmet.glb`) are good test inputs; they are not part of
 the repository.
 

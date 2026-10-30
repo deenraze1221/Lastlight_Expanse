@@ -10,10 +10,10 @@
 union SDL_Event;
 struct SDL_Window;
 
-namespace raven {
+namespace zodar {
 
 struct WindowDesc {
-    std::string title = "RAVEN Engine";
+    std::string title = "ZODAR Engine";
     uint32_t width = 1280;
     uint32_t height = 720;
     bool resizable = true;
@@ -62,4 +62,4 @@ private:
     bool m_resized = false;
 };
 
-} // namespace raven
+} // namespace zodar

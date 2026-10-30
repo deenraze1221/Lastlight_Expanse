@@ -1,4 +1,4 @@
-# RAVEN Engine — Roadmap
+# ZODAR Engine — Roadmap
 
 Each milestone ends with: clean build (GCC/Clang, and MSVC once verified), passing tests,
 validation-clean GPU runs, screenshots for graphics work, and updated docs. Nothing is marked
@@ -25,7 +25,7 @@ textures/samplers, materials (PBR/unlit + custom shaders), forward lighting, glT
 
 | Stage | Contents | Tier | Status |
 | --- | --- | --- | --- |
-| S1 Foundation | Capability table + fallbacks, timeline semaphores + deletion queue, frame scratch allocator, render graph v1, scene/resolve ported (reference path kept), GPU timestamps + CPU timers, pipeline cache on disk, ImGui profiler, RavenBench | 1 | **Done — awaiting review** |
+| S1 Foundation | Capability table + fallbacks, timeline semaphores + deletion queue, frame scratch allocator, render graph v1, scene/resolve ported (reference path kept), GPU timestamps + CPU timers, pipeline cache on disk, ImGui profiler, ZodarBench | 1 | **Done — awaiting review** |
 | S2 GPU scene | Shared geometry buffers (meshoptimizer), vertex pulling, persistent instances, compute frustum culling, multi-draw indirect count | 1 | Planned |
 | S3 Assets | Async transfer queue, KTX2 + BCn (asset compiler), mips, streaming design | 1 | Planned |
 | S4 Lighting | Depth prepass (normals/roughness/velocity), clustered Forward+, spot lights, multi-scatter GGX, IBL, emissive | 1 | Planned |
@@ -38,7 +38,7 @@ textures/samplers, materials (PBR/unlit + custom shaders), forward lighting, glT
 | S11 Experimental | DDGI / ray-traced GI, ray-traced reflections, SSGI, VSM, planar reflections, lightmaps | 3 | Planned (hardware/profiling dependent) |
 
 Rules: one subsystem at a time; each stage ends with clean builds, passing unit + GPU tests
-(synchronization validation on), screenshots, a Windows build and RavenBench numbers measured on
+(synchronization validation on), screenshots, a Windows build and ZodarBench numbers measured on
 a real GPU (RTX 4070). Software-rasterizer numbers are never reported as GPU performance. Every
 optional GPU feature has a fallback; no vendor-specific feature is mandatory.
 

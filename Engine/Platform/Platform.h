@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <string>
 
-namespace raven {
+namespace zodar {
 
 // Owns process-wide platform initialization (SDL video subsystem).
 // Exactly one instance must outlive every Window.
@@ -22,4 +22,4 @@ public:
     static std::filesystem::path userDataPath(const std::string& organization, const std::string& application);
 };
 
-} // namespace raven
+} // namespace zodar

@@ -1,4 +1,4 @@
-add_executable(RavenTests
+add_executable(ZodarTests
     main.cpp
     Assets/GltfLoaderTests.cpp
     Assets/ImageDataTests.cpp
@@ -15,30 +15,30 @@ add_executable(RavenTests
     Renderer/DeviceSelectionTests.cpp
     Renderer/SwapchainSupportTests.cpp
     Renderer/VulkanCheckTests.cpp)
-target_link_libraries(RavenTests PRIVATE Raven::Renderer Raven::stb doctest::doctest)
-raven_set_warnings(RavenTests)
+target_link_libraries(ZodarTests PRIVATE Zodar::Renderer Zodar::stb doctest::doctest)
+zodar_set_warnings(ZodarTests)
 
-add_test(NAME unit COMMAND RavenTests)
+add_test(NAME unit COMMAND ZodarTests)
 
 # Runs the real sample on whatever Vulkan device and video driver are available
 # (a GPU locally; lavapipe + SDL offscreen or Xvfb in the cloud). Fails on any
 # validation error or if the frame cannot be read back.
-if(RAVEN_GPU_TESTS)
+if(ZODAR_GPU_TESTS)
     # Engine subsystems on a headless Vulkan device (no window), validation enforced.
-    add_executable(RavenGpuTests
+    add_executable(ZodarGpuTests
         Gpu/main.cpp
         Gpu/ResourceTests.cpp
         Gpu/TextureTests.cpp
         Gpu/SceneRendererTests.cpp
         Gpu/RenderGraphTests.cpp
         Gpu/DebugOverlayTests.cpp)
-    target_link_libraries(RavenGpuTests PRIVATE Raven::Renderer Raven::Debug doctest::doctest)
-    raven_set_warnings(RavenGpuTests)
-    target_compile_definitions(RavenGpuTests PRIVATE RAVEN_TEST_SHADER_DIR="${RAVEN_OUTPUT_DIR}/shaders")
-    raven_compile_shaders(RavenGpuTests SOURCES
+    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::Debug doctest::doctest)
+    zodar_set_warnings(ZodarGpuTests)
+    target_compile_definitions(ZodarGpuTests PRIVATE ZODAR_TEST_SHADER_DIR="${ZODAR_OUTPUT_DIR}/shaders")
+    zodar_compile_shaders(ZodarGpuTests SOURCES
         Gpu/Shaders/test_sample.vert
         Gpu/Shaders/test_sample.frag)
-    add_test(NAME gpu.subsystems COMMAND RavenGpuTests)
+    add_test(NAME gpu.subsystems COMMAND ZodarGpuTests)
     set_tests_properties(gpu.subsystems PROPERTIES TIMEOUT 300)
 
     add_test(NAME gpu.hello_triangle
@@ -47,8 +47,15 @@ if(RAVEN_GPU_TESTS)
     add_test(NAME gpu.model_viewer_demo
         COMMAND ModelViewer --frames 30 --width 640 --height 360 --screenshot ${CMAKE_BINARY_DIR}/model_viewer_demo.ppm)
     set_tests_properties(gpu.model_viewer_demo PROPERTIES TIMEOUT 300)
-    add_test(NAME gpu.ravenbench_smoke
-        COMMAND RavenBench --objects 256 --lights 8 --width 640 --height 360 --warmup 5 --frames 20
-                --output ${CMAKE_BINARY_DIR}/ravenbench_smoke.json)
-    set_tests_properties(gpu.ravenbench_smoke PROPERTIES TIMEOUT 300)
+    add_test(NAME gpu.zodarbench_smoke
+        COMMAND ZodarBench --objects 256 --lights 8 --width 640 --height 360 --warmup 5 --frames 20
+                --output ${CMAKE_BINARY_DIR}/zodarbench_smoke.json)
+    set_tests_properties(gpu.zodarbench_smoke PROPERTIES TIMEOUT 300)
+    add_test(NAME gpu.zodarbench_unique_smoke
+        COMMAND ZodarBench --scene unique --objects 256 --width 640 --height 360 --warmup 3 --frames 10
+                --sync-validation --output ${CMAKE_BINARY_DIR}/zodarbench_unique_smoke.json)
+    add_test(NAME gpu.zodarbench_city_smoke
+        COMMAND ZodarBench --scene city --blocks 6 --width 640 --height 360 --warmup 3 --frames 10
+                --sync-validation --output ${CMAKE_BINARY_DIR}/zodarbench_city_smoke.json)
+    set_tests_properties(gpu.zodarbench_unique_smoke gpu.zodarbench_city_smoke PROPERTIES TIMEOUT 300)
 endif()

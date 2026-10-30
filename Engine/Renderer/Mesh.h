@@ -6,11 +6,11 @@
 #include <string>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class UploadBatch;
 
-// Mesh resident in device-local memory. Vertex layout: raven::Vertex.
+// Mesh resident in device-local memory. Vertex layout: zodar::Vertex.
 class GpuMesh {
 public:
     GpuMesh() = default;
@@ -38,4 +38,4 @@ private:
     std::string m_name;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

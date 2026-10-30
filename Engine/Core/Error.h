@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-namespace raven {
+namespace zodar {
 
 // Unrecoverable engine error (failed initialization, lost device, missing files).
 // Recoverable conditions are reported through return values instead.
@@ -14,17 +14,17 @@ public:
     explicit Error(const std::string& message) : std::runtime_error(message) {}
 };
 
-// Logs the message with its source location and throws raven::Error.
+// Logs the message with its source location and throws zodar::Error.
 [[noreturn]] void fail(std::string_view message,
                        std::source_location location = std::source_location::current());
 
-} // namespace raven
+} // namespace zodar
 
 // Checks an invariant in every build configuration and fails with a message.
-#define RAVEN_ENSURE(condition, message)                                    \
+#define ZODAR_ENSURE(condition, message)                                    \
     do {                                                                    \
         if (!(condition)) {                                                 \
-            ::raven::fail(std::string("Check failed: " #condition " - ") +  \
+            ::zodar::fail(std::string("Check failed: " #condition " - ") +  \
                           std::string(message));                            \
         }                                                                   \
     } while (false)

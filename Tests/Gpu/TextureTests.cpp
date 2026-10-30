@@ -8,9 +8,9 @@
 #include <cstdlib>
 #include <vector>
 
-using namespace raven;
-using namespace raven::gfx;
-using raven::test::gpu;
+using namespace zodar;
+using namespace zodar::gfx;
+using zodar::test::gpu;
 
 namespace {
 
@@ -23,8 +23,8 @@ struct Push {
 // Renders a fullscreen triangle that samples one bindless texture into a small RGBA8 target.
 std::vector<uint8_t> renderSample(BindlessRegistry& registry, uint32_t size, const Push& push) {
     const auto& ctx = *gpu().context;
-    ShaderModule vs(ctx.device(), loadSpirv(raven::test::shaderDir() + "/test_sample.vert.spv"));
-    ShaderModule fs(ctx.device(), loadSpirv(raven::test::shaderDir() + "/test_sample.frag.spv"));
+    ShaderModule vs(ctx.device(), loadSpirv(zodar::test::shaderDir() + "/test_sample.vert.spv"));
+    ShaderModule fs(ctx.device(), loadSpirv(zodar::test::shaderDir() + "/test_sample.frag.spv"));
     GraphicsPipelineDesc desc;
     desc.vertexShader = vs.handle();
     desc.fragmentShader = fs.handle();
@@ -86,7 +86,7 @@ ImageData quadrants() {
 } // namespace
 
 TEST_CASE("textures: nearest sampling returns exact texels through the bindless table") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     BindlessRegistry registry(*gpu().context);
     Texture texture;
     {
@@ -104,7 +104,7 @@ TEST_CASE("textures: nearest sampling returns exact texels through the bindless 
 }
 
 TEST_CASE("textures: linear sampling blends neighbours") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     BindlessRegistry registry(*gpu().context);
     UploadBatch batch(*gpu().upload);
     Texture texture(batch, registry, quadrants());
@@ -119,7 +119,7 @@ TEST_CASE("textures: linear sampling blends neighbours") {
 }
 
 TEST_CASE("textures: sRGB textures decode to linear and mips are selectable") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     BindlessRegistry registry(*gpu().context);
     // sRGB 188 is linear ~0.5; level 1 is forced to a different colour to prove LOD selection.
     ImageData image = ImageData::solid(2, 2, 188, 188, 188, 255, ColorSpace::Srgb, "Srgb");
@@ -137,7 +137,7 @@ TEST_CASE("textures: sRGB textures decode to linear and mips are selectable") {
 }
 
 TEST_CASE("bindless registry: slot reuse and sampler deduplication") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     BindlessRegistry registry(*gpu().context);
     CHECK(registry.sampler(SamplerDesc::nearest()) == registry.sampler(SamplerDesc::nearest()));
     CHECK(registry.sampler(SamplerDesc::linear()) != registry.sampler(SamplerDesc::nearest()));

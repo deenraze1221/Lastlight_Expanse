@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // --- RenderGraphResources ----------------------------------------------------------------
 
@@ -64,7 +64,7 @@ RenderGraphResources::Physical& RenderGraphResources::acquire(const RGImageDesc&
     if (usage & VK_IMAGE_USAGE_SAMPLED_BIT) {
         p->bindlessSlot = m_bindless.registerTexture(p->image.view());
     }
-    RAVEN_LOG_DEBUG("Render graph: new transient '{}' {}x{}", name, desc.width, desc.height);
+    ZODAR_LOG_DEBUG("Render graph: new transient '{}' {}x{}", name, desc.width, desc.height);
     m_images.push_back(std::move(p));
     return *m_images.back();
 }
@@ -92,22 +92,22 @@ void PassBuilder::depthAttachment(RGImage image, LoadOp load, float clearDepth, 
 }
 
 void PassBuilder::read(RGImage image, ResourceUsage usage) {
-    RAVEN_ENSURE(!isWriteUsage(usage), "read() with a write usage");
+    ZODAR_ENSURE(!isWriteUsage(usage), "read() with a write usage");
     m_graph.addUse(m_pass, image.index, usage, false);
 }
 
 void PassBuilder::write(RGImage image, ResourceUsage usage) {
-    RAVEN_ENSURE(isWriteUsage(usage), "write() with a read usage");
+    ZODAR_ENSURE(isWriteUsage(usage), "write() with a read usage");
     m_graph.addUse(m_pass, image.index, usage, false);
 }
 
 void PassBuilder::read(RGBuffer buffer, ResourceUsage usage) {
-    RAVEN_ENSURE(!isWriteUsage(usage), "read() with a write usage");
+    ZODAR_ENSURE(!isWriteUsage(usage), "read() with a write usage");
     m_graph.addUse(m_pass, buffer.index, usage, false);
 }
 
 void PassBuilder::write(RGBuffer buffer, ResourceUsage usage) {
-    RAVEN_ENSURE(isWriteUsage(usage), "write() with a read usage");
+    ZODAR_ENSURE(isWriteUsage(usage), "write() with a read usage");
     m_graph.addUse(m_pass, buffer.index, usage, false);
 }
 
@@ -125,7 +125,7 @@ VkBuffer PassContext::buffer(RGBuffer h) const { return m_graph.m_res.at(h.index
 
 uint32_t PassContext::bindlessIndex(RGImage h) const {
     const uint32_t slot = m_graph.m_res.at(h.index).bindless;
-    RAVEN_ENSURE(slot != UINT32_MAX, "image '" + m_graph.m_res[h.index].name + "' is not sampled through bindless");
+    ZODAR_ENSURE(slot != UINT32_MAX, "image '" + m_graph.m_res[h.index].name + "' is not sampled through bindless");
     return slot;
 }
 
@@ -134,7 +134,7 @@ uint32_t PassContext::bindlessIndex(RGImage h) const {
 RenderGraph::RenderGraph(RenderGraphResources& resources) : m_resources(resources) {}
 
 RGImage RenderGraph::createImage(std::string name, const RGImageDesc& desc) {
-    RAVEN_ENSURE(desc.width > 0 && desc.height > 0 && desc.format != VK_FORMAT_UNDEFINED,
+    ZODAR_ENSURE(desc.width > 0 && desc.height > 0 && desc.format != VK_FORMAT_UNDEFINED,
                  "invalid transient image '" + name + "'");
     Resource r;
     r.name = std::move(name);
@@ -166,9 +166,9 @@ RGBuffer RenderGraph::importBuffer(std::string name, const RGImportedBuffer& buf
 }
 
 void RenderGraph::addUse(uint32_t pass, uint32_t resource, ResourceUsage usage, bool discard) {
-    RAVEN_ENSURE(resource < m_res.size(), "pass '" + m_passes[pass].name + "' uses an invalid resource handle");
+    ZODAR_ENSURE(resource < m_res.size(), "pass '" + m_passes[pass].name + "' uses an invalid resource handle");
     Resource& r = m_res[resource];
-    RAVEN_ENSURE(r.isImage || usageState(usage).layout == VK_IMAGE_LAYOUT_UNDEFINED ||
+    ZODAR_ENSURE(r.isImage || usageState(usage).layout == VK_IMAGE_LAYOUT_UNDEFINED ||
                      usage == ResourceUsage::StorageRead || usage == ResourceUsage::StorageWrite ||
                      usage == ResourceUsage::StorageReadWrite || usage == ResourceUsage::TransferSrc ||
                      usage == ResourceUsage::TransferDst,
@@ -178,12 +178,12 @@ void RenderGraph::addUse(uint32_t pass, uint32_t resource, ResourceUsage usage, 
 }
 
 void RenderGraph::addPass(std::string name, PassType type, const SetupFn& setup, ExecuteFn execute) {
-    RAVEN_ENSURE(!m_executed, "render graph already executed");
+    ZODAR_ENSURE(!m_executed, "render graph already executed");
     m_passes.push_back({std::move(name), type, {}, {}, std::nullopt, false, std::move(execute)});
     PassBuilder builder(*this, static_cast<uint32_t>(m_passes.size() - 1));
     setup(builder);
     if (type != PassType::Raster) {
-        RAVEN_ENSURE(m_passes.back().colors.empty() && !m_passes.back().depth,
+        ZODAR_ENSURE(m_passes.back().colors.empty() && !m_passes.back().depth,
                      "only raster passes may declare attachments");
     }
     m_plan.reset();
@@ -264,7 +264,7 @@ void RenderGraph::recordBarriers(VkCommandBuffer cmd, const std::vector<PlannedB
 }
 
 void RenderGraph::execute(const FrameInfo& frame) {
-    RAVEN_ENSURE(!m_executed, "render graph executed twice");
+    ZODAR_ENSURE(!m_executed, "render graph executed twice");
     m_executed = true;
     const GraphPlan& plan = compile();
     const VkCommandBuffer cmd = frame.commandBuffer;
@@ -339,7 +339,7 @@ void RenderGraph::execute(const FrameInfo& frame) {
                 depth.clearValue = pass.depth->clear;
                 if (area.width == 0) area = r.extent;
             }
-            RAVEN_ENSURE(area.width > 0, "raster pass '" + pass.name + "' has no attachments");
+            ZODAR_ENSURE(area.width > 0, "raster pass '" + pass.name + "' has no attachments");
             VkRenderingInfo rendering{VK_STRUCTURE_TYPE_RENDERING_INFO};
             rendering.renderArea = {{0, 0}, area};
             rendering.layerCount = 1;
@@ -370,4 +370,4 @@ void RenderGraph::execute(const FrameInfo& frame) {
     recordBarriers(cmd, plan.finalBarriers);
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

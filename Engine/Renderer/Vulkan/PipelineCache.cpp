@@ -7,7 +7,7 @@
 #include <fstream>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 bool isPipelineCacheCompatible(std::span<const uint8_t> data, uint32_t vendorId, uint32_t deviceId,
                                const std::array<uint8_t, VK_UUID_SIZE>& uuid, std::string* reason) {
@@ -42,7 +42,7 @@ PipelineCache::PipelineCache(VkDevice device, uint32_t vendorId, uint32_t device
             file.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(data.size()));
             std::string reason;
             if (!file || !isPipelineCacheCompatible(data, vendorId, deviceId, uuid, &reason)) {
-                RAVEN_LOG_WARN("Ignoring pipeline cache '{}': {}", m_path.string(), file ? reason : "read error");
+                ZODAR_LOG_WARN("Ignoring pipeline cache '{}': {}", m_path.string(), file ? reason : "read error");
                 data.clear();
             }
         }
@@ -50,10 +50,10 @@ PipelineCache::PipelineCache(VkDevice device, uint32_t vendorId, uint32_t device
     VkPipelineCacheCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
     info.initialDataSize = data.size();
     info.pInitialData = data.empty() ? nullptr : data.data();
-    RAVEN_VK_CHECK(vkCreatePipelineCache(device, &info, nullptr, &m_cache));
+    ZODAR_VK_CHECK(vkCreatePipelineCache(device, &info, nullptr, &m_cache));
     m_loadedBytes = data.size();
     if (!m_path.empty()) {
-        RAVEN_LOG_INFO("Pipeline cache: {} ({} KiB loaded)", m_path.string(), m_loadedBytes / 1024);
+        ZODAR_LOG_INFO("Pipeline cache: {} ({} KiB loaded)", m_path.string(), m_loadedBytes / 1024);
     }
 }
 
@@ -81,16 +81,16 @@ size_t PipelineCache::save() const {
         std::ofstream file(temp, std::ios::binary | std::ios::trunc);
         file.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(size));
         if (!file) {
-            RAVEN_LOG_WARN("Cannot write pipeline cache '{}'", temp.string());
+            ZODAR_LOG_WARN("Cannot write pipeline cache '{}'", temp.string());
             return 0;
         }
     }
     std::filesystem::rename(temp, m_path, ec);
     if (ec) {
-        RAVEN_LOG_WARN("Cannot replace pipeline cache '{}': {}", m_path.string(), ec.message());
+        ZODAR_LOG_WARN("Cannot replace pipeline cache '{}': {}", m_path.string(), ec.message());
         return 0;
     }
     return size;
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

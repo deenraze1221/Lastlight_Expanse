@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace raven {
+namespace zodar {
 
 void CpuProfiler::beginFrame() {
     m_current.clear();
@@ -15,7 +15,7 @@ void CpuProfiler::beginFrame() {
 }
 
 void CpuProfiler::endFrame() {
-    RAVEN_ENSURE(m_depth == 0, "CpuProfiler::endFrame with open scopes");
+    ZODAR_ENSURE(m_depth == 0, "CpuProfiler::endFrame with open scopes");
     m_lastFrameMs = std::chrono::duration<double, std::milli>(Clock::now() - m_frameStart).count();
     m_last = std::move(m_current);
     m_current.clear();
@@ -29,7 +29,7 @@ uint32_t CpuProfiler::begin(const char* name) {
 }
 
 void CpuProfiler::end(uint32_t scope) {
-    RAVEN_ENSURE(scope < m_current.size(), "invalid CPU profiler scope");
+    ZODAR_ENSURE(scope < m_current.size(), "invalid CPU profiler scope");
     m_current[scope].ms = std::chrono::duration<double, std::milli>(Clock::now() - m_open[scope].start).count();
     --m_depth;
 }
@@ -61,4 +61,4 @@ float History::percentile(float fraction) const {
     return sorted[index];
 }
 
-} // namespace raven
+} // namespace zodar

@@ -8,16 +8,16 @@
 #include <unordered_map>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class VulkanContext;
 
 // Global descriptor set 0 shared by every engine and game shader:
-//   binding 0: texture2D  ravenTextures[kMaxTextures]  (update-after-bind, partially bound)
-//   binding 1: sampler    ravenSamplers[kMaxSamplers]  (update-after-bind, partially bound)
+//   binding 0: texture2D  zodarTextures[kMaxTextures]  (update-after-bind, partially bound)
+//   binding 1: sampler    zodarSamplers[kMaxSamplers]  (update-after-bind, partially bound)
 //   binding 2: storage buffer of material parameters   (written by MaterialSystem)
 // Shaders index these arrays with indices stored in materials or push constants
-// (see Shaders/Include/raven/bindless.glsl).
+// (see Shaders/Include/zodar/bindless.glsl).
 class BindlessRegistry {
 public:
     static constexpr uint32_t kMaxTextures = 4096;
@@ -58,4 +58,4 @@ private:
     std::unordered_map<SamplerDesc, uint32_t, SamplerDescHash> m_samplerSlots;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

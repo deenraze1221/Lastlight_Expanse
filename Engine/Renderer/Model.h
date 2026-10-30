@@ -9,7 +9,7 @@
 #include <optional>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class UploadBatch;
 
@@ -52,4 +52,4 @@ private:
     Bounds m_bounds;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

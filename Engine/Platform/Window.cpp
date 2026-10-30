@@ -6,7 +6,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
-namespace raven {
+namespace zodar {
 
 Window::Window(const WindowDesc& desc) {
     SDL_WindowFlags flags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
@@ -19,7 +19,7 @@ Window::Window(const WindowDesc& desc) {
         fail(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
     }
     const auto size = framebufferSize();
-    RAVEN_LOG_INFO("Window created: '{}' {}x{} (drawable {}x{})", desc.title, desc.width, desc.height,
+    ZODAR_LOG_INFO("Window created: '{}' {}x{} (drawable {}x{})", desc.title, desc.width, desc.height,
                    size.width, size.height);
 }
 
@@ -99,4 +99,4 @@ void Window::destroySurface(VkInstance instance, VkSurfaceKHR surface) const {
     SDL_Vulkan_DestroySurface(instance, surface, nullptr);
 }
 
-} // namespace raven
+} // namespace zodar

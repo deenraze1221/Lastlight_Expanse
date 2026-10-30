@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace raven {
+namespace zodar {
 
 // The engine's single static vertex format (64 bytes). Colours are linear RGBA.
 // Tangent.w stores the bitangent sign (glTF convention).
@@ -49,4 +49,4 @@ struct MeshData {
     std::string validate() const;
 };
 
-} // namespace raven
+} // namespace zodar

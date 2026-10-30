@@ -1,4 +1,4 @@
-add_library(RavenRenderer STATIC
+add_library(ZodarRenderer STATIC
     Renderer.cpp
     Camera.cpp
     Mesh.cpp
@@ -27,14 +27,14 @@ add_library(RavenRenderer STATIC
     Vulkan/VulkanSwapchain.cpp
     Vulkan/VulkanPipeline.cpp
     Vulkan/VmaImplementation.cpp)
-add_library(Raven::Renderer ALIAS RavenRenderer)
+add_library(Zodar::Renderer ALIAS ZodarRenderer)
 
-target_link_libraries(RavenRenderer
-    PUBLIC Raven::Core Raven::Assets Raven::Platform Raven::volk Raven::VMA)
-raven_set_warnings(RavenRenderer)
+target_link_libraries(ZodarRenderer
+    PUBLIC Zodar::Core Zodar::Assets Zodar::Platform Zodar::volk Zodar::VMA)
+zodar_set_warnings(ZodarRenderer)
 
 # Built-in engine shaders (compiled to bin/shaders).
-raven_compile_shaders(RavenRenderer SOURCES
+zodar_compile_shaders(ZodarRenderer SOURCES
     ${PROJECT_SOURCE_DIR}/Shaders/Engine/mesh.vert
     ${PROJECT_SOURCE_DIR}/Shaders/Engine/pbr.frag
     ${PROJECT_SOURCE_DIR}/Shaders/Engine/unlit.frag

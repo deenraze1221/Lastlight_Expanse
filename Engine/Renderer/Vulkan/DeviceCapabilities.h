@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // Everything the engine needs to know about a physical device, gathered once.
 // Required features form the engine baseline (any current desktop Vulkan 1.3 driver from
@@ -95,4 +95,4 @@ ResolvedFeatures resolveFeatures(const DeviceCapabilities& caps);
 // Queries a physical device. `surface` may be VK_NULL_HANDLE (headless).
 DeviceCapabilities queryCapabilities(VkPhysicalDevice device, VkSurfaceKHR surface);
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 // Pure planning stage of the render graph: pass culling and barrier generation.
 // No Vulkan objects are touched, so the synchronization logic is unit tested directly.
@@ -46,8 +46,8 @@ struct GraphPlan {
     std::vector<bool> resourceUsed;                     // Per resource: referenced by an executed pass.
 };
 
-// Throws raven::Error for invalid graphs (e.g. reading a transient before any write, or
+// Throws zodar::Error for invalid graphs (e.g. reading a transient before any write, or
 // one pass using an image in two different layouts).
 GraphPlan planGraph(const std::vector<PlanResource>& resources, const std::vector<PlanPass>& passes);
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

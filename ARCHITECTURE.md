@@ -1,4 +1,4 @@
-# RAVEN Engine — Architecture
+# ZODAR Engine — Architecture
 
 ## Principles
 
@@ -7,11 +7,11 @@
 2. **Engine and games are separate.** Engine modules never contain game rules. A game is a
    separate CMake target under `Games/<Name>/` that links engine modules through their public
    headers.
-3. **One module = one static library** (`Raven::Core`, `Raven::Platform`, `Raven::Renderer`, ...).
+3. **One module = one static library** (`Zodar::Core`, `Zodar::Platform`, `Zodar::Renderer`, ...).
    Dependencies point downwards only and are enforced by CMake target links.
 4. **Explicit ownership (RAII).** Every Vulkan object has exactly one owner whose destructor
    releases it. Owners are non-copyable. No global Vulkan state besides volk's function table.
-5. **Fail loudly at init, recover at runtime.** Initialization failures throw `raven::Error`
+5. **Fail loudly at init, recover at runtime.** Initialization failures throw `zodar::Error`
    with file/line. Expected runtime conditions (swapchain out of date, minimized window) are
    return values, not exceptions.
 6. **Build only what a milestone needs.** Libraries and abstractions are added when a real
@@ -20,7 +20,7 @@
 ## Module graph
 
 ```
-            Games/<Game>   Samples/*   Tools/RavenBench   Tests
+            Games/<Game>   Samples/*   Tools/ZodarBench   Tests
                        \          |           /             /
                         +------ Debug (ImGui) ------+-------+
                                      |
@@ -40,7 +40,7 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 
 | Module | Files | Responsibility |
 | --- | --- | --- |
-| Core | `Log`, `Error`, `ImageIO` | spdlog-based engine logger, `raven::Error` + `fail()` + `RAVEN_ENSURE`, PPM writer for screenshots |
+| Core | `Log`, `Error`, `ImageIO` | spdlog-based engine logger, `zodar::Error` + `fail()` + `ZODAR_ENSURE`, PPM writer for screenshots |
 | Platform | `Platform`, `Window` | SDL3 lifetime, window + event pump, Vulkan WSI glue (loader, instance extensions, surface) |
 | Renderer | `Renderer` | Frames in flight, acquire/submit/present, swapchain rebuild, screenshot readback |
 | Assets | `MeshData`, `ImageData`, `ModelData`, `Primitives`, `GltfLoader` | Engine vertex (64 B), mesh/tangent/normal generation, RGBA8 images with colour-space-correct mips, glTF 2.0 import (cgltf, stb_image) |
@@ -59,7 +59,7 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | | `VulkanSwapchain` | Swapchain, image views, per-image present semaphores, recreation |
 | | `VulkanPipeline` | SPIR-V loading, `ShaderModule`, minimal `GraphicsPipeline` |
 | | `DeviceSelection`, `SwapchainSupport` | Pure, unit-tested selection policies |
-| | `VulkanCheck` | `RAVEN_VK_CHECK`, `VkResult` names |
+| | `VulkanCheck` | `ZODAR_VK_CHECK`, `VkResult` names |
 
 ## Vulkan decisions
 
@@ -104,7 +104,7 @@ Vulkan directly.
 
 ## Rendering: capabilities, not styles
 
-RAVEN does not ship visual styles or "profiles". The engine provides general-purpose
+ZODAR does not ship visual styles or "profiles". The engine provides general-purpose
 rendering capabilities; each game composes them into its own look.
 
 | Engine provides (style-neutral) | Game decides |
@@ -128,20 +128,20 @@ public engine capabilities.
 
 ## Shader interface
 
-Engine shader library in `Shaders/Include/raven/` (included as `#include "raven/x.glsl"`):
+Engine shader library in `Shaders/Include/zodar/` (included as `#include "zodar/x.glsl"`):
 `bindless.glsl`, `scene.glsl` (material table + buffer-reference frame/instance data), `vertex.glsl` (standard
-inputs + `ravenTransformVertex()`), `surface.glsl` (base colour, alpha mask, normal mapping),
+inputs + `zodarTransformVertex()`), `surface.glsl` (base colour, alpha mask, normal mapping),
 `lighting.glsl` (GGX PBR), `fullscreen.glsl`. A material shader is any vertex/fragment pair
 registered with `MaterialSystem::registerShader`; games implement their own looks this way.
 
 ## Conventions
 
-- Namespaces: `raven` (core/platform), `raven::gfx` (renderer). Types `PascalCase`, functions
-  `camelCase`, members `m_name`, constants `kName`, macros `RAVEN_`.
+- Namespaces: `zodar` (core/platform), `zodar::gfx` (renderer). Types `PascalCase`, functions
+  `camelCase`, members `m_name`, constants `kName`, macros `ZODAR_`.
 - Headers are included as `"Module/File.h"` relative to `Engine/`.
 - Third-party code is fetched and compiled as SYSTEM; engine code is built with
   `-Wall -Wextra -Wpedantic -Wshadow` (or `/W4`), optionally `-Werror`.
-- Shaders: GLSL → SPIR-V at build time (`raven_compile_shaders`), output to `bin/shaders/`.
+- Shaders: GLSL → SPIR-V at build time (`zodar_compile_shaders`), output to `bin/shaders/`.
   Engine-wide shaders will live in top-level `Shaders/`; sample-only shaders stay with the sample.
 
 ## Known architectural debts (tracked)

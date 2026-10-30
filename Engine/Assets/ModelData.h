@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace raven {
+namespace zodar {
 
 // Renderer-independent sampler state as authored in the source file.
 struct ModelSampler {
@@ -74,7 +74,7 @@ struct GltfLoadOptions {
 // Loads .gltf (external or embedded buffers/images) and .glb files. Supports static
 // triangle meshes, metallic-roughness materials, KHR_materials_unlit and
 // KHR_materials_emissive_strength. Skins, morph targets, animations, cameras, lights and
-// texture transforms are reported in `warnings`. Throws raven::Error on invalid files.
+// texture transforms are reported in `warnings`. Throws zodar::Error on invalid files.
 ModelData loadGltf(const std::filesystem::path& path, const GltfLoadOptions& options = {});
 
-} // namespace raven
+} // namespace zodar

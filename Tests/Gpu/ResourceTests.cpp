@@ -9,11 +9,11 @@
 #include <numeric>
 #include <vector>
 
-using namespace raven::gfx;
-using raven::test::gpu;
+using namespace zodar::gfx;
+using zodar::test::gpu;
 
 TEST_CASE("gpu resources: device-local buffer upload and readback round trip") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     std::vector<uint32_t> data(4096);
     std::iota(data.begin(), data.end(), 7u);
 
@@ -34,7 +34,7 @@ TEST_CASE("gpu resources: device-local buffer upload and readback round trip") {
 }
 
 TEST_CASE("gpu resources: mapped upload buffer write") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     GpuBuffer buffer(*gpu().context, {256, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::Upload, "Mapped"});
     REQUIRE(buffer.mapped() != nullptr);
     const float values[4] = {1.0f, 2.0f, 3.0f, 4.0f};
@@ -45,7 +45,7 @@ TEST_CASE("gpu resources: mapped upload buffer write") {
 }
 
 TEST_CASE("gpu resources: buffer and image ownership moves") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     GpuBuffer a(*gpu().context, {64, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MemoryUsage::Upload, "A"});
     const VkBuffer handle = a.handle();
     GpuBuffer b(std::move(a));
@@ -62,7 +62,7 @@ TEST_CASE("gpu resources: buffer and image ownership moves") {
 }
 
 TEST_CASE("gpu resources: mip chain upload and per-mip readback") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     const uint32_t size = 16;
     const uint32_t mips = fullMipCount(size, size);
     CHECK(mips == 5);
@@ -93,7 +93,7 @@ TEST_CASE("gpu resources: mip chain upload and per-mip readback") {
 }
 
 TEST_CASE("gpu resources: invalid uploads are rejected") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     GpuImage image(*gpu().context, {4, 4, VK_FORMAT_R8G8B8A8_UNORM,
                                     VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 1, "Bad"});
     std::vector<uint8_t> tooSmall(10);
@@ -114,7 +114,7 @@ TEST_CASE("gpu resources: depth image aspect") {
 #include "Renderer/Resources/FrameAllocator.h"
 
 TEST_CASE("frame allocator: alignment, growth, addresses and slot recycling") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     FrameAllocator scratch(*gpu().context, 2, 1024);
     scratch.beginFrame(0);
     const auto a = scratch.allocate(100);
@@ -142,7 +142,7 @@ TEST_CASE("frame allocator: alignment, growth, addresses and slot recycling") {
 }
 
 TEST_CASE("deletion queue: retired GPU objects are destroyed after their submission completes") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     auto buffer = std::make_shared<GpuBuffer>(*gpu().context,
                                               BufferDesc{256, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, MemoryUsage::Upload, "Retired"});
     bool destroyed = false;
@@ -158,19 +158,20 @@ TEST_CASE("deletion queue: retired GPU objects are destroyed after their submiss
 }
 
 #include "Renderer/SceneRenderer.h"
+#include "../Support/TempFile.h"
 
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 
 TEST_CASE("pipeline cache: persisted to disk, reloaded, corrupted files ignored") {
-    const auto path = std::filesystem::temp_directory_path() / "raven_test_pipeline_cache.bin";
-    std::filesystem::remove(path);
+    const zodar::test::TempFile cacheFile("zodar_test_pipeline_cache.bin");
+    const std::filesystem::path& path = cacheFile.path();
     const auto buildPipelines = [&](size_t* loaded) {
         VulkanContext context({"PipelineCacheTest", true, false, path}, nullptr);
         *loaded = context.pipelineCacheObject()->loadedBytes();
         UploadContext upload(context);
-        SceneRenderer scene(context, upload, {raven::test::shaderDir()});
+        SceneRenderer scene(context, upload, {zodar::test::shaderDir()});
         const auto start = std::chrono::steady_clock::now();
         for (AlphaMode mode : {AlphaMode::Opaque, AlphaMode::Blend}) {
             for (bool twoSided : {false, true}) {
@@ -200,8 +201,8 @@ TEST_CASE("pipeline cache: persisted to disk, reloaded, corrupted files ignored"
     MESSAGE("8 pipelines: cold " << cold << " ms, warm " << warm << " ms, cache " << fileSize
                                  << " bytes (driver-dependent; informational)");
 
-    { std::ofstream(path, std::ios::binary) << "definitely not a pipeline cache"; }
+    cacheFile.write("definitely not a pipeline cache");
     buildPipelines(&loaded);
     CHECK(loaded == 0); // Rejected before reaching the driver, rebuilt and saved again.
-    std::filesystem::remove(path);
+    CHECK(cacheFile.remove()); // The cache file handle was closed after loading and saving.
 }

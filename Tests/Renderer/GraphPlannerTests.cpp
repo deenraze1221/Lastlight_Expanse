@@ -3,7 +3,7 @@
 #include "Core/Error.h"
 #include "Renderer/RenderGraph/GraphPlanner.h"
 
-using namespace raven::gfx;
+using namespace zodar::gfx;
 
 namespace {
 
@@ -109,14 +109,14 @@ TEST_CASE("graph planner: compute storage buffer RAW and invalid graphs") {
 
     const std::vector<PlanPass> readFirst = {
         {"Bad", {{0, ResourceUsage::IndirectArgs, false}, {1, ResourceUsage::ColorAttachment, true}}, false}};
-    CHECK_THROWS_AS(planGraph(resources, readFirst), raven::Error);
+    CHECK_THROWS_AS(planGraph(resources, readFirst), zodar::Error);
 
     const std::vector<PlanResource> images = {transient("img"), importedOutput("out")};
     const std::vector<PlanPass> twoLayouts = {
         {"Make", {{0, ResourceUsage::ColorAttachment, true}}, false},
         {"Bad", {{0, ResourceUsage::SampledFragment, false}, {0, ResourceUsage::ColorAttachment, false},
                  {1, ResourceUsage::ColorAttachment, true}}, false}};
-    CHECK_THROWS_AS(planGraph(images, twoLayouts), raven::Error);
+    CHECK_THROWS_AS(planGraph(images, twoLayouts), zodar::Error);
 }
 
 TEST_CASE("graph planner: imported resource transitions to its final layout") {

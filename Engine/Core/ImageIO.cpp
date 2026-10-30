@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace raven {
+namespace zodar {
 
 bool writePpm(const std::filesystem::path& path, uint32_t width, uint32_t height,
               std::span<const uint8_t> rgba) {
@@ -30,4 +30,4 @@ bool writePpm(const std::filesystem::path& path, uint32_t width, uint32_t height
     return static_cast<bool>(file);
 }
 
-} // namespace raven
+} // namespace zodar

@@ -19,7 +19,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class GpuMesh;
 class GraphicsPipeline;
@@ -166,4 +166,4 @@ private:
     std::unordered_map<VkFormat, std::unique_ptr<GraphicsPipeline>> m_resolvePipelines;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

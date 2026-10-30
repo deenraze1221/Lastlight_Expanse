@@ -10,16 +10,16 @@
 
 #include <vector>
 
-using namespace raven;
-using namespace raven::gfx;
-using raven::test::gpu;
+using namespace zodar;
+using namespace zodar::gfx;
+using zodar::test::gpu;
 
 namespace {
 
 constexpr uint32_t kSize = 64;
 
 struct Fixture {
-    SceneRenderer scene{*gpu().context, *gpu().upload, {raven::test::shaderDir()}};
+    SceneRenderer scene{*gpu().context, *gpu().upload, {zodar::test::shaderDir()}};
     FrameAllocator scratch{*gpu().context, 2};
     GpuMesh cube;
     GpuMesh sphere;
@@ -81,7 +81,7 @@ glm::vec4 at(const std::vector<glm::vec4>& img, uint32_t x, uint32_t y, uint32_t
 } // namespace
 
 TEST_CASE("scene: depth test keeps the nearest surface regardless of draw order") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     Fixture f;
     const MaterialHandle red = f.unlit({1, 0, 0, 1});
     const MaterialHandle green = f.unlit({0, 1, 0, 1});
@@ -103,7 +103,7 @@ TEST_CASE("scene: depth test keeps the nearest surface regardless of draw order"
 }
 
 TEST_CASE("scene: reverse-Z depth values match the projection") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     Fixture f;
     std::vector<MeshDraw> draws = {{&f.plane, 0, f.unlit({1, 1, 1, 1}),
                                     glm::rotate(glm::mat4(1), glm::radians(90.0f), glm::vec3(1, 0, 0))}};
@@ -117,7 +117,7 @@ TEST_CASE("scene: reverse-Z depth values match the projection") {
 }
 
 TEST_CASE("scene: PBR lighting responds to sun direction and point lights") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     Fixture f;
     MaterialDesc d;
     d.shader = f.scene.materials().pbrShader();
@@ -148,7 +148,7 @@ TEST_CASE("scene: PBR lighting responds to sun direction and point lights") {
 }
 
 TEST_CASE("scene: textured unlit material and alpha modes") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     Fixture f;
     UploadBatch batch(*gpu().upload);
     ImageData checker;
@@ -185,7 +185,7 @@ TEST_CASE("scene: textured unlit material and alpha modes") {
 }
 
 TEST_CASE("scene: culling, instancing and statistics") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     Fixture f;
     const MaterialHandle white = f.unlit({1, 1, 1, 1});
     std::vector<MeshDraw> draws;
@@ -208,7 +208,7 @@ TEST_CASE("scene: culling, instancing and statistics") {
 }
 
 TEST_CASE("scene: target resize retires old targets safely and resolves to an output") {
-    raven::test::ValidationGuard guard;
+    zodar::test::ValidationGuard guard;
     Fixture f;
     std::vector<MeshDraw> draws = {{&f.cube, 0, f.unlit({0.25f, 0.5f, 2.0f, 1}), glm::mat4(1)}};
     SceneView view = frontCamera();

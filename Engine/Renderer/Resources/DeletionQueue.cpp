@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 DeletionQueue::~DeletionQueue() {
     flushAll();
@@ -45,4 +45,4 @@ void DeletionQueue::flushAll() {
     m_pending.clear();
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

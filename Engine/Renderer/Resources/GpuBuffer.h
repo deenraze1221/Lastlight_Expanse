@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <span>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class VulkanContext;
 
@@ -63,4 +63,4 @@ private:
     VkDeviceAddress m_address = 0;
 };
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

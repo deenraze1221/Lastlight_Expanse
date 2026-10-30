@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 class VulkanContext;
 
@@ -72,4 +72,4 @@ struct GpuMemoryStats {
 };
 GpuMemoryStats queryMemoryStats(const VulkanContext& context);
 
-} // namespace raven::gfx
+} // namespace zodar::gfx

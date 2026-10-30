@@ -7,10 +7,10 @@
 #include <utility>
 #include <vector>
 
-namespace raven::gfx {
+namespace zodar::gfx {
 
 Texture::Texture(UploadBatch& batch, BindlessRegistry& registry, const ImageData& image) : m_name(image.name) {
-    RAVEN_ENSURE(!image.levels.empty() && image.width > 0 && image.height > 0,
+    ZODAR_ENSURE(!image.levels.empty() && image.width > 0 && image.height > 0,
                  "texture '" + image.name + "' has no pixel data");
     const VkFormat format =
         image.colorSpace == ColorSpace::Srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
@@ -58,4 +58,4 @@ void Texture::release() {
     m_image.reset();
 }
 
-} // namespace raven::gfx
+} // namespace zodar::gfx
