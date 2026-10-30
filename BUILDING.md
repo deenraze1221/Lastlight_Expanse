@@ -23,10 +23,12 @@ No Vulkan SDK library is linked; the loader is resolved at runtime.
 | VulkanMemoryAllocator | v3.3.0 | 1d8f600fd424 |
 | spdlog | v1.15.3 | 6fa36017cfd5 |
 | GLM | 1.0.1 | 0af55ccecd98 |
+| stb (stb_image; stb_image_write in tests) | — | 003501f6d7a8 |
+| cgltf | v1.15 | bbeb5b0b070d |
 | doctest (tests only) | v2.4.12 | 1da23a3e8119 |
 
 Headers are 1.4.304 because volk's tags follow header versions; the engine requests and
-requires **API 1.3**. Later milestones add Dear ImGui, Jolt, miniaudio, ufbx, cgltf and stb.
+requires **API 1.3** plus descriptor indexing. Later milestones add Dear ImGui, Jolt, miniaudio and ufbx.
 
 ## Windows 10/11
 
@@ -76,7 +78,7 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 | --- | --- | --- |
 | `RAVEN_BUILD_SAMPLES` | ON | Build `Samples/` |
 | `RAVEN_BUILD_TESTS` | ON | Build `RavenTests` (doctest) |
-| `RAVEN_GPU_TESTS` | OFF | Register `gpu.hello_triangle` (needs a Vulkan device + video driver) |
+| `RAVEN_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless device), `gpu.hello_triangle`, `gpu.model_viewer_demo` (need a video driver) |
 | `RAVEN_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` for engine code |
 
 ## HelloTriangle arguments
@@ -90,6 +92,17 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 ```
 
 Exit codes: 0 ok, 1 fatal error, 2 validation errors occurred, 3 screenshot failed.
+
+## ModelViewer
+
+```
+ModelViewer [file.gltf|file.glb] [--frames N] [--screenshot F.ppm] [--no-validation]
+            [--width W] [--height H] [--yaw DEG] [--pitch DEG] [--zoom F] [--spin DEG_PER_S] [--nearest]
+```
+
+Without a file it shows a procedural material demo. Left-drag orbits, wheel zooms, Esc quits.
+Khronos sample models (e.g. `DamagedHelmet.glb`) are good test inputs; they are not part of
+the repository.
 
 ## Headless / cloud testing
 

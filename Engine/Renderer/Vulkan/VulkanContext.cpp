@@ -62,10 +62,12 @@ QueueFamilies findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
     QueueFamilies result;
     for (uint32_t i = 0; i < count; ++i) {
         VkBool32 present = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present);
+        if (surface) {
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present);
+        }
         const bool graphics = (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
-        if (graphics && present) {
-            return {i, i}; // A single family for both is preferred.
+        if (graphics && (present || !surface)) {
+            return {i, i}; // A single family for both is preferred; headless needs graphics only.
         }
         if (graphics && result.graphics == UINT32_MAX) {
             result.graphics = i;
@@ -79,10 +81,12 @@ QueueFamilies findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
 
 } // namespace
 
-VulkanContext::VulkanContext(const Window& window, const ContextDesc& desc) : m_window(window) {
+VulkanContext::VulkanContext(const ContextDesc& desc, const Window* window) : m_window(window) {
     try {
-        createInstance(window, desc);
-        m_surface = window.createSurface(m_instance);
+        createInstance(desc);
+        if (m_window) {
+            m_surface = m_window->createSurface(m_instance);
+        }
         pickPhysicalDevice();
         createDevice();
         createAllocator();
@@ -109,7 +113,7 @@ void VulkanContext::destroy() {
         m_device = VK_NULL_HANDLE;
     }
     if (m_surface) {
-        m_window.destroySurface(m_instance, m_surface);
+        m_window->destroySurface(m_instance, m_surface);
         m_surface = VK_NULL_HANDLE;
     }
     if (m_debugMessenger) {
@@ -128,9 +132,24 @@ void VulkanContext::waitIdle() const {
     RAVEN_VK_CHECK(vkDeviceWaitIdle(m_device));
 }
 
-void VulkanContext::createInstance(const Window& window, const ContextDesc& desc) {
-    // Use SDL's loader so the engine and SDL resolve the same Vulkan library.
-    volkInitializeCustom(window.vulkanGetInstanceProcAddr());
+void VulkanContext::setDebugName(VkObjectType type, uint64_t handle, const char* name) const {
+    if (!m_debugUtils || !name || handle == 0) {
+        return;
+    }
+    VkDebugUtilsObjectNameInfoEXT info{VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+    info.objectType = type;
+    info.objectHandle = handle;
+    info.pObjectName = name;
+    vkSetDebugUtilsObjectNameEXT(m_device, &info);
+}
+
+void VulkanContext::createInstance(const ContextDesc& desc) {
+    if (m_window) {
+        // Use SDL's loader so the engine and SDL resolve the same Vulkan library.
+        volkInitializeCustom(m_window->vulkanGetInstanceProcAddr());
+    } else if (volkInitialize() != VK_SUCCESS) {
+        fail("Vulkan loader not found");
+    }
 
     const uint32_t loaderVersion = volkGetInstanceVersion();
     RAVEN_LOG_INFO("Vulkan loader version {}", versionString(loaderVersion));
@@ -138,20 +157,28 @@ void VulkanContext::createInstance(const Window& window, const ContextDesc& desc
         fail("Vulkan 1.3 is required; the installed loader supports " + versionString(loaderVersion));
     }
 
-    std::vector<const char*> extensions = window.requiredInstanceExtensions();
+    std::vector<const char*> extensions;
+    if (m_window) {
+        extensions = m_window->requiredInstanceExtensions();
+    }
     std::vector<const char*> layers;
+
+    // Debug utils is enabled whenever available: object names help validation and RenderDoc.
+    m_debugUtils = hasInstanceExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    if (m_debugUtils) {
+        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
 
     m_validationEnabled = false;
     if (desc.enableValidation) {
         if (!hasLayer(kValidationLayer)) {
             RAVEN_LOG_WARN("Validation requested but {} is not installed; continuing without it",
                            kValidationLayer);
-        } else if (!hasInstanceExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
+        } else if (!m_debugUtils) {
             RAVEN_LOG_WARN("Validation requested but {} is unavailable; continuing without it",
                            VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         } else {
             layers.push_back(kValidationLayer);
-            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
             m_validationEnabled = true;
         }
     }
@@ -187,7 +214,8 @@ void VulkanContext::createInstance(const Window& window, const ContextDesc& desc
     if (m_validationEnabled) {
         RAVEN_VK_CHECK(vkCreateDebugUtilsMessengerEXT(m_instance, &messengerInfo, nullptr, &m_debugMessenger));
     }
-    RAVEN_LOG_INFO("Vulkan instance created (API 1.3, validation {})", m_validationEnabled ? "on" : "off");
+    RAVEN_LOG_INFO("Vulkan instance created (API 1.3, validation {}, {})", m_validationEnabled ? "on" : "off",
+                   m_window ? "windowed" : "headless");
 }
 
 void VulkanContext::pickPhysicalDevice() {
@@ -206,9 +234,11 @@ void VulkanContext::pickPhysicalDevice() {
         vkGetPhysicalDeviceProperties(device, &props);
 
         VkPhysicalDeviceVulkan13Features features13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+        VkPhysicalDeviceVulkan12Features features12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
         VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         if (props.apiVersion >= VK_API_VERSION_1_3) {
-            features.pNext = &features13;
+            features12.pNext = &features13;
+            features.pNext = &features12;
             vkGetPhysicalDeviceFeatures2(device, &features);
         }
 
@@ -232,10 +262,16 @@ void VulkanContext::pickPhysicalDevice() {
         c.type = props.deviceType;
         c.apiVersion = props.apiVersion;
         c.hasGraphicsQueue = q.graphics != UINT32_MAX;
-        c.hasPresentQueue = q.present != UINT32_MAX;
-        c.hasSwapchainExtension = std::any_of(exts.begin(), exts.end(), [](const VkExtensionProperties& e) {
-            return std::strcmp(e.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0;
-        });
+        // Headless contexts do not present, so presentation support is not a requirement.
+        c.hasPresentQueue = !m_surface || q.present != UINT32_MAX;
+        c.hasSwapchainExtension = !m_surface ||
+            std::any_of(exts.begin(), exts.end(), [](const VkExtensionProperties& e) {
+                return std::strcmp(e.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0;
+            });
+        c.hasDescriptorIndexing = features12.descriptorIndexing && features12.runtimeDescriptorArray &&
+                                  features12.descriptorBindingPartiallyBound &&
+                                  features12.descriptorBindingSampledImageUpdateAfterBind &&
+                                  features12.shaderSampledImageArrayNonUniformIndexing;
         c.hasDynamicRendering = features13.dynamicRendering == VK_TRUE;
         c.hasSynchronization2 = features13.synchronization2 == VK_TRUE;
         c.deviceLocalMemoryBytes = localBytes;
@@ -248,7 +284,8 @@ void VulkanContext::pickPhysicalDevice() {
 
     const int best = pickBestDevice(candidates);
     if (best < 0) {
-        fail("No GPU supports Vulkan 1.3 with dynamic rendering, synchronization2 and presentation");
+        fail("No GPU supports Vulkan 1.3 with dynamic rendering, synchronization2, descriptor indexing"
+             " and presentation");
     }
     m_physicalDevice = devices[static_cast<size_t>(best)];
     m_graphicsFamily = families[static_cast<size_t>(best)].graphics;
@@ -265,6 +302,12 @@ void VulkanContext::pickPhysicalDevice() {
     m_deviceInfo.driverName = driver.driverName;
     m_deviceInfo.driverInfo = driver.driverInfo;
     m_deviceInfo.isSoftwareRasterizer = m_deviceInfo.type == VK_PHYSICAL_DEVICE_TYPE_CPU;
+
+    VkPhysicalDeviceFeatures baseFeatures;
+    vkGetPhysicalDeviceFeatures(m_physicalDevice, &baseFeatures);
+    m_deviceInfo.samplerAnisotropy = baseFeatures.samplerAnisotropy == VK_TRUE;
+    m_deviceInfo.maxSamplerAnisotropy =
+        m_deviceInfo.samplerAnisotropy ? props2.properties.limits.maxSamplerAnisotropy : 1.0f;
 
     RAVEN_LOG_INFO("Selected GPU: {} ({}), driver {} {}", m_deviceInfo.name, deviceTypeName(m_deviceInfo.type),
                    m_deviceInfo.driverName, m_deviceInfo.driverInfo);
@@ -287,17 +330,29 @@ void VulkanContext::createDevice() {
     VkPhysicalDeviceVulkan13Features features13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     features13.dynamicRendering = VK_TRUE;
     features13.synchronization2 = VK_TRUE;
+    // Bindless resource tables (see BindlessRegistry).
+    VkPhysicalDeviceVulkan12Features features12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    features12.pNext = &features13;
+    features12.descriptorIndexing = VK_TRUE;
+    features12.runtimeDescriptorArray = VK_TRUE;
+    features12.descriptorBindingPartiallyBound = VK_TRUE;
+    features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+    features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
     VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-    features.pNext = &features13;
+    features.pNext = &features12;
+    features.features.samplerAnisotropy = m_deviceInfo.samplerAnisotropy ? VK_TRUE : VK_FALSE;
 
-    const char* extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    std::vector<const char*> extensions;
+    if (m_surface) {
+        extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
 
     VkDeviceCreateInfo info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     info.pNext = &features;
     info.queueCreateInfoCount = static_cast<uint32_t>(queues.size());
     info.pQueueCreateInfos = queues.data();
-    info.enabledExtensionCount = 1;
-    info.ppEnabledExtensionNames = extensions;
+    info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    info.ppEnabledExtensionNames = extensions.data();
 
     RAVEN_VK_CHECK(vkCreateDevice(m_physicalDevice, &info, nullptr, &m_device));
     volkLoadDevice(m_device);

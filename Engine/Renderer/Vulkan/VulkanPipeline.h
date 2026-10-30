@@ -8,6 +8,8 @@
 
 namespace raven::gfx {
 
+class VulkanContext;
+
 // Reads a SPIR-V binary. Fails with a descriptive error when missing or malformed.
 std::vector<uint32_t> loadSpirv(const std::filesystem::path& path);
 
@@ -26,22 +28,44 @@ private:
     VkShaderModule m_module = VK_NULL_HANDLE;
 };
 
-// Minimal description for Milestone 1: one colour attachment, no vertex input,
-// dynamic viewport/scissor, dynamic rendering. Vertex layouts, depth, blending and
-// descriptor sets are added with the Milestone 2 mesh and material work.
+enum class VertexInput {
+    None,         // Vertices generated in the shader (fullscreen passes).
+    EngineVertex, // raven::Vertex at binding 0: position, normal, tangent, uv0, color (locations 0-4).
+};
+
+enum class BlendMode {
+    Opaque,
+    AlphaBlend,      // src * a + dst * (1 - a)
+    PremultipliedAlpha,
+    Additive,
+};
+
+// Graphics pipeline for dynamic rendering. Viewport and scissor are always dynamic.
 struct GraphicsPipelineDesc {
     VkShaderModule vertexShader = VK_NULL_HANDLE;
     VkShaderModule fragmentShader = VK_NULL_HANDLE;
+    VertexInput vertexInput = VertexInput::None;
     VkFormat colorFormat = VK_FORMAT_UNDEFINED;
+    VkFormat depthFormat = VK_FORMAT_UNDEFINED; // UNDEFINED = no depth attachment.
+    bool depthTest = false;
+    bool depthWrite = false;
+    VkCompareOp depthCompare = VK_COMPARE_OP_GREATER_OR_EQUAL; // Engine uses reverse Z.
+    BlendMode blend = BlendMode::Opaque;
     VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     VkCullModeFlags cullMode = VK_CULL_MODE_NONE;
+    VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    // Either pass an existing layout (shared by many pipelines) or let the pipeline own one
+    // built from setLayouts + push constants.
+    VkPipelineLayout sharedLayout = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSetLayout> setLayouts;
     uint32_t pushConstantSize = 0;
     VkShaderStageFlags pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    const char* debugName = nullptr;
 };
 
 class GraphicsPipeline {
 public:
-    GraphicsPipeline(VkDevice device, const GraphicsPipelineDesc& desc);
+    GraphicsPipeline(const VulkanContext& context, const GraphicsPipelineDesc& desc);
     ~GraphicsPipeline();
 
     GraphicsPipeline(const GraphicsPipeline&) = delete;
@@ -54,6 +78,7 @@ public:
 private:
     VkDevice m_device;
     VkPipelineLayout m_layout = VK_NULL_HANDLE;
+    bool m_ownsLayout = false;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkShaderStageFlags m_pushConstantStages = 0;
 };

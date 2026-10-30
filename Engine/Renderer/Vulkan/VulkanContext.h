@@ -21,20 +21,26 @@ struct ContextDesc {
 };
 
 struct DeviceInfo {
+    // Filled from the selected physical device.
     std::string name;
     std::string driverName;
     std::string driverInfo;
     VkPhysicalDeviceType type = VK_PHYSICAL_DEVICE_TYPE_OTHER;
     uint32_t apiVersion = 0;
     bool isSoftwareRasterizer = false;
+    bool samplerAnisotropy = false;
+    float maxSamplerAnisotropy = 1.0f;
 };
 
 // Owns instance, debug messenger, surface, logical device, queues and the memory
 // allocator. Destruction order is the reverse of creation. Not copyable or movable:
 // other objects keep references to it.
+//
+// With a window the context can present. Without one (window == nullptr) it is headless:
+// no surface or swapchain support is required, which is used by GPU tests and tools.
 class VulkanContext {
 public:
-    VulkanContext(const Window& window, const ContextDesc& desc);
+    VulkanContext(const ContextDesc& desc, const Window* window);
     ~VulkanContext();
 
     VulkanContext(const VulkanContext&) = delete;
@@ -53,6 +59,15 @@ public:
 
     const DeviceInfo& deviceInfo() const { return m_deviceInfo; }
     bool validationEnabled() const { return m_validationEnabled; }
+    bool isHeadless() const { return m_window == nullptr; }
+
+    // Names an object for validation messages and graphics debuggers (no-op when
+    // VK_EXT_debug_utils is unavailable).
+    void setDebugName(VkObjectType type, uint64_t handle, const char* name) const;
+    template <typename T>
+    void setDebugName(T handle, VkObjectType type, const char* name) const {
+        setDebugName(type, reinterpret_cast<uint64_t>(handle), name);
+    }
 
     // Number of validation errors reported since creation. Zero is required for tests.
     uint32_t validationErrorCount() const { return m_validationErrors.load(); }
@@ -61,7 +76,7 @@ public:
     void waitIdle() const;
 
 private:
-    void createInstance(const Window& window, const ContextDesc& desc);
+    void createInstance(const ContextDesc& desc);
     void pickPhysicalDevice();
     void createDevice();
     void createAllocator();
@@ -72,7 +87,8 @@ private:
                                                          const VkDebugUtilsMessengerCallbackDataEXT* data,
                                                          void* userData);
 
-    const Window& m_window;
+    const Window* m_window = nullptr;
+    bool m_debugUtils = false;
     VkInstance m_instance = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;

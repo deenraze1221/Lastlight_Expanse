@@ -23,9 +23,9 @@
                  Games/<Game>      Samples/*      Tests
                        \              |            /
                         +-------- Renderer -------+
-                                     |
-                                  Platform
-                                     |
+                                /          \
+                         Platform          Assets   (CPU data + importers, no GPU)
+                                \          /
                                     Core
 ```
 
@@ -41,7 +41,13 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | Core | `Log`, `Error`, `ImageIO` | spdlog-based engine logger, `raven::Error` + `fail()` + `RAVEN_ENSURE`, PPM writer for screenshots |
 | Platform | `Platform`, `Window` | SDL3 lifetime, window + event pump, Vulkan WSI glue (loader, instance extensions, surface) |
 | Renderer | `Renderer` | Frames in flight, acquire/submit/present, swapchain rebuild, screenshot readback |
-| Renderer/Vulkan | `VulkanContext` | Instance, debug messenger, surface, GPU selection, device, queues, VMA allocator |
+| Assets | `MeshData`, `ImageData`, `ModelData`, `Primitives`, `GltfLoader` | Engine vertex (64 B), mesh/tangent/normal generation, RGBA8 images with colour-space-correct mips, glTF 2.0 import (cgltf, stb_image) |
+| Renderer | `SceneRenderer` | Forward renderer: HDR colour + reverse-Z depth targets, frame/instance buffers, culling, sorting, instancing, sun + point lights, resolve |
+| | `MaterialSystem` | Named shaders, 128 B GPU material table, pipeline cache (shader × alpha mode × sidedness) |
+| | `BindlessRegistry` | Global set 0: 4096 textures, 64 samplers, material table |
+| | `Texture`, `Sampler`, `GpuMesh`, `Model`, `Camera`, `Frustum` | Sampled textures, sampler descriptions, GPU meshes, glTF models with override hooks, reverse-Z cameras, culling |
+| Renderer/Resources | `GpuBuffer`, `GpuImage`, `UploadContext`, `UploadBatch` | VMA-backed RAII resources, batched staging uploads, readback |
+| Renderer/Vulkan | `VulkanContext` | Instance, debug messenger, surface (optional: headless mode), GPU selection, device, queues, VMA allocator |
 | | `VulkanSwapchain` | Swapchain, image views, per-image present semaphores, recreation |
 | | `VulkanPipeline` | SPIR-V loading, `ShaderModule`, minimal `GraphicsPipeline` |
 | | `DeviceSelection`, `SwapchainSupport` | Pure, unit-tested selection policies |
@@ -58,6 +64,11 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | Present semaphores **per swapchain image** | A present may still hold a semaphore when its frame slot is reused; per-image avoids the reuse hazard flagged by current validation layers. |
 | Fence reset **after** successful acquire | An out-of-date early return never leaves a fence unsignalled (deadlock). |
 | sRGB swapchain (`B8G8R8A8_SRGB` preferred) | Shaders write linear colour. Scenes will render to an HDR target and resolve into this through the post-process stack. |
+| **Reverse-Z** depth (D32, clear 0, GREATER_OR_EQUAL), infinite far plane by default | Best depth precision for large scenes. |
+| **Bindless** textures/samplers (descriptor indexing) + material SSBO | Any shader indexes any texture; materials are table entries, not descriptor sets. Samplers are independent of textures. |
+| Shared scene pipeline layout: set 0 bindless, set 1 frame + instances, push = material index | One layout for every material shader, engine or game. |
+| Forward shading into an RGBA16F target | Simple, MSAA-friendly, enough for M2 light counts; resolve/post stack on top. |
+| Deferred destruction by frame number | Render targets and bindless slots are released only after frames that used them completed. |
 | Validation on by default, errors counted | `HelloTriangle` exits with code 2 if any validation error occurred; the GPU test relies on it. |
 
 ## Frame flow (Milestone 1)
@@ -103,6 +114,14 @@ DEAD SECTOR's PSX-inspired look is therefore a **game-side style preset**
 dither/quantize post pass), material conventions and settings presets, built only from
 public engine capabilities.
 
+## Shader interface
+
+Engine shader library in `Shaders/Include/raven/` (included as `#include "raven/x.glsl"`):
+`bindless.glsl`, `scene.glsl` (material/frame/instance layout), `vertex.glsl` (standard
+inputs + `ravenTransformVertex()`), `surface.glsl` (base colour, alpha mask, normal mapping),
+`lighting.glsl` (GGX PBR), `fullscreen.glsl`. A material shader is any vertex/fragment pair
+registered with `MaterialSystem::registerShader`; games implement their own looks this way.
+
 ## Conventions
 
 - Namespaces: `raven` (core/platform), `raven::gfx` (renderer). Types `PascalCase`, functions
@@ -115,6 +134,9 @@ public engine capabilities.
 
 ## Known architectural debts (tracked)
 
+- Materials are immutable after creation; textures must outlive materials referencing them.
+- `BindlessRegistry::releaseTexture` assumes the GPU no longer uses the slot (callers defer).
+- Uploads are synchronous on the graphics queue (no streaming/transfer queue yet).
 - A pipeline is created for a fixed swapchain format; if a recreated swapchain changes format,
   pipelines must be rebuilt (not handled yet; formats do not change in practice).
 - Swapchain recreation uses `vkDeviceWaitIdle`; `VK_EXT_swapchain_maintenance1` present fences

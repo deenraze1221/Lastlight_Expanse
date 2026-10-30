@@ -9,24 +9,35 @@ endif()
 
 # raven_compile_shaders(<target> SOURCES <files...>)
 # Compiles each source to ${RAVEN_OUTPUT_DIR}/shaders/<name>.spv and makes <target> depend on it.
+# Engine shader library: #include "raven/<file>.glsl" from any engine or game shader.
+set(RAVEN_SHADER_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/Shaders/Include)
+
 function(raven_compile_shaders target)
-    cmake_parse_arguments(ARG "" "" "SOURCES" ${ARGN})
+    cmake_parse_arguments(ARG "" "" "SOURCES;INCLUDE_DIRS" ${ARGN})
     set(output_dir ${RAVEN_OUTPUT_DIR}/shaders)
+    set(include_dirs ${RAVEN_SHADER_INCLUDE_DIR} ${ARG_INCLUDE_DIRS})
+    set(include_args)
+    set(include_files)
+    foreach(dir IN LISTS include_dirs)
+        list(APPEND include_args -I${dir})
+        file(GLOB_RECURSE dir_files CONFIGURE_DEPENDS ${dir}/*.glsl)
+        list(APPEND include_files ${dir_files})
+    endforeach()
     set(outputs)
     foreach(source IN LISTS ARG_SOURCES)
         get_filename_component(source_abs ${source} ABSOLUTE)
         get_filename_component(name ${source} NAME)
         set(output ${output_dir}/${name}.spv)
         if(RAVEN_GLSLC)
-            set(command ${RAVEN_GLSLC} --target-env=vulkan1.3 -Werror -O -o ${output} ${source_abs})
+            set(command ${RAVEN_GLSLC} --target-env=vulkan1.3 -Werror -O ${include_args} -o ${output} ${source_abs})
         else()
-            set(command ${RAVEN_GLSLANG} -V --target-env vulkan1.3 -o ${output} ${source_abs})
+            set(command ${RAVEN_GLSLANG} -V --target-env vulkan1.3 ${include_args} -o ${output} ${source_abs})
         endif()
         add_custom_command(
             OUTPUT ${output}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${output_dir}
             COMMAND ${command}
-            DEPENDS ${source_abs}
+            DEPENDS ${source_abs} ${include_files}
             COMMENT "Compiling shader ${name}"
             VERBATIM)
         list(APPEND outputs ${output})

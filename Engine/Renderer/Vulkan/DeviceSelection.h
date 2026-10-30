@@ -18,11 +18,13 @@ struct DeviceCandidate {
     bool hasSwapchainExtension = false;
     bool hasDynamicRendering = false;
     bool hasSynchronization2 = false;
+    bool hasDescriptorIndexing = false; // Runtime arrays, partially bound, update-after-bind, non-uniform indexing.
     VkDeviceSize deviceLocalMemoryBytes = 0;
 };
 
 // Returns a negative score when the device cannot run the engine (Vulkan 1.3 with
-// dynamic rendering, synchronization2, swapchain and a presentable graphics queue).
+// dynamic rendering, synchronization2, descriptor indexing, swapchain and a presentable
+// graphics queue; the last two are reported as satisfied for headless contexts).
 // Discrete > integrated > virtual > CPU; memory breaks ties within a type.
 int64_t scoreDevice(const DeviceCandidate& candidate);
 

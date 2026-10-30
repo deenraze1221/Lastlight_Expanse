@@ -1,6 +1,6 @@
 # Third-party dependencies, pinned to release tags (commit hashes recorded in BUILDING.md).
 # Only libraries required by the current milestone are fetched; later milestones add
-# Dear ImGui, Jolt, miniaudio, ufbx, cgltf and stb when their systems are built.
+# Dear ImGui, Jolt, miniaudio and ufbx when their systems are built.
 include(FetchContent)
 
 FetchContent_Declare(VulkanHeaders
@@ -61,7 +61,21 @@ FetchContent_Declare(doctest
     GIT_SHALLOW    TRUE
     SYSTEM)
 
-FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm)
+# stb has no release tags; pinned by commit.
+FetchContent_Declare(stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        003501f6d7a8668ce8b6d875e34dd97ad0d5d5b5
+    SOURCE_SUBDIR  _raven_unused
+    SYSTEM)
+
+FetchContent_Declare(cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG        v1.15
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  _raven_unused
+    SYSTEM)
+
+FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf)
 if(RAVEN_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
@@ -80,3 +94,12 @@ target_include_directories(raven_vma SYSTEM INTERFACE ${vulkanmemoryallocator_SO
 target_compile_definitions(raven_vma INTERFACE VMA_STATIC_VULKAN_FUNCTIONS=0 VMA_DYNAMIC_VULKAN_FUNCTIONS=1)
 target_link_libraries(raven_vma INTERFACE Raven::volk)
 add_library(Raven::VMA ALIAS raven_vma)
+
+# Header-only importers; implementations are compiled once inside Raven::Assets.
+add_library(raven_stb INTERFACE)
+target_include_directories(raven_stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
+add_library(Raven::stb ALIAS raven_stb)
+
+add_library(raven_cgltf INTERFACE)
+target_include_directories(raven_cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
+add_library(Raven::cgltf ALIAS raven_cgltf)

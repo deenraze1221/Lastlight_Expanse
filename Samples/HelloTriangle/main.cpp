@@ -95,7 +95,8 @@ int run(const Options& options) {
     pipelineDesc.colorFormat = renderer.swapchain().format();
     pipelineDesc.pushConstantSize = sizeof(PushConstants);
     pipelineDesc.pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT;
-    raven::gfx::GraphicsPipeline pipeline(device, pipelineDesc);
+    pipelineDesc.debugName = "Triangle";
+    raven::gfx::GraphicsPipeline pipeline(renderer.context(), pipelineDesc);
 
     using Clock = std::chrono::steady_clock;
     const auto start = Clock::now();

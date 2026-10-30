@@ -56,7 +56,7 @@ struct Renderer::PendingCapture {
 };
 
 Renderer::Renderer(Window& window, const RendererDesc& desc) : m_window(window) {
-    m_context = std::make_unique<VulkanContext>(window, ContextDesc{desc.applicationName, desc.enableValidation});
+    m_context = std::make_unique<VulkanContext>(ContextDesc{desc.applicationName, desc.enableValidation}, &window);
     m_swapchain = std::make_unique<VulkanSwapchain>(*m_context, toExtent(window.framebufferSize()), desc.presentMode);
     try {
         createFrameResources();

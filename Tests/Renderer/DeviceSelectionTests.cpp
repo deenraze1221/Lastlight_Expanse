@@ -13,7 +13,7 @@ DeviceCandidate suitable(VkPhysicalDeviceType type, VkDeviceSize memoryMiB) {
     c.type = type;
     c.apiVersion = VK_API_VERSION_1_3;
     c.hasGraphicsQueue = c.hasPresentQueue = c.hasSwapchainExtension = true;
-    c.hasDynamicRendering = c.hasSynchronization2 = true;
+    c.hasDynamicRendering = c.hasSynchronization2 = c.hasDescriptorIndexing = true;
     c.deviceLocalMemoryBytes = memoryMiB * 1024 * 1024;
     return c;
 }
@@ -35,6 +35,10 @@ TEST_CASE("device selection: requirements are mandatory") {
     auto noDynamic = c;
     noDynamic.hasDynamicRendering = false;
     CHECK(raven::gfx::scoreDevice(noDynamic) < 0);
+
+    auto noBindless = c;
+    noBindless.hasDescriptorIndexing = false;
+    CHECK(raven::gfx::scoreDevice(noBindless) < 0);
 
     auto noSync2 = c;
     noSync2.hasSynchronization2 = false;

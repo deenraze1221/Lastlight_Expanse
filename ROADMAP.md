@@ -7,7 +7,7 @@ done before it is verified.
 | # | Milestone | Status |
 | --- | --- | --- |
 | 1 | Engine foundation | **Done** (verified on Linux/lavapipe; Windows pending local run) |
-| 2 | 3D renderer | Not started |
+| 2 | 3D renderer core | **In progress**: resources, camera/depth, meshes, textures, materials, glTF done; shadows + ImGui overlay remaining |
 | 3 | Lighting, post-processing and graphics settings | Not started |
 | 4 | First DEAD SECTOR prototype scene | Not started |
 | 5 | Gameplay foundation | Not started |
