@@ -14,11 +14,29 @@ add_executable(ZodarTests
     Renderer/PipelineCacheTests.cpp
     Renderer/DeviceSelectionTests.cpp
     Renderer/SwapchainSupportTests.cpp
-    Renderer/VulkanCheckTests.cpp)
-target_link_libraries(ZodarTests PRIVATE Zodar::Renderer Zodar::stb doctest::doctest)
+    Renderer/VulkanCheckTests.cpp
+    UI/ThemeTests.cpp
+    UI/DrawListTests.cpp
+    UI/LayoutTests.cpp
+    UI/ScaleTests.cpp
+    UI/FontTests.cpp
+    UI/SvgTests.cpp
+    UI/AssetIntegrityTests.cpp)
+target_link_libraries(ZodarTests PRIVATE Zodar::Renderer Zodar::UI Zodar::stb doctest::doctest)
+# UI tests read the committed resources directly (fonts, original logos, manifest).
+target_compile_definitions(ZodarTests PRIVATE ZODAR_TEST_UI_DIR="${PROJECT_SOURCE_DIR}/Resources/UI")
 zodar_set_warnings(ZodarTests)
 
 add_test(NAME unit COMMAND ZodarTests)
+
+# Temporary UI sandbox (SDL3 software renderer, offscreen): renders the component gallery
+# and checks token colours at known pixels. Needs no GPU.
+if(TARGET ZodarUISandbox)
+    add_test(NAME ui.sandbox_smoke
+        COMMAND ZodarUISandbox --frames 3 --check --software --scale 1.33
+                --screenshot ${CMAKE_BINARY_DIR}/ui_sandbox_smoke.png)
+    set_tests_properties(ui.sandbox_smoke PROPERTIES TIMEOUT 120 ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
+endif()
 
 # Runs the real sample on whatever Vulkan device and video driver are available
 # (a GPU locally; lavapipe + SDL offscreen or Xvfb in the cloud). Fails on any

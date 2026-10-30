@@ -44,9 +44,12 @@ Engine/Assets/          CPU meshes/images/models, primitives, glTF import
 Engine/Platform/        SDL3 platform + window, Vulkan surface glue
 Engine/Renderer/        Frame loop, scene renderer, materials, textures, meshes; RenderGraph/, Resources/, Vulkan/
 Engine/Debug/           ImGui profiler overlay (engine tool)
+Engine/UI/              Tooling UI: theme, layout, text, SVG, widgets (draw lists; no SDL/Renderer)
+Resources/UI/           Committed UI fonts (OFL), original logo SVGs, SHA-256 manifest
 Shaders/                Engine shader library (Include/zodar/*.glsl) and built-in shaders
 Samples/                HelloTriangle (M1), ModelViewer (M2)
 Tools/ZodarBench/       Deterministic benchmark with JSON reports
+Tools/ZodarUISandbox/   Temporary UI review tool (SDL3 2D renderer)
 Tests/                  doctest unit tests + GPU smoke test registration
 Docs/                   Design and migration documents
 ```

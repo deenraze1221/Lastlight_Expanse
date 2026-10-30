@@ -82,7 +82,14 @@ FetchContent_Declare(imgui
     SOURCE_SUBDIR  _zodar_unused
     SYSTEM)
 
-FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf imgui)
+# SVG parsing + rasterization for the UI module (original brand logos). No release tags; pinned by commit.
+FetchContent_Declare(nanosvg
+    GIT_REPOSITORY https://github.com/memononen/nanosvg.git
+    GIT_TAG        239e102ec2c691f2902e20ace2ed36ee4a35cfe6
+    SOURCE_SUBDIR  _zodar_unused
+    SYSTEM)
+
+FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf imgui nanosvg)
 if(ZODAR_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
@@ -106,6 +113,11 @@ add_library(Zodar::VMA ALIAS zodar_vma)
 add_library(zodar_stb INTERFACE)
 target_include_directories(zodar_stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 add_library(Zodar::stb ALIAS zodar_stb)
+
+# Header-only; the implementation is compiled once inside Zodar::UI.
+add_library(zodar_nanosvg INTERFACE)
+target_include_directories(zodar_nanosvg SYSTEM INTERFACE ${nanosvg_SOURCE_DIR}/src)
+add_library(Zodar::nanosvg ALIAS zodar_nanosvg)
 
 add_library(zodar_cgltf INTERFACE)
 target_include_directories(zodar_cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
