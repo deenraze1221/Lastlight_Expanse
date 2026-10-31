@@ -127,6 +127,8 @@
   `hot reload: live scenes ...` (transform + inline material, 4 failure kinds, prefab via
   watching, broken prefab, destructor). Verified GCC 13 Debug, 0 warnings, 196/196 unit,
   63/63 GPU cases, 23/23 ctest, 0 validation messages; hot-reload GPU cases 5x stable.
+  GCC 13 Release (watching compiled out): 0 warnings, 23/23 ctest, hot-reload cases pass
+  (watching case skips). Not run: Clang, MinGW, MSVC.
 
 ## Phase C5 — asset hot reload (done)
 - `AssetCache::replace` (in-place swap of the asset struct, previous content returned,
