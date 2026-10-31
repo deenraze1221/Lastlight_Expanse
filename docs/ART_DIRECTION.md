@@ -103,7 +103,7 @@ Required work, to be scheduled:
 2. **Pixel-art texture rules in the asset pipeline** (engine, generic, configured per game).
    Each texture gets a "pixel art" usage flag that means: no BCn compression (or an
    art-preserving mode, decided by A/B tests), mip generation that keeps the palette readable,
-   nearest sampling, and a max-anisotropy setting. Size validation (32/64/128/256) gives a
+   nearest sampling, and a max-anisotropy setting. Size validation (§2: 8/16/32/64) gives a
    warning, not an error (done at load time in Phase C1; the offline compiler check remains).
 3. **Asset validation report** (engine tool). Texture size class, texel density per mesh
    (texels per metre, from UV area against world area), palette deviation against a

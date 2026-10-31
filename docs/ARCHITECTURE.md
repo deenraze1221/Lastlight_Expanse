@@ -325,8 +325,8 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
 - Sampling: `gfx::SamplerDesc::pixelArt()` (nearest mag/min, linear mip, no anisotropy).
   Engine default stays linear (`AssetManagerDesc::defaultSampler`); games pick pixel art.
   glTF sampler filters are honoured end to end (GPU test checks the material's sampler).
-- Texture standards (`Assets/TextureStandards.h`): 32/64/128/256 square; anything else loads
-  with a warning (asset warnings + log), never an error.
+- Texture standards (`Assets/TextureStandards.h`): see the revised bullet below (32 default,
+  64 max, 8/16 allowed); anything else loads with a warning (asset warnings + log), never an error.
 - Async loads (C2): `AssetCache` entries have a `Loading` state (`getOrCreatePending`,
   `resolve`, `reject`). Decode jobs run on `AssetManagerDesc::jobs` and push results (by
   request id) into a mutex-protected queue; they never touch handles or caches, so record
@@ -343,7 +343,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   textures via `sceneMaterialDirectory`). Hash = FNV-1a 64 over source + dependencies (paths
   relative to the source, sizes, bytes): location independent, no crypto needed. `check` never
   throws: errors = unusable (missing source/dependency, parse failure), warnings = stale hash,
-  size standards, texel density (target 64 texels/m, ±2×), missing compiled outputs. Report
+  size standards, texel density (target 32 texels/m, ±2×), missing compiled outputs. Report
   JSON `zodar.asset_report` v1. CLI `ZodarAssetTool` (CPU only; `--compile` uses the existing
   `compileModelTextures` cache), wrapped by `zodar.py import|assets`; ctest
   `tools.asset_check_example` keeps the example registry current. The runtime loads by id via
@@ -398,8 +398,9 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   are stable. Its own `FileWatcher` covers scene + prefab files; asset files are the
   AssetManager's.
 - Not yet (later phases):
-  streaming budgets (`docs/ASSET_STREAMING.md`), audio/FBX importers,
-  scene-file `model` references (meshes still bound by name in `SceneBindings`).
+  streaming budgets (`docs/ASSET_STREAMING.md`), audio/FBX importers, glTF skins/animations;
+  `meshRenderer` meshes are still bound by name from code (`SceneBindings::meshes`; whole
+  glTF models use `modelRenderer`, C4).
 
 ## Frame flow (Milestone 1)
 

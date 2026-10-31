@@ -99,7 +99,7 @@ Make every app start, run, capture and report the same way.
 - **C1 done:** `AssetManager` (synchronous loads; PNG/JPEG textures, glTF 2.0 models, material
   files with texture slots, scene materials), `AssetCache<T>`/`AssetHandle<T>` ref counting,
   release through the deletion queue, `MaterialSystem::releaseMaterial`, failure states with
-  messages, `SamplerDesc::pixelArt()`, texture size standards (32/64/128/256, warnings).
+  messages, `SamplerDesc::pixelArt()`, texture size standards (revised in C4: 32 default, 64 max, 8/16 allowed; warnings).
 - **C2 done:** async loads (`load*Async`, `createSceneMaterialsAsync`, `update`, `waitAll`).
 - **C3 done:** `AssetRegistry` + `ZodarAssetTool` (`zodar.py import`, `assets list|check`).
 - **C4 done:** scene-file `modelRenderer` (registry id or `.gltf`/`.glb` path), `ModelRenderer`

@@ -107,7 +107,7 @@ struct AssetManagerDesc {
     // linear; pixel-art games pass gfx::SamplerDesc::pixelArt().
     gfx::SamplerDesc defaultSampler = gfx::SamplerDesc::linear();
     // Warn (log + asset warnings) about textures outside the size standards
-    // (Assets/TextureStandards.h: 32, 64, 128, 256 square).
+    // (Assets/TextureStandards.h: 32×32 default, 64×64 maximum, 8/16 allowed).
     bool checkTextureSizes = true;
     // Worker pool decoding async loads (e.g. Application::jobs()); must outlive the manager's
     // pending loads. nullptr (or a pool with 0 workers): async loads decode inline in the

@@ -16,7 +16,8 @@ zodar::SceneInstance scene = zodar::instantiateScene(doc, world, bindings);
 // Render through WorldRender: collectDraws(world, draws) or WorldRenderSync::sync(world).
 ```
 
-Meshes are bound by name from code until the Phase C asset manager. `serializeScene(doc)`
+`meshRenderer` meshes are bound by name from code; whole glTF models are referenced with
+`modelRenderer` (Phase C4). `serializeScene(doc)`
 writes deterministic JSON; `parseScene(serializeScene(doc))` equals `doc` exactly.
 
 Lights, camera, environment and fog: `collectLighting(world, view)` and
