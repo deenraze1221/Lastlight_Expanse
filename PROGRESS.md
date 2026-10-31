@@ -32,16 +32,31 @@
 - Asset streaming designed (docs/ASSET_STREAMING.md), not implemented. MSVC/Windows build unverified here.
 - GeometryPool cannot free meshes; streamed terrain uses the CPU draw path.
 
+## Completed (docs)
+- `docs/AI_FIRST_ROADMAP.md`: AI-first audit + phases A–G (runtime/tooling, ECS + scene files,
+  asset manager, gameplay, physics/audio/animation, introspection, agent docs).
+
+## Current state (commit f64a190)
+- Branch `claude/peaceful-thompson-v8a01e`, clean tree, pushed.
+- All checks green: GCC 13 Debug/Release + Clang 18 Debug 16/16 ctest, MinGW Windows build +
+  123/123 unit tests (Wine), validation 0 errors, no performance regression.
+
 ## Current task
-- AI-first engine: audit done, phased plan in docs/AI_FIRST_ROADMAP.md. Next: Phase A1
-  (`zodar::Application` + headless mode, migrate the game).
-- Visual style follow-ups (shadows, weather, performance) continue alongside.
+- **Next: Phase A1** (docs/AI_FIRST_ROADMAP.md §2 Phase A, §4 item 1): `zodar::Application`
+  runtime (window or headless, fixed timestep, standard frame loop) in a new `Zodar::Runtime`
+  module; migrate `game/` onto it, keeping existing samples/tools unchanged until A3.
+  Not started.
 
 ## Next steps
-1. S5 shadows: cascaded shadow maps for the sun (engine), sampled in pbr.frag and voxel.frag.
-2. Weather: rain/snow particles + wet/snow-covered shading, day-night cycle driving sun/sky/fog.
-3. Compact voxel vertex (8–16 B packed position/normal/AO/layer) — meshes are 64 B/vertex now
-   (108 MB for 0.8 M triangles at radius 6).
-4. GeometryPool free-list so terrain can use GPU-driven rendering (multi-draw indirect).
-5. Texture streaming/compression: BC7 block textures via AssetPipeline (TextureArray already accepts BCn).
-6. Benchmarks on a real GPU (RTX 4070 per roadmap).
+1. Phase A1 (above).
+2. Phase A2: standard CLI, PNG capture, run report JSON.
+3. Phase A3: CMakePresets + `tools/zodar.py`, RUNNING guide; migrate ModelViewer/ZodarBench.
+4. Phase B1/B2: EnTT world + transforms + renderer bridge; scene/material JSON.
+
+## Backlog (rendering / game visuals, interleave when needed)
+- S5 shadows (CSM sun) in pbr.frag and voxel.frag.
+- Weather (rain/snow), day-night cycle.
+- Compact voxel vertex (8–16 B; meshes are 64 B/vertex, 108 MB for 0.8 M triangles at radius 6).
+- GeometryPool free-list -> GPU-driven terrain.
+- BC7 block textures via AssetPipeline.
+- Real-GPU benchmarks (RTX 4070); MSVC build; 1.4 validation with layers >= 1.4.304.
