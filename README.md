@@ -1,6 +1,6 @@
 # Lastlight Expanse
 
-Voxel game built on **ZODAR**, a reusable C++20 / Vulkan 1.3 engine (CMake, Ninja, SDL3).
+Voxel game built on **ZODAR**, a reusable C++23 / Vulkan 1.3+ engine (1.4 used when available) (CMake, Ninja, SDL3).
 The engine was imported from [SECTOR-ENGINE](https://github.com/deenraze1221/SECTOR-ENGINE)
 with its full history; engine code lives in `engine/` and never depends on `game/`.
 

@@ -1,5 +1,7 @@
 #include "Renderer/Vulkan/DeviceCapabilities.h"
 
+#include "Renderer/Vulkan/ApiVersion.h"
+
 #include <algorithm>
 #include <cstring>
 
@@ -38,6 +40,7 @@ ResolvedFeatures resolveFeatures(const DeviceCapabilities& c) {
     f.dedicatedTransfer = c.transferFamily != UINT32_MAX;
     f.meshShaders = c.meshShader;
     f.rayTracing = c.accelerationStructure && (c.rayQuery || c.rayTracingPipeline);
+    f.vulkan14 = c.effectiveApiVersion >= VK_API_VERSION_1_4;
     return f;
 }
 
@@ -52,6 +55,7 @@ std::vector<ResolvedFeatures::Entry> ResolvedFeatures::entries() const {
         {"Dedicated transfer queue", dedicatedTransfer, "graphics queue uploads"},
         {"Mesh shaders (detected, not used yet)", meshShaders, "vertex pipeline + indirect draws"},
         {"Ray tracing (detected, not used yet)", rayTracing, "probes and screen-space techniques"},
+        {"Vulkan 1.4 core (detected, not used yet)", vulkan14, "Vulkan 1.3 core"},
     };
 }
 
@@ -64,7 +68,7 @@ bool hasExtension(const std::vector<VkExtensionProperties>& exts, const char* na
 
 } // namespace
 
-DeviceCapabilities queryCapabilities(VkPhysicalDevice device, VkSurfaceKHR surface) {
+DeviceCapabilities queryCapabilities(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t instanceApiVersion) {
     DeviceCapabilities c;
 
     uint32_t extCount = 0;
@@ -76,6 +80,7 @@ DeviceCapabilities queryCapabilities(VkPhysicalDevice device, VkSurfaceKHR surfa
     vkGetPhysicalDeviceProperties(device, &base);
     c.name = base.deviceName;
     c.apiVersion = base.apiVersion;
+    c.effectiveApiVersion = effectiveApiVersion(instanceApiVersion, base.apiVersion);
     c.vendorId = base.vendorID;
     c.deviceId = base.deviceID;
     c.type = base.deviceType;

@@ -9,6 +9,7 @@ add_library(ZodarGraphics STATIC
     Renderer/Resources/FrameAllocator.cpp
     Renderer/Resources/UploadContext.cpp
     Renderer/Resources/UploadQueue.cpp
+    Renderer/Vulkan/ApiVersion.cpp
     Renderer/Vulkan/VulkanCheck.cpp
     Renderer/Vulkan/DeviceCapabilities.cpp
     Renderer/Vulkan/DeviceSelection.cpp

@@ -6,12 +6,38 @@
 | --- | --- | --- |
 | CMake | ≥ 3.25 | Verified with 3.28.3 |
 | Ninja | any recent | Primary generator |
-| C++ compiler | C++20 | Verified: GCC 13.3, Clang (Ubuntu 24.04). MSVC 2022 17.8+ expected, **not yet verified** |
-| Vulkan driver | 1.3+ | Any desktop GPU driver from 2022 onwards |
-| Vulkan SDK | 1.3.2xx+ | Windows: needed for `glslc` and validation layers. Linux: distro packages are enough |
+| C++ compiler | C++23 | Verified: GCC 13.3, Clang 18.1 (with libstdc++ 13), MinGW-w64 GCC 13 (Windows x64 cross build). MSVC 2022 17.8+ expected, **not yet verified**. Older compilers stop at configure time (`ZODAR_ALLOW_UNSUPPORTED_COMPILER=ON` overrides) |
+| Vulkan driver | 1.3+ (1.4 used when available) | Any desktop GPU driver from 2022 onwards; see "Vulkan API version" below |
+| Vulkan SDK | 1.3.2xx+ (1.4.304+ recommended) | Windows: needed for `glslc` and validation layers. Linux: distro packages are enough; their validation layer decides which API version validated runs use |
 | Git | any | Dependencies are fetched at configure time |
 
 No Vulkan SDK library is linked; the loader is resolved at runtime.
+
+### C++23 policy
+
+The engine builds as C++23 (`CMAKE_CXX_STANDARD 23`). Only features available on every
+verified toolchain may be used. Usable: `std::move_only_function`, `std::to_underlying`,
+`std::unreachable`, `if consteval`, multidimensional `operator[]`, `static operator()`, `auto(x)`.
+**Not usable yet**: `std::expected` (missing with Clang 18 + libstdc++ 13), `std::print`,
+`std::ranges::to`, `std::mdspan`, `std::flat_map` (GCC 13 lacks them), explicit object
+parameters ("deducing this", no GCC 13 support), `std::stacktrace` (extra link library).
+
+### Vulkan API version
+
+Vulkan **1.3 is the minimum**; the engine requests **1.4** when possible and falls back to 1.3
+(`engine/graphics/Renderer/Vulkan/ApiVersion.h`):
+
+- Instance `apiVersion` = 1.4, limited to the validation layer's version when validation is on
+  (an older layer cannot validate newer API usage). The loader version does not limit it:
+  loaders >= 1.1 accept any request, and the engine uses no instance-level 1.4 commands.
+- Effective version = min(instance request, device `apiVersion`); VMA and Dear ImGui use it.
+- With effective 1.4 the "Vulkan 1.4 core" capability is reported, but **no 1.4 functionality
+  is enabled or used yet**: every path runs on 1.3 core on every device.
+- The log shows the decision, e.g. `Vulkan instance created (API 1.3, limited by validation
+  layer, ...)` and `Vulkan API: device 1.4.318, instance 1.3, effective 1.3`.
+- To validate the 1.4 path install validation layers >= 1.4.304 (LunarG SDK, or build
+  Vulkan-ValidationLayers); Ubuntu 24.04 ships 1.3.275, so validated runs there use 1.3.
+  `gpu.zodarbench_highest_api_smoke` runs the 1.4 path without validation.
 
 ## Pinned dependencies (fetched by `cmake/ZodarDependencies.cmake`)
 
@@ -245,7 +271,7 @@ the repository.
 ## Headless / cloud testing
 
 Without a GPU, Mesa **lavapipe** (`mesa-vulkan-drivers`) provides a conformant software
-Vulkan 1.3+ device. Two ways to get a presentable surface:
+Vulkan 1.3+ device (1.4 is used automatically when available). Two ways to get a presentable surface:
 
 ```bash
 SDL_VIDEO_DRIVER=offscreen ctest --test-dir build --output-on-failure

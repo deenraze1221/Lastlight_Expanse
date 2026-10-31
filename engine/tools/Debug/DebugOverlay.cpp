@@ -62,7 +62,7 @@ DebugOverlay::DebugOverlay(gfx::VulkanContext& context, Window* window, VkFormat
     }
 
     ImGui_ImplVulkan_InitInfo info{};
-    info.ApiVersion = VK_API_VERSION_1_3;
+    info.ApiVersion = context.deviceInfo().effectiveApiVersion; // same version as the engine (1.3 or 1.4)
     info.Instance = context.instance();
     info.PhysicalDevice = context.physicalDevice();
     info.Device = context.device();

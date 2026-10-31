@@ -1,7 +1,7 @@
 # ZODAR engine. A nested project so engine version macros stay independent of the game.
 project(ZODAR
     VERSION 0.1.0
-    DESCRIPTION "ZODAR Engine - modular C++20 / Vulkan 1.3 game engine"
+    DESCRIPTION "ZODAR Engine - modular C++23 / Vulkan 1.3+ game engine"
     LANGUAGES C CXX)
 
 # Each engine module is a separate static library. Dependencies only point downwards:

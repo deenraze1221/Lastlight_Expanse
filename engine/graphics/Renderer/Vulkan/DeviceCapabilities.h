@@ -15,7 +15,8 @@ namespace zodar::gfx {
 // routed through ResolvedFeatures with an explicit fallback.
 struct DeviceCapabilities {
     std::string name;
-    uint32_t apiVersion = 0;
+    uint32_t apiVersion = 0;          // Reported by the device (VkPhysicalDeviceProperties).
+    uint32_t effectiveApiVersion = 0; // min(instance request, device), major.minor (ApiVersion.h)
     uint32_t vendorId = 0;
     uint32_t deviceId = 0;
     VkPhysicalDeviceType type = VK_PHYSICAL_DEVICE_TYPE_OTHER;
@@ -85,6 +86,9 @@ struct ResolvedFeatures {
     bool dedicatedTransfer = false;
     bool meshShaders = false;
     bool rayTracing = false;
+    // Effective API version >= 1.4. Detected only: no 1.4 functionality is enabled or used
+    // yet, every path runs on Vulkan 1.3 core.
+    bool vulkan14 = false;
 
     std::vector<Entry> entries() const;
 };
@@ -92,7 +96,8 @@ struct ResolvedFeatures {
 // Pure policy: decides which optional paths are used. No Vulkan calls (unit tested).
 ResolvedFeatures resolveFeatures(const DeviceCapabilities& caps);
 
-// Queries a physical device. `surface` may be VK_NULL_HANDLE (headless).
-DeviceCapabilities queryCapabilities(VkPhysicalDevice device, VkSurfaceKHR surface);
+// Queries a physical device. `surface` may be VK_NULL_HANDLE (headless). `instanceApiVersion`
+// is the VkApplicationInfo::apiVersion the instance was created with.
+DeviceCapabilities queryCapabilities(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t instanceApiVersion);
 
 } // namespace zodar::gfx

@@ -51,7 +51,8 @@ struct DeviceInfo {
     std::string driverName;
     std::string driverInfo;
     VkPhysicalDeviceType type = VK_PHYSICAL_DEVICE_TYPE_OTHER;
-    uint32_t apiVersion = 0;
+    uint32_t apiVersion = 0;          // Reported by the device.
+    uint32_t effectiveApiVersion = 0; // What the engine may use: min(instance, device), major.minor.
     bool isSoftwareRasterizer = false;
     bool samplerAnisotropy = false;
     float maxSamplerAnisotropy = 1.0f;
@@ -83,6 +84,8 @@ public:
     uint32_t presentQueueFamily() const { return m_presentFamily; }
 
     const DeviceInfo& deviceInfo() const { return m_deviceInfo; }
+    // VkApplicationInfo::apiVersion of the instance (1.3 or 1.4).
+    uint32_t instanceApiVersion() const { return m_instanceApiVersion; }
     const DeviceCapabilities& capabilities() const { return m_caps; }
     const ResolvedFeatures& features() const { return m_features; }
 
@@ -155,6 +158,7 @@ private:
     uint32_t m_graphicsFamily = UINT32_MAX;
     uint32_t m_presentFamily = UINT32_MAX;
     DeviceInfo m_deviceInfo;
+    uint32_t m_instanceApiVersion = 0;
     DeviceCapabilities m_caps;
     ResolvedFeatures m_features;
     VkQueue m_computeQueue = VK_NULL_HANDLE;

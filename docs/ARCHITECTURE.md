@@ -1,6 +1,6 @@
 # ZODAR Engine — Architecture
 
-Lastlight Expanse repository: the reusable ZODAR engine lives in `engine/`, the game in `game/`.
+Lastlight Expanse repository (C++23, Vulkan 1.3 minimum / 1.4 when available): the reusable ZODAR engine lives in `engine/`, the game in `game/`.
 Engine code never includes game headers or links game targets.
 
 ## Repository layout
@@ -169,6 +169,7 @@ Minecraft-inspired voxel look built only from engine capabilities (`game/`):
 | **Compiled textures** (S3) | `ZodarAssetCompiler` bakes mips with the engine's filters and encodes BC7 (all model textures by default) into KTX2; `loadGltf` uses them when the source hash matches and falls back to decoding the source image with runtime mip generation (logged) otherwise. `Texture` uploads BCn directly; devices without BC sampling get a CPU decode (bcdec). Streaming is designed in `ASSET_STREAMING.md`, not implemented. |
 | **Lighting** (S4) | Clustered Forward+ (Olsson 2012) with exponential depth slices; one compute thread per cluster streams all lights through shared memory and writes a fixed-capacity, ascending-order 16-bit light list, so clustered shading is byte-identical to evaluating every light (GPU test). Lights live in a device-local buffer (copied from frame scratch each frame); shaders read lights and lists through buffer device addresses in the frame constants. Shading: GGX + height-correlated Smith + Schlick + Lambert with multiple-scattering energy compensation from a baked DFG LUT; IBL via irradiance cube + GGX-prefiltered cube + DFG LUT (split sum), constant ambient without an environment. Optional depth-only prepass with `invariant gl_Position`; the shading pass keeps its pipelines (GREATER_OR_EQUAL, depth write of identical values), so images are identical with and without prepass. Design notes and results: `S4_REPORT.md`. |
 | **Timeline semaphore** for all graphics submissions (`VulkanContext::submitGraphics`) | One ordering source for frames, uploads and deferred deletion. Blocking upload waits additionally use a fence because the 1.3.275 synchronization-validation layer does not model `vkWaitSemaphores` host waits. |
+| **API version**: Vulkan 1.3 minimum, 1.4 requested (`ApiVersion.h`) | Instance requests 1.4, limited to the enabled validation layer's version; effective version = min(request, device); VMA/ImGui use the effective version. Vulkan 1.4 is detected (`ResolvedFeatures::vulkan14`) but nothing uses it yet, so behaviour is identical on 1.3 and 1.4 devices. Future 1.4 features (push descriptors, maintenance5/6, host image copy, 8-bit indices) must each get a capability entry with a 1.3 fallback. |
 | **Capability baseline**: Vulkan 1.3 + dynamic rendering, sync2, descriptor indexing, timeline semaphores, buffer device address, indirect count/multi-draw/first-instance, shader draw parameters | Every current NVIDIA/AMD/Intel desktop driver, RADV (Steam Deck) and lavapipe. Optional features (mesh shaders, ray tracing, async compute, BC, timestamps, memory budget, anisotropy) resolve to an explicit fallback; mesh shaders/RT are detected but not enabled until their paths exist. |
 | Display output encoding | The resolve writes sRGB-encoded values: hardware does it for `_SRGB` swapchains; the shader does it for UNORM-only surfaces. |
 | Forward shading into an RGBA16F target | Simple, MSAA-friendly, enough for M2 light counts; resolve/post stack on top. |
@@ -227,6 +228,10 @@ inputs + `zodarTransformVertex()`), `surface.glsl` (base colour, alpha mask, nor
 registered with `MaterialSystem::registerShader`; games implement their own looks this way.
 
 ## Conventions
+
+- Language: **C++23** (GCC 13, Clang 18, MinGW-w64 GCC 13 verified; MSVC 17.8+ unverified). Use
+  only C++23 features available on all of them; BUILDING.md ("C++23 policy") lists what is
+  usable and what is not yet.
 
 - Namespaces: `zodar` (core/platform), `zodar::gfx` (renderer). Types `PascalCase`, functions
   `camelCase`, members `m_name`, constants `kName`, macros `ZODAR_`.

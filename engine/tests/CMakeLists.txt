@@ -19,6 +19,7 @@ add_executable(ZodarTests
     Renderer/VulkanCheckTests.cpp
     Renderer/UploadQueueTests.cpp
     Renderer/ClusterMathTests.cpp
+    Renderer/ApiVersionTests.cpp
     Scene/VoxelTests.cpp
     UI/ThemeTests.cpp
     UI/DrawListTests.cpp
@@ -123,6 +124,11 @@ if(ZODAR_GPU_TESTS)
     add_test(NAME gpu.zodarbench_city_cpu_path_smoke
         COMMAND ZodarBench --scene city --blocks 6 --path graph --width 640 --height 360 --warmup 3 --frames 10
                 --sync-validation --output ${CMAKE_BINARY_DIR}/zodarbench_city_cpu_smoke.json)
+    # Highest API path: without validation the instance requests Vulkan 1.4, so 1.4 drivers run
+    # with effective version 1.4 (validated runs are limited to the installed layer's version).
+    add_test(NAME gpu.zodarbench_highest_api_smoke
+        COMMAND ZodarBench --scene city --blocks 6 --width 640 --height 360 --warmup 3 --frames 10
+                --no-validation --output ${CMAKE_BINARY_DIR}/zodarbench_highest_api_smoke.json)
     set_tests_properties(gpu.zodarbench_unique_smoke gpu.zodarbench_city_smoke gpu.zodarbench_city_cpu_path_smoke
-                         PROPERTIES TIMEOUT 300)
+                         gpu.zodarbench_highest_api_smoke PROPERTIES TIMEOUT 300)
 endif()

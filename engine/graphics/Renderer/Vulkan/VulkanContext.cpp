@@ -1,5 +1,7 @@
 #include "Renderer/Vulkan/VulkanContext.h"
 
+#include "Renderer/Vulkan/ApiVersion.h"
+
 #include "Core/Error.h"
 #include "Core/Log.h"
 #include "Platform/Window.h"
@@ -7,6 +9,7 @@
 #include "Renderer/Vulkan/VulkanCheck.h"
 
 #include <algorithm>
+#include <optional>
 #include <cstring>
 #include <set>
 #include <vector>
@@ -30,13 +33,18 @@ const char* deviceTypeName(VkPhysicalDeviceType type) {
     }
 }
 
-bool hasLayer(const char* name) {
+// Spec version of an installed instance layer, or nullopt when it is not installed.
+std::optional<uint32_t> layerSpecVersion(const char* name) {
     uint32_t count = 0;
     vkEnumerateInstanceLayerProperties(&count, nullptr);
     std::vector<VkLayerProperties> layers(count);
     vkEnumerateInstanceLayerProperties(&count, layers.data());
-    return std::any_of(layers.begin(), layers.end(),
-                       [&](const VkLayerProperties& l) { return std::strcmp(l.layerName, name) == 0; });
+    for (const VkLayerProperties& l : layers) {
+        if (std::strcmp(l.layerName, name) == 0) {
+            return l.specVersion;
+        }
+    }
+    return std::nullopt;
 }
 
 bool hasInstanceExtension(const char* name) {
@@ -188,8 +196,10 @@ void VulkanContext::createInstance(const ContextDesc& desc) {
     }
 
     m_validationEnabled = false;
+    std::optional<uint32_t> validationLayerVersion;
     if (desc.enableValidation) {
-        if (!hasLayer(kValidationLayer)) {
+        validationLayerVersion = layerSpecVersion(kValidationLayer);
+        if (!validationLayerVersion) {
             ZODAR_LOG_WARN("Validation requested but {} is not installed; continuing without it",
                            kValidationLayer);
         } else if (!m_debugUtils) {
@@ -206,7 +216,11 @@ void VulkanContext::createInstance(const ContextDesc& desc) {
     app.applicationVersion = VK_MAKE_API_VERSION(0, 0, 1, 0);
     app.pEngineName = "ZODAR Engine";
     app.engineVersion = VK_MAKE_API_VERSION(0, ZODAR_VERSION_MAJOR, ZODAR_VERSION_MINOR, ZODAR_VERSION_PATCH);
-    app.apiVersion = VK_API_VERSION_1_3;
+    // Vulkan 1.3 minimum; 1.4 requested unless an enabled validation layer is older (ApiVersion.h).
+    const InstanceApiChoice api =
+        chooseInstanceApiVersion(m_validationEnabled ? validationLayerVersion : std::nullopt);
+    m_instanceApiVersion = api.version;
+    app.apiVersion = m_instanceApiVersion;
 
     VkDebugUtilsMessengerCreateInfoEXT messengerInfo{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
     messengerInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
@@ -240,7 +254,8 @@ void VulkanContext::createInstance(const ContextDesc& desc) {
     if (m_validationEnabled) {
         ZODAR_VK_CHECK(vkCreateDebugUtilsMessengerEXT(m_instance, &messengerInfo, nullptr, &m_debugMessenger));
     }
-    ZODAR_LOG_INFO("Vulkan instance created (API 1.3, validation {}, {})",
+    ZODAR_LOG_INFO("Vulkan instance created (API {}, limited by {}, validation {}, {})",
+                   apiVersionString(m_instanceApiVersion, false), api.limitedBy,
                    m_validationEnabled ? (desc.synchronizationValidation ? "on + sync" : "on") : "off",
                    m_window ? "windowed" : "headless");
 }
@@ -257,7 +272,7 @@ void VulkanContext::pickPhysicalDevice() {
     std::vector<DeviceCandidate> candidates;
     std::vector<DeviceCapabilities> caps;
     for (VkPhysicalDevice device : devices) {
-        DeviceCapabilities c = queryCapabilities(device, m_surface);
+        DeviceCapabilities c = queryCapabilities(device, m_surface, m_instanceApiVersion);
         const auto missing = missingBaseline(c, m_surface != VK_NULL_HANDLE);
         DeviceCandidate candidate{c.name, c.type, c.deviceLocalMemoryBytes, missing.empty()};
         std::string missingText;
@@ -290,6 +305,7 @@ void VulkanContext::pickPhysicalDevice() {
     m_deviceInfo.name = props2.properties.deviceName;
     m_deviceInfo.type = props2.properties.deviceType;
     m_deviceInfo.apiVersion = props2.properties.apiVersion;
+    m_deviceInfo.effectiveApiVersion = m_caps.effectiveApiVersion;
     m_deviceInfo.driverName = driver.driverName;
     m_deviceInfo.driverInfo = driver.driverInfo;
     m_deviceInfo.isSoftwareRasterizer = m_deviceInfo.type == VK_PHYSICAL_DEVICE_TYPE_CPU;
@@ -299,6 +315,9 @@ void VulkanContext::pickPhysicalDevice() {
 
     ZODAR_LOG_INFO("Selected GPU: {} ({}), driver {} {}", m_deviceInfo.name, deviceTypeName(m_deviceInfo.type),
                    m_deviceInfo.driverName, m_deviceInfo.driverInfo);
+    ZODAR_LOG_INFO("Vulkan API: device {}, instance {}, effective {}{}", versionString(m_deviceInfo.apiVersion),
+                   apiVersionString(m_instanceApiVersion, false), apiVersionString(m_caps.effectiveApiVersion, false),
+                   m_features.vulkan14 ? " (1.4 detected; engine paths use 1.3 core)" : "");
     if (m_deviceInfo.isSoftwareRasterizer) {
         ZODAR_LOG_WARN("Rendering on a software rasterizer: output is valid, performance numbers are not");
     }
@@ -385,7 +404,8 @@ void VulkanContext::createAllocator() {
     functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
 
     VmaAllocatorCreateInfo info{};
-    info.vulkanApiVersion = VK_API_VERSION_1_3;
+    // VMA must not assume more than both the instance and the device provide.
+    info.vulkanApiVersion = m_caps.effectiveApiVersion;
     info.physicalDevice = m_physicalDevice;
     info.device = m_device;
     info.instance = m_instance;
