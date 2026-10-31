@@ -81,6 +81,14 @@
   update, scope names standardised; ModelViewer animation on the runtime clock; bench rejects
   unknown `--present` and non-finite `--frame-cap`. Not verified: MinGW/Windows, MSVC.
 
+- Phase B1.1: `Zodar::World` module (`engine/world/World`): EnTT v3.15.0 dependency
+  (`Zodar::EnTT`, header-only); `zodar::Entity` handle (32-bit id, null = 0xFFFFFFFF);
+  `zodar::World` (create, destroy -> bool, isAlive, entityCount, clear; movable, non-copyable).
+  Tests: 7 `World*` unit cases (null handle, distinct ids, destroy/double destroy, stale handle
+  after index reuse, clear, foreign world, move). Verified: GCC 13 Debug, warnings as errors,
+  0 warnings, full build, 7/7 ctest (non-GPU), 145/145 unit cases. Not run this session: GPU
+  tests (no renderer change), Release, Clang, MinGW, MSVC.
+
 ## Engine audit: open items (from SECTOR-ENGINE docs)
 - Renderer S4 awaiting RTX benchmarks; S5 shadows, S6 post (tonemap, TAA), S7 AO/GI, S8 volumetrics/fog, S9 HZB/meshlets planned.
 - Asset streaming designed (docs/ASSET_STREAMING.md), not implemented. MSVC/Windows build unverified here.
@@ -91,15 +99,20 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- Branch `claude/dazzling-allen-03abzg` (from `claude/youthful-ride-bzkozz` A2 550ba4c): Phase A3
-  committed and pushed. Phase A complete.
+- Branch `claude/tender-johnson-ccgy9l` (from `claude/dazzling-allen-03abzg` A3 64e95ff): Phase
+  B1.1 committed and pushed. Phase A complete and unchanged.
 
 ## Current task
-- **Next: Phase B1** (docs/AI_FIRST_ROADMAP.md Phase B): EnTT world + transforms + renderer
-  bridge. Not started.
+- **Next: Phase B1.2** (not started): `Name` + `Transform` components in `Zodar::World`.
+  Handoff: add component API to `World` (templated `add/get/tryGet/has/remove<T>` forwarding to
+  `m_registry`, keep EnTT out of callers); `Transform` (local position/rotation(quat)/scale,
+  glm), parent/child hierarchy (parent handle + child list or EnTT-friendly linked siblings),
+  cached world matrix with dirty propagation; `destroy` of a parent: define policy (destroy
+  children recursively) and test it. Tests in `engine/tests/World/`. Not in B1.2: renderer
+  bridge (B1.3), scene JSON (B2).
 
 ## Next steps
-1. Phase B1/B2: EnTT world + transforms + renderer bridge; scene/material JSON.
+1. Phase B1.2 transforms + hierarchy; B1.3 renderer bridge; B2 scene/material JSON.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.

@@ -21,6 +21,7 @@ add_executable(ZodarTests
     Renderer/ClusterMathTests.cpp
     Renderer/ApiVersionTests.cpp
     Scene/VoxelTests.cpp
+    World/WorldTests.cpp
     Runtime/FixedTimestepTests.cpp
     Runtime/CommandLineTests.cpp
     Runtime/RunReportTests.cpp
@@ -37,7 +38,7 @@ add_executable(ZodarTests
     UI/ProgressBarTests.cpp
     UI/SvgFilterTests.cpp
     UI/LoadingScreenTests.cpp)
-target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::UI Zodar::stb doctest::doctest)
+target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::World Zodar::UI Zodar::stb doctest::doctest)
 # UI tests read the committed resources directly (fonts, original logos, manifest).
 target_compile_definitions(ZodarTests PRIVATE ZODAR_TEST_UI_DIR="${ZODAR_ENGINE_DIR}/ui/Resources/UI")
 zodar_set_warnings(ZodarTests)

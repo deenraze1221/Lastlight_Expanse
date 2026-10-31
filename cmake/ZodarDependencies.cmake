@@ -103,7 +103,15 @@ FetchContent_Declare(nanosvg
     SOURCE_SUBDIR  _zodar_unused
     SYSTEM)
 
-FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf imgui bcdec bc7enc_rdo nanosvg)
+# ECS backend for Zodar::World (header-only, MIT). Used only behind zodar::World / zodar::Entity.
+FetchContent_Declare(entt
+    GIT_REPOSITORY https://github.com/skypjack/entt.git
+    GIT_TAG        v3.15.0
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  _zodar_unused
+    SYSTEM)
+
+FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf imgui bcdec bc7enc_rdo nanosvg entt)
 if(ZODAR_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
@@ -127,6 +135,10 @@ add_library(Zodar::VMA ALIAS zodar_vma)
 add_library(zodar_stb INTERFACE)
 target_include_directories(zodar_stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 add_library(Zodar::stb ALIAS zodar_stb)
+
+add_library(zodar_entt INTERFACE)
+target_include_directories(zodar_entt SYSTEM INTERFACE ${entt_SOURCE_DIR}/src)
+add_library(Zodar::EnTT ALIAS zodar_entt)
 
 # Header-only; the implementation is compiled once inside Zodar::UI.
 add_library(zodar_nanosvg INTERFACE)

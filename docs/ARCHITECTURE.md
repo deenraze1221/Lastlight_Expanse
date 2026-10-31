@@ -15,6 +15,7 @@ Engine code never includes game headers or links game targets.
 | `engine/assets/Assets` | `Zodar::Assets` | CPU meshes/images/models, glTF, KTX2, texture cache |
 | `engine/assets/AssetPipeline` | `Zodar::AssetPipeline` | Offline BCn encoding, mip baking |
 | `engine/scene/Scene` | `Zodar::Scene` | Noise, voxel chunks, greedy mesher, LOD, chunk streaming (no GPU) |
+| `engine/world/World` | `Zodar::World` | Entities: `zodar::World` / `zodar::Entity` over EnTT (Phase B1.1; no GPU) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
 | `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON. Used by the game, ModelViewer and ZodarBench |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarUISandbox |
@@ -228,6 +229,21 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
 | JSON-lines log sink (`log::Config::jsonFilePath`, `--log-json`): own spdlog sink, ISO 8601 UTC ms, escaped message | One object per line is greppable and parseable; no JSON dependency; opt-in |
 | `CMakePresets.json` (debug, release, gpu-tests, ci + `ci` workflow), trees in `build/<preset>` (git-ignored) | One documented way to configure; each preset has its own `_deps` |
 | `tools/zodar.py`: Python stdlib only, prints failures/summaries, full logs to files, returns the underlying exit code | Agents spend few tokens per build/test/run; no extra install |
+
+## Entity world (Phase B1.1)
+
+- Module `Zodar::World` (`engine/world/World`), depends on `Core` + `Zodar::EnTT` only (EnTT
+  v3.15.0, header-only, MIT, pinned in `cmake/ZodarDependencies.cmake`). No GPU, no Renderer.
+- `zodar::Entity`: value handle wrapping a 32-bit id (index + version, EnTT layout);
+  `Entity::null()` / default = `kNullId` (0xFFFFFFFF). Stale handles stay invalid after
+  index reuse. Handles are only meaningful for the World that created them.
+- `zodar::World`: owns an `entt::registry` privately. API: `create()`, `destroy(e)` (false for
+  null/stale/foreign handles), `isAlive(e)`, `entityCount()`, `clear()`. Non-copyable, movable,
+  single-threaded. Callers never touch EnTT types; the backend stays replaceable.
+- EnTT headers are visible through `World.h` (components are templates from B1.2 on), but
+  only `World/*.h` may include `<entt/...>`.
+- Planned: B1.2 `Name` + `Transform` components (hierarchy, cached world matrix); B1.3 renderer
+  bridge (components -> `SceneView` / `GpuScene`).
 
 ## Frame flow (Milestone 1)
 
