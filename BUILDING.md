@@ -29,6 +29,13 @@ No Vulkan SDK library is linked; the loader is resolved at runtime.
 | doctest (tests only) | v2.4.12 | 1da23a3e8119 |
 | bcdec (BCn decode: runtime fallback, tests) | — | 80859ed3b7af |
 | bc7enc_rdo (rgbcx BC1–5 + bc7enc BC7; AssetPipeline only) | — | b9438627eef7 |
+| nanosvg (UI: SVG parse + rasterize) | — | 239e102ec2c6 |
+
+stb_truetype (UI fonts) comes from the existing `stb` pin. UI fonts are committed under
+`Resources/UI/Fonts` with their OFL licences: Michroma Regular and Rajdhani Light/Regular/Bold,
+taken from [google/fonts](https://github.com/google/fonts) at commit `6c1dbe27dcf7`.
+`Resources/UI/MANIFEST.sha256` pins every font and original logo file; the unit tests fail if
+any of them changes. Resources are copied to `bin/ui` at build time.
 
 Headers are 1.4.304 because volk's tags follow header versions; the engine requests and
 requires **API 1.3** plus the baseline in ARCHITECTURE.md (descriptor indexing, timeline semaphores, buffer device address, indirect count). KTX2 is implemented in the engine (S3); later stages add meshoptimizer, FSR, Jolt, miniaudio and ufbx.
@@ -186,6 +193,31 @@ count. Independent validation: `ktx validate <file.ktx2>` from KTX-Software, if 
 
 Use `--no-validation` for timing runs (validation layers add CPU cost) and a separate run with
 validation for correctness. Reports from a software rasterizer set `"softwareRasterizer": true`.
+
+## ZodarUISandbox (temporary)
+
+Review tool for the UI module, drawn with SDL3's 2D renderer until the Vulkan UI pass exists.
+
+```
+ZodarUISandbox [--scale F] [--user-scale F] [--size WxH] [--frames N] [--screenshot F.png]
+               [--check] [--software] [--resources DIR]
+```
+
+Loading window (Stage UI-2), driven by **mock** startup data (scripted example values, not engine
+progress; the window title and every log line say so):
+
+```
+ZodarUISandbox --screen loading [--scenario normal|slow-shaders|failure|indeterminate]
+               [--at SECONDS] [--speed F] [--monitor WxH] [--open-log] [--exit-after-launcher]
+```
+
+`--at` freezes mock time (screenshots), `--monitor` simulates a monitor size, `--speed` speeds up
+a live run. A live run shows the loading window, then resizes and re-centres the same window for
+the launcher placeholder. `ctest` runs one `ui.loading_*` test per scenario and `ui.loading_flow`.
+
+`--scale` overrides the OS display scale (test profiles 1.0 / 1.33 / 2.0; any value works),
+`--check` verifies token colours at known pixels (exit code 4 on mismatch), `--software` forces
+SDL's software renderer. `ctest` runs it offscreen as `ui.sandbox_smoke`.
 
 ## Windows build from Linux (MinGW-w64)
 
