@@ -55,6 +55,9 @@ public:
     // Destroys every entity. Previously returned handles become invalid.
     void clear();
 
+    // Every live entity, sorted by entity index (creation order unless indices were reused).
+    [[nodiscard]] std::vector<Entity> entities() const;
+
     // --- Components ---------------------------------------------------------------------
 
     // Adds (or replaces) component T on a live entity. Throws std::invalid_argument for a dead

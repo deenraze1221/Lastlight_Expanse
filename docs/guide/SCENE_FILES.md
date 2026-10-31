@@ -19,6 +19,18 @@ zodar::SceneInstance scene = zodar::instantiateScene(doc, world, bindings);
 Meshes are bound by name from code until the Phase C asset manager. `serializeScene(doc)`
 writes deterministic JSON; `parseScene(serializeScene(doc))` equals `doc` exactly.
 
+Lights, camera, environment and fog: `collectLighting(world, view)` and
+`collectCamera(world, view.camera)` (`WorldRender/SceneComponents.h`). Component fields are
+generated from the reflection tables into `SCENE_COMPONENTS.md`.
+
+Saving a live World: `captureScene(world, invertBindings(doc, bindings))` returns a document
+(roots by entity index, children depth-first; parents get ids `e<n>`), then `serializeScene`.
+
+Mutable materials: `updateMaterial(materialSystem, handle, materialData)` re-applies edited
+values (e.g. a reloaded `*.material.json`) to a live handle. The GPU write is deferred to the
+next recorded frame and ordered after frames in flight; shader, `alphaMode` and `doubleSided`
+cannot change (create a new material).
+
 ## `*.scene.json`
 
 ```json
@@ -48,6 +60,26 @@ writes deterministic JSON; `parseScene(serializeScene(doc))` equals `doc` exactl
 | `.name` | string | `Name` component |
 | `.transform` | object | `Transform`: `position` [3], `rotation` quaternion **[x, y, z, w]** (unit length) or `rotationDegrees` [3] (Euler XYZ; saved as quaternion), `scale` [3] or number |
 | `.meshRenderer` | object | `mesh` (required, bound name), `material` (required, id in `materials`), `submesh` (default 0), `visible` (default true) |
+| `.camera`, `.directionalLight`, `.pointLight`, `.spotLight`, `.environment`, `.fog` | object | Reflected components, see `SCENE_COMPONENTS.md`; direction = entity -Z |
+| `.prefab` | string | `*.prefab.json` path relative to this file; the entity needs an `id` |
+| `.overrides` | object | Prefab entity id -> fields to patch (`name`, `transform`, `meshRenderer`, components) |
+
+## Prefabs (`*.prefab.json`)
+
+Same format as a scene. They are expanded while parsing (the document is flat):
+
+```json
+{ "id": "lamp", "prefab": "prefabs/lamp.prefab.json", "transform": { "position": [0, 3, 2] },
+  "overrides": { "bulb": { "pointLight": { "intensity": 25 } } } }
+```
+
+- The instance entity becomes the parent of the prefab's root entities; prefab entities
+  follow it in document order.
+- Prefab entity ids become `<instance id>/<id>` (`lamp/bulb`); prefab material ids become
+  `<prefab path>#<id>`, added once per prefab path; material file paths are rebased to the scene.
+- Overrides patch only the given fields (other fields keep the prefab values); material names
+  in overrides refer to the including file's materials (or the prefixed prefab ids).
+- Nesting is allowed (16 levels); cycles are errors. `serializeScene` writes the flat result.
 
 ## `*.material.json`
 
@@ -77,11 +109,13 @@ one per line:
 
 ```
 broken.scene.json:3:6: invalid JSON: syntax error while parsing object key - unexpected ','; expected string literal
-level.scene.json: /entities/4/transform/rotation: quaternion [x, y, z, w] must have unit length (length is 2.000000)
-level.scene.json: /materials/stone/roughnes: unknown field 'roughnes'
+level.scene.json:12:40: /entities/4/transform/rotation: quaternion [x, y, z, w] must have unit length (length is 2.000000)
+level.scene.json:5:9: /materials/stone/roughnes: unknown field 'roughnes'
 <scene>: /entities/0/meshRenderer/mesh: mesh 'cube' is not bound (SceneBindings::meshes)
 ```
 
-Syntax errors carry `line:column`; schema errors carry the JSON pointer of the value. Unknown
+File errors carry `line:column` (schema errors: of the offending value, or of the enclosing
+object for a missing field) and the JSON pointer of the value. Errors found after parsing
+(`instantiateScene`, `captureScene`, `createSceneMaterials`) carry document paths only. Unknown
 fields are errors (typo protection). `instantiateScene` validates all bindings first and leaves
 the World unchanged on error; `createSceneMaterials` creates nothing if a shader is unknown.

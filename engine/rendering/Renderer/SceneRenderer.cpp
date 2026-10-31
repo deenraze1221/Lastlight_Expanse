@@ -407,6 +407,7 @@ RenderStats SceneRenderer::render(const FrameInfo& frame, VkExtent2D extent, con
 
     // Reference path: hand-written barriers (kept for regression comparison with the graph).
     const VkCommandBuffer cmd = frame.commandBuffer;
+    m_materials->recordPendingUpdates(cmd);
     m_lighting->record(cmd, prepared.lights);
     // The previous frame may still read colour (resolve) or write depth: order against both.
     transitionImage(cmd, m_color.handle(), m_color.fullRange(), VK_IMAGE_LAYOUT_UNDEFINED,
@@ -487,6 +488,13 @@ SceneRenderer::GraphOutputs SceneRenderer::addToGraph(RenderGraph& graph, const 
                                                       VkFormat outputFormat, RenderStats* statsOut) {
     RenderStats stats;
     auto prepared = std::make_shared<PreparedScene>(prepare(frame, extent, view, stats));
+
+    // Mutable materials: queued table writes run first, ordered before every later pass.
+    if (m_materials->hasPendingUpdates()) {
+        graph.addPass(
+            "MaterialUpdates", RenderGraph::PassType::Transfer, [](PassBuilder& b) { b.sideEffect(); },
+            [this](PassContext& ctx) { m_materials->recordPendingUpdates(ctx.cmd()); });
+    }
 
     // --- GPU-driven scene: culled and expanded into indirect draws on the GPU. --------
     GpuScene* gpuScene = view.gpuScene;

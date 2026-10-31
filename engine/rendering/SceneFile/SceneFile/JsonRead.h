@@ -8,6 +8,7 @@
 
 #include <glm/glm.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -17,6 +18,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace zodar {
@@ -30,15 +32,118 @@ namespace zodar::detail {
 using Json = nlohmann::basic_json<nlohmann::ordered_map, std::vector, std::string, bool, std::int64_t,
                                   std::uint64_t, float>;
 
+// Maps JSON pointers ("/entities/2/transform") to the 1-based line:column where that value
+// starts in the source text. Built by a small scanner over text nlohmann already accepted.
+class JsonLocator {
+public:
+    struct Position {
+        uint32_t line = 0;
+        uint32_t column = 0;
+    };
+
+    JsonLocator() = default;
+    explicit JsonLocator(std::string_view text) : m_text(text) {
+        for (std::size_t i = 0; i < text.size(); ++i) {
+            if (text[i] == '\n') {
+                m_lineStarts.push_back(i + 1);
+            }
+        }
+        std::size_t i = 0;
+        skipSpace(i);
+        value(i, "", 0);
+    }
+
+    // Position of `path`, or of its nearest recorded ancestor (e.g. the object a missing
+    // field belongs to); {0, 0} if nothing is known.
+    [[nodiscard]] Position find(std::string path) const {
+        for (;;) {
+            if (const auto it = m_positions.find(path); it != m_positions.end()) {
+                return position(it->second);
+            }
+            if (path.empty()) {
+                return {};
+            }
+            path.resize(path.rfind('/') == std::string::npos ? 0 : path.rfind('/'));
+        }
+    }
+
+private:
+    static constexpr int kMaxDepth = 512;
+
+    Position position(std::size_t offset) const {
+        const auto it = std::upper_bound(m_lineStarts.begin(), m_lineStarts.end(), offset);
+        const std::size_t line = static_cast<std::size_t>(it - m_lineStarts.begin()); // 1-based (index 0 = line 1).
+        return {static_cast<uint32_t>(line), static_cast<uint32_t>(offset - m_lineStarts[line - 1] + 1)};
+    }
+    void skipSpace(std::size_t& i) const {
+        while (i < m_text.size() && (m_text[i] == ' ' || m_text[i] == '\t' || m_text[i] == '\n' || m_text[i] == '\r')) {
+            ++i;
+        }
+    }
+    std::string string(std::size_t& i) const { // At '"'; returns the (simply) unescaped text.
+        std::string out;
+        for (++i; i < m_text.size() && m_text[i] != '"'; ++i) {
+            if (m_text[i] == '\\' && i + 1 < m_text.size()) {
+                ++i;
+            }
+            out += m_text[i];
+        }
+        ++i;
+        return out;
+    }
+    void value(std::size_t& i, const std::string& path, int depth) {
+        if (i >= m_text.size() || depth > kMaxDepth) {
+            return;
+        }
+        m_positions.emplace(path, i);
+        const char c = m_text[i];
+        if (c == '{' || c == '[') {
+            const char close = c == '{' ? '}' : ']';
+            ++i;
+            skipSpace(i);
+            for (std::size_t index = 0; i < m_text.size() && m_text[i] != close; ++index) {
+                std::string key = std::to_string(index);
+                if (c == '{') {
+                    key = string(i);
+                    skipSpace(i);
+                    ++i; // ':'
+                    skipSpace(i);
+                }
+                value(i, path + "/" + key, depth + 1);
+                skipSpace(i);
+                if (i < m_text.size() && m_text[i] == ',') {
+                    ++i;
+                    skipSpace(i);
+                }
+            }
+            ++i;
+        } else if (c == '"') {
+            (void)string(i);
+        } else {
+            while (i < m_text.size() && m_text[i] != ',' && m_text[i] != '}' && m_text[i] != ']' && m_text[i] != ' ' &&
+                   m_text[i] != '\n' && m_text[i] != '\r' && m_text[i] != '\t') {
+                ++i;
+            }
+        }
+    }
+
+    std::string_view m_text;
+    std::vector<std::size_t> m_lineStarts{0};
+    std::unordered_map<std::string, std::size_t> m_positions;
+};
+
 class Issues {
 public:
-    explicit Issues(std::string file) : m_file(std::move(file)) {}
+    explicit Issues(std::string file, const JsonLocator* locator = nullptr)
+        : m_file(std::move(file)), m_locator(locator) {}
 
     void add(std::string path, std::string message) {
-        m_list.push_back({m_file, 0, 0, std::move(path), std::move(message)});
+        const JsonLocator::Position at = m_locator ? m_locator->find(path) : JsonLocator::Position{};
+        m_list.push_back({m_file, at.line, at.column, std::move(path), std::move(message)});
     }
     void append(const std::vector<DataIssue>& issues) { m_list.insert(m_list.end(), issues.begin(), issues.end()); }
     [[nodiscard]] bool empty() const noexcept { return m_list.empty(); }
+    [[nodiscard]] std::size_t count() const noexcept { return m_list.size(); }
     [[nodiscard]] const std::string& file() const noexcept { return m_file; }
     void throwIfAny() const {
         if (!m_list.empty()) {
@@ -48,6 +153,7 @@ public:
 
 private:
     std::string m_file;
+    const JsonLocator* m_locator = nullptr;
     std::vector<DataIssue> m_list;
 };
 
@@ -100,8 +206,8 @@ inline std::string child(const std::string& path, std::size_t index) {
 }
 
 // Reports every key of `object` that is not in `allowed`.
-inline void checkKeys(const Json& object, const std::string& path, std::initializer_list<std::string_view> allowed,
-                      Issues& issues) {
+template <typename Names>
+void checkKeysIn(const Json& object, const std::string& path, const Names& allowed, Issues& issues) {
     for (const auto& [key, value] : object.items()) {
         bool known = false;
         for (std::string_view name : allowed) {
@@ -115,6 +221,11 @@ inline void checkKeys(const Json& object, const std::string& path, std::initiali
             issues.add(child(path, key), message);
         }
     }
+}
+
+inline void checkKeys(const Json& object, const std::string& path, std::initializer_list<std::string_view> allowed,
+                      Issues& issues) {
+    checkKeysIn(object, path, allowed, issues);
 }
 
 inline bool requireObject(const Json& value, const std::string& path, Issues& issues) {

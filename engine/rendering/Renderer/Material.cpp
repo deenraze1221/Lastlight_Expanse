@@ -6,6 +6,8 @@
 #include "Renderer/Texture.h"
 #include "Renderer/Vulkan/VulkanContext.h"
 
+#include <algorithm>
+
 namespace zodar::gfx {
 
 MaterialSystem::MaterialSystem(const VulkanContext& context, BindlessRegistry& bindless, VkPipelineLayout layout,
@@ -14,7 +16,7 @@ MaterialSystem::MaterialSystem(const VulkanContext& context, BindlessRegistry& b
     : m_context(context), m_bindless(bindless), m_layout(layout), m_formats(formats), m_defaults(defaults),
       m_shaderDirectory(shaderDirectory) {
     // Host-visible table: a new material's slot is never read by in-flight frames.
-    m_materialBuffer = GpuBuffer(context, {sizeof(GpuMaterial) * kMaxMaterials, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+    m_materialBuffer = GpuBuffer(context, {sizeof(GpuMaterial) * kMaxMaterials, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                            MemoryUsage::Upload, "MaterialTable"});
     m_bindless.setMaterialBuffer(m_materialBuffer.handle(), m_materialBuffer.size());
 
@@ -94,6 +96,49 @@ MaterialHandle MaterialSystem::createMaterial(const MaterialDesc& desc) {
     m_materialBuffer.write(&gpu, sizeof(gpu), static_cast<VkDeviceSize>(handle) * sizeof(GpuMaterial));
     m_materials.push_back(desc);
     return handle;
+}
+
+void MaterialSystem::updateMaterial(MaterialHandle handle, const MaterialDesc& desc) {
+    ZODAR_ENSURE(handle < m_materials.size(), "updateMaterial: unknown material handle " + std::to_string(handle));
+    MaterialDesc& current = m_materials[handle];
+    if (desc.shader != current.shader || desc.alphaMode != current.alphaMode || desc.doubleSided != current.doubleSided) {
+        fail("updateMaterial: material '" + current.name +
+             "' cannot change shader, alphaMode or doubleSided (pipeline state); create a new material");
+    }
+    current = desc;
+    if (std::find(m_pending.begin(), m_pending.end(), handle) == m_pending.end()) {
+        m_pending.push_back(handle);
+    }
+}
+
+void MaterialSystem::recordPendingUpdates(VkCommandBuffer cmd) {
+    if (m_pending.empty()) {
+        return;
+    }
+    // Earlier submissions (frames in flight) may still read the table: a barrier's first scope
+    // covers all previously submitted commands on the queue, so the writes wait for them.
+    VkMemoryBarrier2 before{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+    before.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    before.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+    before.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    before.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    VkDependencyInfo dep{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    dep.memoryBarrierCount = 1;
+    dep.pMemoryBarriers = &before;
+    vkCmdPipelineBarrier2(cmd, &dep);
+    for (const MaterialHandle handle : m_pending) {
+        const GpuMaterial gpu = toGpu(m_materials[handle]);
+        vkCmdUpdateBuffer(cmd, m_materialBuffer.handle(), static_cast<VkDeviceSize>(handle) * sizeof(GpuMaterial),
+                          sizeof(GpuMaterial), &gpu);
+    }
+    VkMemoryBarrier2 after{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+    after.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    after.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    after.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    after.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+    dep.pMemoryBarriers = &after;
+    vkCmdPipelineBarrier2(cmd, &dep);
+    m_pending.clear();
 }
 
 const GraphicsPipeline& MaterialSystem::pipeline(MaterialHandle handle) {

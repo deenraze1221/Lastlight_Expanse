@@ -169,6 +169,7 @@ TEST_CASE("scene file: JSON scene renders identically to the equivalent C++ scen
                           rootMatrix * glm::translate(glm::mat4(1), {i * 1.5f - 2.25f, 1.2f, 0})});
     }
     SceneView manualView = baseView();
+    manualView.lighting.sun.enabled = false; // The scene file has no directional light.
     manualView.draws = manual;
     const auto reference = f.render(manualView, extent);
 
@@ -181,12 +182,20 @@ TEST_CASE("scene file: JSON scene renders identically to the equivalent C++ scen
     REQUIRE(bindings.materials.size() == 2);
     World world;
     const SceneInstance instance = instantiateScene(doc, world, bindings);
-    CHECK(world.entityCount() == 5);
+    CHECK(world.entityCount() == 9);
     CHECK(world.children(instance.byId.at("root")).size() == 4);
+    CHECK(world.parent(instance.byId.at("lamp/bulb")) == instance.byId.at("lamp"));
+
+    // Lights and clear colour come from the scene's components (lamp prefab, sky).
+    SceneView jsonView = baseView();
+    jsonView.lighting.pointLights.clear();
+    jsonView.clearColor = {};
+    collectLighting(world, jsonView);
+    REQUIRE(jsonView.lighting.pointLights.size() == 1);
 
     std::vector<MeshDraw> draws;
     collectDraws(world, draws);
-    SceneView cpuView = baseView();
+    SceneView cpuView = jsonView;
     cpuView.draws = draws;
     CHECK(f.render(cpuView, extent) == reference);
 
@@ -194,10 +203,24 @@ TEST_CASE("scene file: JSON scene renders identically to the equivalent C++ scen
     GpuSceneSink sink(gpuScene);
     WorldRenderSync sync(sink);
     CHECK(sync.sync(world).added == 5);
-    SceneView gpuView = baseView();
+    SceneView gpuView = jsonView;
     gpuView.gpuScene = &gpuScene;
     CHECK(f.render(gpuView, extent) == reference);
     sync.clear();
+
+    // Save the live World and load it again: same rendering.
+    const SceneDocument saved = captureScene(world, invertBindings(doc, bindings));
+    World reloaded;
+    const std::filesystem::path exampleDir = std::filesystem::path(ZODAR_EXAMPLES_DIR) / "scene_from_json";
+    (void)instantiateScene(parseScene(serializeScene(saved), "saved", exampleDir), reloaded, bindings);
+    CHECK(captureScene(reloaded, invertBindings(doc, bindings)) == saved);
+    std::vector<MeshDraw> reloadedDraws;
+    collectDraws(reloaded, reloadedDraws);
+    SceneView reloadedView = baseView();
+    reloadedView.lighting.pointLights.clear();
+    collectLighting(reloaded, reloadedView);
+    reloadedView.draws = reloadedDraws;
+    CHECK(f.render(reloadedView, extent) == reference);
 
     // GPU-side validation: unknown shader (nothing created), out-of-range submesh.
     SceneDocument badShader = doc;
@@ -214,4 +237,45 @@ TEST_CASE("scene file: JSON scene renders identically to the equivalent C++ scen
     CHECK_THROWS_WITH_AS((void)instantiateScene(badSubmesh, other, bindings),
                          doctest::Contains("submesh 9 out of range"), DataError);
     CHECK(other.entityCount() == 0);
+}
+
+TEST_CASE("material system: mutable materials update the GPU table on the next frame") {
+    zodar::test::ValidationGuard guard;
+    Fixture f;
+    const VkExtent2D extent{96, 64};
+    const MaterialHandle live = f.material({0.8f, 0.2f, 0.2f, 1});
+    const MaterialHandle green = f.material({0.1f, 0.8f, 0.2f, 1}); // Reference for the new values.
+
+    SceneView view = baseView();
+    std::vector<MeshDraw> draws{{&f.meshes[1], 0, live, glm::translate(glm::mat4(1), {0, 1, -2})}};
+    view.draws = draws;
+    const auto before = f.render(view, extent);
+    draws[0].material = green;
+    const auto expected = f.render(view, extent);
+    REQUIRE(before != expected);
+
+    MaterialData data = parseMaterial(R"({"baseColor": [0.1, 0.8, 0.2, 1], "roughness": 0.35})", "green", "green");
+    updateMaterial(f.scene.materials(), live, data, "green.material.json");
+    CHECK(f.scene.materials().pendingUpdateCount() == 1);
+    updateMaterial(f.scene.materials(), live, data); // Coalesced.
+    CHECK(f.scene.materials().pendingUpdateCount() == 1);
+    CHECK(f.scene.materials().material(live).baseColorFactor == data.baseColor); // CPU side immediately.
+    draws[0].material = live;
+    CHECK(f.render(view, extent) == expected); // CPU draw path.
+    CHECK_FALSE(f.scene.materials().hasPendingUpdates());
+
+    // GpuScene path, then back to red through a second update.
+    GpuScene gpuScene(*gpu().context, f.scene.materials(), zodar::test::shaderDir(), 2);
+    gpuScene.add(f.meshes[1], 0, live, draws[0].transform);
+    SceneView gpuView = baseView();
+    gpuView.gpuScene = &gpuScene;
+    CHECK(f.render(gpuView, extent) == expected);
+    data.baseColor = {0.8f, 0.2f, 0.2f, 1};
+    updateMaterial(f.scene.materials(), live, data);
+    CHECK(f.render(gpuView, extent) == before);
+
+    // Pipeline state cannot change on a live material.
+    data.alphaMode = AlphaMode::Blend;
+    CHECK_THROWS_WITH_AS(updateMaterial(f.scene.materials(), live, data), doctest::Contains("cannot change"), DataError);
+    CHECK_FALSE(f.scene.materials().hasPendingUpdates());
 }

@@ -50,6 +50,22 @@ std::size_t World::entityCount() const noexcept {
 
 void World::clear() { m_registry.clear(); }
 
+std::vector<Entity> World::entities() const {
+    std::vector<Entity> result;
+    if (const auto* storage = m_registry.storage<entt::entity>(); storage != nullptr) {
+        // The first free_list() entries of the entity storage are the live entities.
+        const std::size_t live = storage->free_list();
+        result.reserve(live);
+        for (std::size_t i = 0; i < live; ++i) {
+            result.emplace_back(static_cast<Entity::Id>(storage->data()[i]));
+        }
+    }
+    std::sort(result.begin(), result.end(), [](Entity a, Entity b) {
+        return entt::to_entity(static_cast<entt::entity>(a.id())) < entt::to_entity(static_cast<entt::entity>(b.id()));
+    });
+    return result;
+}
+
 void World::detachFromParent(Entity entity) {
     auto* node = m_registry.try_get<detail::HierarchyNode>(toEntt(entity));
     if (node == nullptr || node->parent.isNull()) {

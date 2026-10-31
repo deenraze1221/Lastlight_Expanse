@@ -4,6 +4,7 @@
 #include "SceneFile/MaterialFile.h"
 #include "World/Components.h"
 #include "World/World.h"
+#include "WorldRender/SceneComponents.h"
 #include "WorldRender/WorldRender.h"
 
 #include <cstdint>
@@ -20,7 +21,13 @@
 //   SceneBindings b;  b.meshes["cube"] = &cubeMesh;                 // meshes come from code
 //   b.materials = createSceneMaterials(doc, renderer.materials());  // GPU materials
 //   SceneInstance s = instantiateScene(doc, world, b);              // entities in the World
-// Rendering then goes through the existing WorldRender bridge (collectDraws / WorldRenderSync).
+// Rendering then goes through the existing WorldRender bridge (collectDraws / WorldRenderSync,
+// collectLighting / collectCamera). captureScene saves a live World back to a document.
+//
+// Prefabs (*.prefab.json, same format as a scene) are expanded at parse time: an entity with
+// "prefab": "<path>" becomes the parent of the prefab's root entities; prefab entity ids become
+// "<instance id>/<id>", prefab material ids "<prefab path>#<id>"; "overrides" patches fields of
+// prefab entities by id. The resulting document is flat (serializeScene writes no prefab refs).
 namespace zodar {
 
 // A material defined by the scene: inline, or loaded from `source` (path as written in the
@@ -50,6 +57,13 @@ struct SceneEntity {
     std::optional<std::string> name;
     std::optional<Transform> transform;
     std::optional<SceneMeshRenderer> meshRenderer;
+    // Reflected components (WorldRender/SceneComponents.h); JSON keys = ComponentReflection::key.
+    std::optional<CameraComponent> camera;
+    std::optional<DirectionalLightComponent> directionalLight;
+    std::optional<PointLightComponent> pointLight;
+    std::optional<SpotLightComponent> spotLight;
+    std::optional<EnvironmentComponent> environment;
+    std::optional<FogComponent> fog;
 
     bool operator==(const SceneEntity&) const = default;
 };
@@ -63,13 +77,13 @@ struct SceneDocument {
     bool operator==(const SceneDocument&) const = default;
 };
 
-// Parses and validates scene JSON. Material references (string values in "materials") are
+// Parses and validates scene JSON (prefabs expanded). Material references (string values in "materials") are
 // loaded relative to `baseDirectory`. `file` names the source in errors. Throws DataError
 // listing every problem found (syntax: file:line:column; schema: JSON pointer path).
 [[nodiscard]] SceneDocument parseScene(std::string_view json, std::string_view file = "<memory>",
                                        const std::filesystem::path& baseDirectory = {});
 
-// Reads and parses a scene file; material references resolve next to it.
+// Reads and parses a scene (or prefab) file; material and prefab references resolve next to it.
 [[nodiscard]] SceneDocument loadSceneFile(const std::filesystem::path& path);
 
 // Deterministic, pretty-printed JSON. Referenced materials are written as their `source`
@@ -93,10 +107,31 @@ struct SceneInstance {
     std::unordered_map<std::string, Entity> byId; // Entities that have an id.
 };
 
-// Creates the document's entities in `world` (Name, Transform, MeshRenderer, hierarchy).
+// Creates the document's entities in `world` (Name, Transform, MeshRenderer, reflected
+// components, hierarchy). Error paths use document indices ("/entities/<i>").
 // All mesh / material names and submesh indices are checked first: on DataError the world is
 // unchanged. Bound meshes must outlive the entities that use them.
 SceneInstance instantiateScene(const SceneDocument& document, World& world, const SceneBindings& bindings,
                                std::string_view file = "<scene>");
+
+// Names used to write a live World back into a document. invertBindings() builds them from
+// the document and bindings a scene was instantiated with.
+struct SceneCaptureNames {
+    std::unordered_map<const gfx::GpuMesh*, std::string> meshes;
+    std::unordered_map<gfx::MaterialHandle, std::string> materials; // Handle -> material id.
+    std::vector<SceneMaterial> materialDefinitions;                 // Written to "materials".
+};
+[[nodiscard]] SceneCaptureNames invertBindings(const SceneDocument& document, const SceneBindings& bindings);
+
+// Writes every live entity of `world` (roots by entity index, then children depth-first in
+// child order, so instantiating the result reproduces the hierarchy). Entities with children
+// get generated ids "e<n>" (n = output index). Throws DataError naming the entity for a mesh
+// or material missing from `names`.
+[[nodiscard]] SceneDocument captureScene(const World& world, const SceneCaptureNames& names,
+                                         std::string_view file = "<world>");
+
+// Markdown reference of every scene-file component, generated from the reflection tables
+// (docs/guide/SCENE_COMPONENTS.md is this text; a unit test keeps them in sync).
+[[nodiscard]] std::string sceneComponentReference();
 
 } // namespace zodar

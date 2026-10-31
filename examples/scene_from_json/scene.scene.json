@@ -14,6 +14,15 @@
     { "name": "Orb 0", "parent": "root", "transform": { "position": [-2.25, 1.2, 0] }, "meshRenderer": { "mesh": "sphere", "material": "red" } },
     { "name": "Orb 1", "parent": "root", "transform": { "position": [-0.75, 1.2, 0] }, "meshRenderer": { "mesh": "sphere", "material": "blue" } },
     { "name": "Orb 2", "parent": "root", "transform": { "position": [0.75, 1.2, 0] }, "meshRenderer": { "mesh": "sphere", "material": "red" } },
-    { "name": "Orb 3", "parent": "root", "transform": { "position": [2.25, 1.2, 0] }, "meshRenderer": { "mesh": "sphere", "material": "blue" } }
+    { "name": "Orb 3", "parent": "root", "transform": { "position": [2.25, 1.2, 0] }, "meshRenderer": { "mesh": "sphere", "material": "blue" } },
+    {
+      "id": "lamp",
+      "name": "Lamp",
+      "prefab": "prefabs/lamp.prefab.json",
+      "transform": { "position": [0, 3, 2] },
+      "overrides": { "bulb": { "pointLight": { "intensity": 25 } } }
+    },
+    { "name": "Sky", "environment": { "clearColor": [0.05, 0.06, 0.08, 1] } },
+    { "name": "Camera", "transform": { "position": [0, 4, 6], "rotationDegrees": [-30, 0, 0] }, "camera": { "verticalFovDegrees": 60 } }
   ]
 }

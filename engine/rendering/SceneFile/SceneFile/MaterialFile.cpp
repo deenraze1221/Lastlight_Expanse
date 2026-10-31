@@ -88,7 +88,8 @@ Json materialJson(const MaterialData& m) {
 MaterialData parseMaterial(std::string_view json, std::string_view file, std::string_view defaultName) {
     const std::string fileName(file);
     const detail::Json root = detail::parseJson(json, fileName);
-    detail::Issues issues(fileName);
+    const detail::JsonLocator locator(json);
+    detail::Issues issues(fileName, &locator);
     MaterialData material;
     detail::readMaterialObject(root, "", std::string(defaultName), material, issues);
     issues.throwIfAny();
@@ -127,17 +128,39 @@ gfx::MaterialDesc toMaterialDesc(const MaterialData& m, gfx::ShaderHandle shader
     return d;
 }
 
-gfx::MaterialHandle createMaterial(gfx::MaterialSystem& materials, const MaterialData& material,
-                                   std::string_view file) {
-    gfx::ShaderHandle shader = 0;
+namespace {
+
+gfx::ShaderHandle resolveShader(gfx::MaterialSystem& materials, const MaterialData& material, std::string_view file) {
     try {
-        shader = materials.findShader(material.shader);
+        return materials.findShader(material.shader);
     } catch (const Error&) {
         throw DataError({{std::string(file), 0, 0, "/shader",
                           "material '" + material.name + "': unknown shader '" + material.shader +
                               "' (register it with MaterialSystem::registerShader first)"}});
     }
-    return materials.createMaterial(toMaterialDesc(material, shader));
+}
+
+} // namespace
+
+gfx::MaterialHandle createMaterial(gfx::MaterialSystem& materials, const MaterialData& material,
+                                   std::string_view file) {
+    return materials.createMaterial(toMaterialDesc(material, resolveShader(materials, material, file)));
+}
+
+void updateMaterial(gfx::MaterialSystem& materials, gfx::MaterialHandle handle, const MaterialData& material,
+                    std::string_view file) {
+    const gfx::MaterialDesc desc = toMaterialDesc(material, resolveShader(materials, material, file));
+    if (handle >= materials.materialCount()) {
+        throw DataError({{std::string(file), 0, 0, "", "unknown material handle " + std::to_string(handle)}});
+    }
+    const gfx::MaterialDesc& current = materials.material(handle);
+    if (desc.shader != current.shader || desc.alphaMode != current.alphaMode || desc.doubleSided != current.doubleSided) {
+        throw DataError({{std::string(file), 0, 0, "",
+                          "material '" + material.name +
+                              "': shader, alphaMode and doubleSided cannot change on a live material "
+                              "(create a new material)"}});
+    }
+    materials.updateMaterial(handle, desc);
 }
 
 } // namespace zodar

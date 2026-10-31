@@ -6,6 +6,8 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <functional>
+#include <sstream>
 #include <unordered_set>
 
 namespace zodar {
@@ -16,12 +18,107 @@ using detail::Json;
 
 namespace {
 
+constexpr std::size_t kMaxPrefabDepth = 16;
+
+// Calls f(&SceneEntity::member) for every reflected scene component.
+template <typename F>
+void forEachReflected(F&& f) {
+    f(&SceneEntity::camera);
+    f(&SceneEntity::directionalLight);
+    f(&SceneEntity::pointLight);
+    f(&SceneEntity::spotLight);
+    f(&SceneEntity::environment);
+    f(&SceneEntity::fog);
+}
+
+template <typename Member>
+using ComponentOf = typename std::remove_cvref_t<decltype(std::declval<SceneEntity&>().*std::declval<Member>())>::value_type;
+
+// --- Reflected components <-> JSON -----------------------------------------------------
+
+void readReflected(const Json& object, const std::string& path, const ComponentInfo& info, void* component,
+                   Issues& issues) {
+    if (!detail::requireObject(object, path, issues)) {
+        return;
+    }
+    std::vector<std::string_view> names;
+    for (const FieldInfo& field : info.fields) {
+        names.push_back(field.name);
+    }
+    detail::checkKeysIn(object, path, names, issues);
+    for (const FieldInfo& f : info.fields) {
+        switch (f.type) {
+        case FieldType::Bool:
+            detail::readBool(object, f.name, path, f.get<bool>(component), issues);
+            break;
+        case FieldType::Uint:
+            detail::readUint(object, f.name, path, f.get<uint32_t>(component), issues);
+            break;
+        case FieldType::Float:
+            detail::readFloat(object, f.name, path, f.get<float>(component), issues, f.min, f.max);
+            break;
+        case FieldType::Vec3:
+            detail::readVec<3>(object, f.name, path, f.get<glm::vec3>(component), issues, f.min, f.max);
+            break;
+        case FieldType::Vec4:
+            detail::readVec<4>(object, f.name, path, f.get<glm::vec4>(component), issues, f.min, f.max);
+            break;
+        case FieldType::Quat: {
+            glm::vec4 q(0.0f);
+            if (detail::readVec<4>(object, f.name, path, q, issues)) {
+                f.get<glm::quat>(component) = glm::quat(q.w, q.x, q.y, q.z);
+            }
+            break;
+        }
+        case FieldType::String:
+            detail::readString(object, f.name, path, f.get<std::string>(component), issues);
+            break;
+        }
+    }
+}
+
+Json reflectedJson(const ComponentInfo& info, const void* component) {
+    Json j = Json::object();
+    for (const FieldInfo& f : info.fields) {
+        const std::string key(f.name);
+        switch (f.type) {
+        case FieldType::Bool:
+            j[key] = f.get<bool>(component);
+            break;
+        case FieldType::Uint:
+            j[key] = f.get<uint32_t>(component);
+            break;
+        case FieldType::Float:
+            j[key] = f.get<float>(component);
+            break;
+        case FieldType::Vec3:
+            j[key] = detail::vecJson(f.get<glm::vec3>(component));
+            break;
+        case FieldType::Vec4:
+            j[key] = detail::vecJson(f.get<glm::vec4>(component));
+            break;
+        case FieldType::Quat: {
+            const glm::quat& q = f.get<glm::quat>(component);
+            j[key] = detail::vecJson(glm::vec4(q.x, q.y, q.z, q.w));
+            break;
+        }
+        case FieldType::String:
+            j[key] = f.get<std::string>(component);
+            break;
+        }
+    }
+    return j;
+}
+
+// --- Built-in components ---------------------------------------------------------------
+
+// Reads into `out` (fields not present keep their current value, so overrides can patch).
 void readTransform(const Json& object, const std::string& path, Transform& out, Issues& issues) {
     if (!detail::requireObject(object, path, issues)) {
         return;
     }
     detail::checkKeys(object, path, {"position", "rotation", "rotationDegrees", "scale"}, issues);
-    Transform t;
+    Transform t = out;
     detail::readVec<3>(object, "position", path, t.position, issues);
     if (object.contains("rotation") && object.contains("rotationDegrees")) {
         issues.add(child(path, "rotationDegrees"), "use either 'rotation' or 'rotationDegrees', not both");
@@ -50,32 +147,174 @@ void readTransform(const Json& object, const std::string& path, Transform& out, 
     out = t;
 }
 
-void readMeshRenderer(const Json& object, const std::string& path, SceneMeshRenderer& out, Issues& issues) {
+// `partial`: patch an existing renderer (no required fields).
+void readMeshRenderer(const Json& object, const std::string& path, SceneMeshRenderer& out, bool partial,
+                      Issues& issues) {
     if (!detail::requireObject(object, path, issues)) {
         return;
     }
     detail::checkKeys(object, path, {"mesh", "submesh", "material", "visible"}, issues);
-    SceneMeshRenderer r;
-    detail::readString(object, "mesh", path, r.mesh, issues, true);
+    SceneMeshRenderer r = out;
+    detail::readString(object, "mesh", path, r.mesh, issues, !partial);
     detail::readUint(object, "submesh", path, r.submesh, issues);
-    detail::readString(object, "material", path, r.material, issues, true);
+    detail::readString(object, "material", path, r.material, issues, !partial);
     detail::readBool(object, "visible", path, r.visible, issues);
     out = std::move(r);
 }
 
-std::string entityLabel(const SceneEntity& entity, std::size_t index) {
-    if (!entity.id.empty()) {
-        return "entity '" + entity.id + "'";
-    }
-    return "entity " + std::to_string(index);
+std::vector<std::string_view> componentKeys(std::initializer_list<std::string_view> base) {
+    std::vector<std::string_view> keys(base);
+    forEachReflected([&keys](auto member) { keys.push_back(ComponentReflection<ComponentOf<decltype(member)>>::key); });
+    return keys;
 }
 
-} // namespace
+// Component fields of an entity object (shared by entities and prefab overrides). Existing
+// components are patched, missing ones created from defaults.
+void readEntityComponents(const Json& object, const std::string& path, SceneEntity& entity,
+                          const std::unordered_set<std::string>& materialIds, Issues& issues) {
+    if (const auto name = object.find("name"); name != object.end()) {
+        if (name->is_string()) {
+            entity.name = name->get<std::string>();
+        } else {
+            issues.add(child(path, "name"), "expected a string, got " + detail::typeName(*name));
+        }
+    }
+    if (const auto t = object.find("transform"); t != object.end()) {
+        if (!entity.transform) {
+            entity.transform.emplace();
+        }
+        readTransform(*t, child(path, "transform"), *entity.transform, issues);
+    }
+    if (const auto r = object.find("meshRenderer"); r != object.end()) {
+        const bool partial = entity.meshRenderer.has_value();
+        if (!partial) {
+            entity.meshRenderer.emplace();
+        }
+        const std::string at = child(path, "meshRenderer");
+        readMeshRenderer(*r, at, *entity.meshRenderer, partial, issues);
+        const std::string& material = entity.meshRenderer->material;
+        if (!material.empty() && !materialIds.contains(material)) {
+            issues.add(child(at, "material"), "unknown material '" + material + "' (not defined in /materials)");
+        }
+    }
+    forEachReflected([&](auto member) {
+        using T = ComponentOf<decltype(member)>;
+        const std::string_view key = ComponentReflection<T>::key;
+        if (const auto it = object.find(key); it != object.end()) {
+            auto& component = entity.*member;
+            if (!component) {
+                component.emplace();
+            }
+            readReflected(*it, child(path, key), componentInfo<T>(), &*component, issues);
+        }
+    });
+}
 
-SceneDocument parseScene(std::string_view json, std::string_view file, const std::filesystem::path& baseDirectory) {
-    const std::string fileName(file);
-    const Json root = detail::parseJson(json, fileName);
-    Issues issues(fileName);
+// --- Parsing -----------------------------------------------------------------------------
+
+struct ParseState {
+    std::vector<std::string> prefabStack; // Normalised prefab paths being expanded (cycle check).
+};
+
+SceneDocument parseSceneImpl(std::string_view json, const std::string& file, const std::filesystem::path& baseDir,
+                             ParseState& state);
+
+std::string normalisedKey(const std::filesystem::path& path) {
+    std::error_code ec;
+    const std::filesystem::path canonical = std::filesystem::weakly_canonical(path, ec);
+    return (ec ? path.lexically_normal() : canonical).generic_string();
+}
+
+// Loads `prefabPath` (relative to baseDir) and appends its entities after the instance entity.
+void expandPrefab(std::size_t instance, const std::string& prefabPath, const Json* overrides, const std::string& path,
+                  const std::filesystem::path& baseDir, SceneDocument& doc, std::vector<std::string>& sourcePaths,
+                  std::unordered_set<std::string>& materialIds, Issues& issues, ParseState& state) {
+    const std::filesystem::path full = baseDir / prefabPath;
+    const std::string key = normalisedKey(full);
+    const std::string at = child(path, "prefab");
+    if (std::find(state.prefabStack.begin(), state.prefabStack.end(), key) != state.prefabStack.end()) {
+        std::string chain;
+        for (const std::string& p : state.prefabStack) {
+            chain += p + " -> ";
+        }
+        issues.add(at, "prefab cycle: " + chain + key);
+        return;
+    }
+    if (state.prefabStack.size() >= kMaxPrefabDepth) {
+        issues.add(at, "prefabs nested deeper than " + std::to_string(kMaxPrefabDepth) + " levels");
+        return;
+    }
+    SceneDocument prefab;
+    state.prefabStack.push_back(key);
+    try {
+        prefab = parseSceneImpl(detail::readTextFile(full), full.generic_string(), full.parent_path(), state);
+    } catch (const DataError& e) {
+        state.prefabStack.pop_back();
+        issues.add(at, "cannot load prefab '" + prefabPath + "'");
+        issues.append(e.issues());
+        return;
+    }
+    state.prefabStack.pop_back();
+
+    // Prefab materials: shared by all instances of the same prefab path.
+    const std::string prefix = prefabPath + "#";
+    const std::filesystem::path relativeDir = std::filesystem::path(prefabPath).parent_path();
+    for (const SceneMaterial& material : prefab.materials) {
+        SceneMaterial copy = material;
+        copy.id = prefix + material.id;
+        if (!copy.source.empty()) {
+            copy.source = (relativeDir / material.source).lexically_normal().generic_string();
+        }
+        if (materialIds.insert(copy.id).second) {
+            doc.materials.push_back(std::move(copy));
+        }
+    }
+
+    const std::string& instanceId = doc.entities[instance].id;
+    std::unordered_map<std::string, std::size_t> local;
+    std::vector<SceneEntity> copies;
+    for (const SceneEntity& entity : prefab.entities) {
+        SceneEntity copy = entity;
+        if (!entity.id.empty()) {
+            copy.id = instanceId + "/" + entity.id;
+            local.emplace(entity.id, copies.size());
+        }
+        copy.parent = entity.parent.empty() ? instanceId : instanceId + "/" + entity.parent;
+        if (copy.meshRenderer) {
+            copy.meshRenderer->material = prefix + entity.meshRenderer->material;
+        }
+        copies.push_back(std::move(copy));
+    }
+
+    if (overrides != nullptr) {
+        const std::string overridesPath = child(path, "overrides");
+        if (detail::requireObject(*overrides, overridesPath, issues)) {
+            static const std::vector<std::string_view> allowed = componentKeys({"name", "transform", "meshRenderer"});
+            for (const auto& [id, value] : overrides->items()) {
+                const std::string entryPath = child(overridesPath, id);
+                const auto target = local.find(id);
+                if (target == local.end()) {
+                    issues.add(entryPath, "prefab '" + prefabPath + "' has no entity with id '" + id + "'");
+                    continue;
+                }
+                if (detail::requireObject(value, entryPath, issues)) {
+                    detail::checkKeysIn(value, entryPath, allowed, issues);
+                    readEntityComponents(value, entryPath, copies[target->second], materialIds, issues);
+                }
+            }
+        }
+    }
+    for (SceneEntity& copy : copies) {
+        doc.entities.push_back(std::move(copy));
+        sourcePaths.push_back(at);
+    }
+}
+
+SceneDocument parseSceneImpl(std::string_view json, const std::string& file, const std::filesystem::path& baseDir,
+                             ParseState& state) {
+    const Json root = detail::parseJson(json, file);
+    const detail::JsonLocator locator(json);
+    Issues issues(file, &locator);
     SceneDocument doc;
     if (!detail::requireObject(root, "", issues)) {
         issues.throwIfAny();
@@ -101,7 +340,7 @@ SceneDocument parseScene(std::string_view json, std::string_view file, const std
             if (value.is_string()) {
                 material.source = value.get<std::string>();
                 try {
-                    material.data = loadMaterialFile(baseDirectory / material.source);
+                    material.data = loadMaterialFile(baseDir / material.source);
                 } catch (const DataError& e) {
                     issues.add(path, "cannot load material file '" + material.source + "'");
                     issues.append(e.issues());
@@ -117,55 +356,56 @@ SceneDocument parseScene(std::string_view json, std::string_view file, const std
         }
     }
 
-    std::unordered_map<std::string, std::size_t> entityIds;
+    std::vector<std::string> sourcePaths; // JSON path of each document entity (errors).
     if (const auto it = root.find("entities"); it != root.end()) {
         if (!it->is_array()) {
             issues.add("/entities", "expected an array, got " + detail::typeName(*it));
         } else {
+            static const std::vector<std::string_view> allowed =
+                componentKeys({"id", "parent", "name", "transform", "meshRenderer", "prefab", "overrides"});
             for (std::size_t i = 0; i < it->size(); ++i) {
                 const Json& object = (*it)[i];
                 const std::string path = child("/entities", i);
                 SceneEntity entity;
+                std::string prefab;
                 if (detail::requireObject(object, path, issues)) {
-                    detail::checkKeys(object, path, {"id", "name", "parent", "transform", "meshRenderer"}, issues);
-                    if (detail::readString(object, "id", path, entity.id, issues) &&
-                        !entityIds.emplace(entity.id, i).second) {
-                        issues.add(child(path, "id"), "duplicate entity id '" + entity.id + "'");
-                    }
+                    detail::checkKeysIn(object, path, allowed, issues);
+                    detail::readString(object, "id", path, entity.id, issues);
                     detail::readString(object, "parent", path, entity.parent, issues);
-                    if (const auto name = object.find("name"); name != object.end()) {
-                        if (name->is_string()) {
-                            entity.name = name->get<std::string>();
-                        } else {
-                            issues.add(child(path, "name"), "expected a string, got " + detail::typeName(*name));
-                        }
+                    readEntityComponents(object, path, entity, materialIds, issues);
+                    if (detail::readString(object, "prefab", path, prefab, issues) && entity.id.empty()) {
+                        issues.add(child(path, "id"), "a prefab instance needs an id (prefab entity ids are prefixed with it)");
+                        prefab.clear();
                     }
-                    if (const auto t = object.find("transform"); t != object.end()) {
-                        entity.transform.emplace();
-                        readTransform(*t, child(path, "transform"), *entity.transform, issues);
-                    }
-                    if (const auto r = object.find("meshRenderer"); r != object.end()) {
-                        entity.meshRenderer.emplace();
-                        readMeshRenderer(*r, child(path, "meshRenderer"), *entity.meshRenderer, issues);
-                        const std::string& material = entity.meshRenderer->material;
-                        if (!material.empty() && !materialIds.contains(material)) {
-                            issues.add(child(child(path, "meshRenderer"), "material"),
-                                       "unknown material '" + material + "' (not defined in /materials)");
-                        }
+                    if (object.contains("overrides") && !object.contains("prefab")) {
+                        issues.add(child(path, "overrides"), "'overrides' needs 'prefab'");
                     }
                 }
                 doc.entities.push_back(std::move(entity));
+                sourcePaths.push_back(path);
+                if (!prefab.empty()) {
+                    const auto overrides = object.find("overrides");
+                    expandPrefab(doc.entities.size() - 1, prefab, overrides != object.end() ? &*overrides : nullptr,
+                                 path, baseDir, doc, sourcePaths, materialIds, issues, state);
+                }
             }
         }
     }
 
-    // Parent references: must exist, and following parents must never return to the entity.
+    // Ids must be unique (also across expanded prefabs); parents must exist and never cycle.
+    std::unordered_map<std::string, std::size_t> entityIds;
+    for (std::size_t i = 0; i < doc.entities.size(); ++i) {
+        const std::string& id = doc.entities[i].id;
+        if (!id.empty() && !entityIds.emplace(id, i).second) {
+            issues.add(child(sourcePaths[i], "id"), "duplicate entity id '" + id + "'");
+        }
+    }
     for (std::size_t i = 0; i < doc.entities.size(); ++i) {
         const SceneEntity& entity = doc.entities[i];
         if (entity.parent.empty()) {
             continue;
         }
-        const std::string path = child(child("/entities", i), "parent");
+        const std::string path = child(sourcePaths[i], "parent");
         const auto parent = entityIds.find(entity.parent);
         if (parent == entityIds.end()) {
             issues.add(path, "unknown parent entity id '" + entity.parent + "'");
@@ -174,7 +414,8 @@ SceneDocument parseScene(std::string_view json, std::string_view file, const std
         std::size_t current = parent->second;
         for (std::size_t steps = 0; steps <= doc.entities.size(); ++steps) {
             if (current == i) {
-                issues.add(path, entityLabel(entity, i) + " is its own ancestor (parent cycle)");
+                issues.add(path, (entity.id.empty() ? "entity " + std::to_string(i) : "entity '" + entity.id + "'") +
+                                     " is its own ancestor (parent cycle)");
                 break;
             }
             const auto next = entityIds.find(doc.entities[current].parent);
@@ -189,8 +430,17 @@ SceneDocument parseScene(std::string_view json, std::string_view file, const std
     return doc;
 }
 
+} // namespace
+
+SceneDocument parseScene(std::string_view json, std::string_view file, const std::filesystem::path& baseDirectory) {
+    ParseState state;
+    return parseSceneImpl(json, std::string(file), baseDirectory, state);
+}
+
 SceneDocument loadSceneFile(const std::filesystem::path& path) {
-    return parseScene(detail::readTextFile(path), path.generic_string(), path.parent_path());
+    ParseState state;
+    state.prefabStack.push_back(normalisedKey(path));
+    return parseSceneImpl(detail::readTextFile(path), path.generic_string(), path.parent_path(), state);
 }
 
 std::string serializeScene(const SceneDocument& document) {
@@ -214,12 +464,7 @@ std::string serializeScene(const SceneDocument& document) {
             e["parent"] = entity.parent;
         }
         if (entity.transform) {
-            const Transform& t = *entity.transform;
-            Json transform = Json::object();
-            transform["position"] = detail::vecJson(t.position);
-            transform["rotation"] = detail::vecJson(glm::vec4(t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w));
-            transform["scale"] = detail::vecJson(t.scale);
-            e["transform"] = std::move(transform);
+            e["transform"] = reflectedJson(componentInfo<Transform>(), &*entity.transform);
         }
         if (entity.meshRenderer) {
             const SceneMeshRenderer& r = *entity.meshRenderer;
@@ -234,6 +479,12 @@ std::string serializeScene(const SceneDocument& document) {
             }
             e["meshRenderer"] = std::move(renderer);
         }
+        forEachReflected([&](auto member) {
+            using T = ComponentOf<decltype(member)>;
+            if (const auto& component = entity.*member) {
+                e[std::string(ComponentReflection<T>::key)] = reflectedJson(componentInfo<T>(), &*component);
+            }
+        });
         entities.push_back(std::move(e));
     }
     root["entities"] = std::move(entities);
@@ -244,8 +495,7 @@ std::unordered_map<std::string, gfx::MaterialHandle>
 createSceneMaterials(const SceneDocument& document, gfx::MaterialSystem& materials, std::string_view file) {
     Issues issues{std::string(file)};
     std::vector<gfx::ShaderHandle> shaders;
-    for (std::size_t i = 0; i < document.materials.size(); ++i) {
-        const SceneMaterial& material = document.materials[i];
+    for (const SceneMaterial& material : document.materials) {
         try {
             shaders.push_back(materials.findShader(material.data.shader));
         } catch (const Error&) {
@@ -311,6 +561,11 @@ SceneInstance instantiateScene(const SceneDocument& document, World& world, cons
             world.add<MeshRenderer>(e, MeshRenderer{bindings.meshes.at(r.mesh), r.submesh,
                                                     bindings.materials.at(r.material), r.visible});
         }
+        forEachReflected([&](auto member) {
+            if (const auto& component = entity.*member) {
+                world.add<ComponentOf<decltype(member)>>(e, *component);
+            }
+        });
         if (!entity.id.empty()) {
             instance.byId.emplace(entity.id, e);
         }
@@ -331,6 +586,133 @@ SceneInstance instantiateScene(const SceneDocument& document, World& world, cons
         }
     }
     return instance;
+}
+
+SceneCaptureNames invertBindings(const SceneDocument& document, const SceneBindings& bindings) {
+    SceneCaptureNames names;
+    // Several names may bind the same object: keep the lexicographically smallest (deterministic).
+    for (const auto& [name, mesh] : bindings.meshes) {
+        auto [it, inserted] = names.meshes.emplace(mesh, name);
+        if (!inserted && name < it->second) {
+            it->second = name;
+        }
+    }
+    for (const auto& [name, handle] : bindings.materials) {
+        auto [it, inserted] = names.materials.emplace(handle, name);
+        if (!inserted && name < it->second) {
+            it->second = name;
+        }
+    }
+    names.materialDefinitions = document.materials;
+    return names;
+}
+
+SceneDocument captureScene(const World& world, const SceneCaptureNames& names, std::string_view file) {
+    // Roots by entity index, then depth-first in child order: parents precede children and
+    // re-instantiation reproduces the child order.
+    std::vector<Entity> order;
+    const std::function<void(Entity)> visit = [&](Entity e) {
+        order.push_back(e);
+        for (const Entity c : world.children(e)) {
+            visit(c);
+        }
+    };
+    for (const Entity e : world.entities()) {
+        if (world.parent(e).isNull()) {
+            visit(e);
+        }
+    }
+    std::unordered_map<Entity::Id, std::size_t> index;
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        index.emplace(order[i].id(), i);
+    }
+
+    Issues issues{std::string(file)};
+    SceneDocument doc;
+    doc.materials = names.materialDefinitions;
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        const Entity e = order[i];
+        SceneEntity s;
+        if (!world.children(e).empty()) {
+            s.id = "e" + std::to_string(i);
+        }
+        if (const Entity parent = world.parent(e); !parent.isNull()) {
+            s.parent = "e" + std::to_string(index.at(parent.id()));
+        }
+        if (const Name* name = world.tryGet<Name>(e)) {
+            s.name = name->value;
+        }
+        if (const Transform* t = world.tryGet<Transform>(e)) {
+            s.transform = *t;
+        }
+        if (const MeshRenderer* r = world.tryGet<MeshRenderer>(e)) {
+            const auto mesh = names.meshes.find(r->mesh);
+            const auto material = names.materials.find(r->material);
+            const std::string path = child(child("/entities", i), "meshRenderer");
+            const std::string label = s.name ? "entity '" + *s.name + "'" : "entity " + std::to_string(i);
+            if (mesh == names.meshes.end()) {
+                issues.add(child(path, "mesh"), label + ": mesh has no name (SceneCaptureNames::meshes)");
+            }
+            if (material == names.materials.end()) {
+                issues.add(child(path, "material"), label + ": material handle " + std::to_string(r->material) +
+                                                        " has no id (SceneCaptureNames::materials)");
+            }
+            if (mesh != names.meshes.end() && material != names.materials.end()) {
+                s.meshRenderer = SceneMeshRenderer{mesh->second, r->submesh, material->second, r->visible};
+            }
+        }
+        forEachReflected([&](auto member) {
+            if (const auto* component = world.tryGet<ComponentOf<decltype(member)>>(e)) {
+                s.*member = *component;
+            }
+        });
+        doc.entities.push_back(std::move(s));
+    }
+    issues.throwIfAny();
+    return doc;
+}
+
+namespace {
+
+void appendComponentTable(std::ostringstream& out, const ComponentInfo& info, const void* defaults) {
+    out << "\n## `" << info.key << "`\n\n" << info.description << "\n\n";
+    out << "| Field | Type | Default | Range | Description |\n| --- | --- | --- | --- | --- |\n";
+    for (const FieldInfo& f : info.fields) {
+        std::ostringstream range;
+        const bool hasMin = f.min > std::numeric_limits<float>::lowest();
+        const bool hasMax = f.max < std::numeric_limits<float>::max();
+        if (hasMin && hasMax) {
+            range << f.min << " .. " << f.max;
+        } else if (hasMin) {
+            range << ">= " << f.min;
+        } else if (hasMax) {
+            range << "<= " << f.max;
+        }
+        out << "| `" << f.name << "` | " << fieldTypeName(f.type) << " | `" << formatField(f, defaults) << "` | "
+            << range.str() << " | " << f.description << " |\n";
+    }
+}
+
+} // namespace
+
+std::string sceneComponentReference() {
+    std::ostringstream out;
+    out << "# Scene file components\n\n"
+           "Generated from the component reflection tables by `zodar::sceneComponentReference()`\n"
+           "(`engine/rendering/SceneFile`); do not edit by hand. Regenerate with\n"
+           "`ZODAR_UPDATE_DOCS=1 ./build/bin/ZodarTests -tc='scene file: reflection*'`.\n"
+           "Every field is optional. Vector ranges apply per component. Scene file format:\n"
+           "`SCENE_FILES.md`.\n";
+    const Transform transform;
+    appendComponentTable(out, componentInfo<Transform>(), &transform);
+    out << "\nAlso accepted: `rotationDegrees` [3] (Euler XYZ degrees, instead of `rotation`) and a number for a\n"
+           "uniform `scale`.\n";
+    forEachReflected([&out](auto member) {
+        using T = ComponentOf<decltype(member)>;
+        const T defaults{};
+        appendComponentTable(out, componentInfo<T>(), &defaults);
+    });
+    return out.str();
 }
 
 } // namespace zodar

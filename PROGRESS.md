@@ -107,8 +107,8 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase B2 core committed and pushed (scene/material JSON, `Zodar::SceneFile`).
-  Phases A, B1.x unchanged.
+- `main`: Phase B2 complete (scene/material/prefab JSON, reflection, scene components, World
+  capture, mutable materials). Phases A, B1.x unchanged.
 
 ## Current task
 - **Phase B2 core done**: module `Zodar::SceneFile` (`engine/rendering/SceneFile`, nlohmann/json
@@ -124,13 +124,23 @@
   C++ scene, CPU + GpuScene; unknown shader / bad submesh). Verified GCC 13 Debug, 0 warnings,
   162/162 unit, 47/47 GPU cases, 19/19 ctest, 0 validation messages. Not run: Release, Clang,
   MinGW, MSVC.
-- Not done (remaining B2): World -> SceneDocument capture (save live World), prefabs with
-  overrides, component reflection tables, mutable materials (deferred GPU update), light /
-  camera / environment components in scene files, schema-error line numbers, game migration.
+- **Phase B2 remainder done**: schema-error line:column (`JsonLocator`); reflection
+  (`World/Reflection.h`, generated `docs/guide/SCENE_COMPONENTS.md`); scene components
+  `CameraComponent`, `DirectionalLight/PointLight/SpotLightComponent`, `EnvironmentComponent`,
+  `FogComponent` + `collectLighting`/`collectCamera` (`WorldRender/SceneComponents.h`); prefabs
+  (`*.prefab.json`, overrides, nesting, cycle check); `captureScene`/`invertBindings`
+  (`World::entities()`); mutable materials (`MaterialSystem::updateMaterial`, deferred
+  `vkCmdUpdateBuffer`, `zodar::updateMaterial` for MaterialData). Example scene extended (lamp
+  prefab, sky, camera).
+- Tests: 13 `scene file:*` unit cases; GPU: JSON scene (lights, prefab) pixel-identical to C++,
+  capture/reload identical, mutable material case. Verified GCC 13 Debug, 0 warnings, 168/168
+  unit, 48/48 GPU cases, 19/19 ctest, 0 validation messages (core + synchronization). Not run:
+  Release, Clang, MinGW, MSVC.
+- Deliberately not done: prefab references preserved on save (flat documents), IBL map /
+  textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. B2 remainder (World capture/save, prefabs, reflection, mutable materials, light components)
-   or next roadmap phase when requested; optionally migrate game draws to scene files.
+1. Next roadmap phase (C asset manager) when requested; optionally migrate game draws to scene files.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.

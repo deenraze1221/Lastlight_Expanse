@@ -113,6 +113,19 @@ public:
 
     // Materials are immutable once created (updating in-flight data safely is planned).
     MaterialHandle createMaterial(const MaterialDesc& desc);
+
+    // Mutable materials (deferred GPU update): changes factors, textures and custom data of an
+    // existing material. The CPU description changes immediately; the GPU table entry is
+    // written by recordPendingUpdates() in the next recorded frame, ordered after every
+    // earlier queue submission's reads (frames in flight keep their old values). The pipeline
+    // state (shader, alphaMode, doubleSided) cannot change: create a new material instead.
+    // Fails (zodar::Error) for an unknown handle or a pipeline-state change.
+    void updateMaterial(MaterialHandle handle, const MaterialDesc& desc);
+    bool hasPendingUpdates() const { return !m_pending.empty(); }
+    uint32_t pendingUpdateCount() const { return static_cast<uint32_t>(m_pending.size()); }
+    // Records barrier -> vkCmdUpdateBuffer per pending material -> barrier, then clears the
+    // queue. Called by SceneRenderer at the start of each frame (render() and addToGraph()).
+    void recordPendingUpdates(VkCommandBuffer cmd);
     const MaterialDesc& material(MaterialHandle handle) const { return m_materials.at(handle); }
     uint32_t materialCount() const { return static_cast<uint32_t>(m_materials.size()); }
 
@@ -144,6 +157,7 @@ private:
 
     std::vector<Shader> m_shaders;
     std::vector<MaterialDesc> m_materials;
+    std::vector<MaterialHandle> m_pending; // Unique handles awaiting a GPU table write.
     GpuBuffer m_materialBuffer;
     std::unordered_map<uint64_t, std::unique_ptr<GraphicsPipeline>> m_pipelines;
     ShaderHandle m_pbr = 0;

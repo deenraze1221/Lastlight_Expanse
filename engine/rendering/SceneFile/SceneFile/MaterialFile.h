@@ -57,4 +57,11 @@ struct MaterialData {
 gfx::MaterialHandle createMaterial(gfx::MaterialSystem& materials, const MaterialData& material,
                                    std::string_view file = "<memory>");
 
+// Mutable materials: re-applies `material` to an existing handle (e.g. an edited material
+// file). The GPU update is deferred to the next recorded frame (MaterialSystem::updateMaterial).
+// Throws DataError for an unknown shader or handle, or a pipeline-state change (shader,
+// alphaMode, doubleSided).
+void updateMaterial(gfx::MaterialSystem& materials, gfx::MaterialHandle handle, const MaterialData& material,
+                    std::string_view file = "<memory>");
+
 } // namespace zodar

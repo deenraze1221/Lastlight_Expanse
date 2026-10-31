@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "entities": [
+    { "id": "bulb", "name": "Bulb", "pointLight": { "color": [1, 0.85, 0.7], "intensity": 10, "range": 15 } }
+  ]
+}
