@@ -1,7 +1,8 @@
 // End-to-end check of zodar::Application: headless window (no SDL_VIDEO_DRIVER needed),
 // deterministic fixed steps, hook order, a SceneRenderer pass, screenshot and exit code.
 // Accepts the standard options (Runtime/CommandLine.h) on top of its defaults, and checks
-// what they ask for: PNG/PPM screenshot content, --capture-frames files, --report JSON.
+// what they ask for: PNG/PPM screenshot content, --capture-frames files, --report JSON;
+// always checks onFrameEnd (once per frame) and an app capture (requestCapture, frame 2).
 //   ZodarRuntimeSmoke --screenshot out.png [--capture-frames 3,6 --capture-dir DIR] [--report r.json]
 // Exit code: the Application's (0 ok, 1 fatal, 2 validation, 3 screenshot) or 10 + n when
 // check n fails.
@@ -33,11 +34,13 @@ constexpr uint64_t kFrames = 12;
 
 class SmokeApp final : public zodar::Application {
 public:
-    explicit SmokeApp(zodar::ApplicationDesc desc) : Application(std::move(desc)) {}
+    SmokeApp(zodar::ApplicationDesc desc, std::filesystem::path appCapture)
+        : Application(std::move(desc)), m_appCapture(std::move(appCapture)) {}
 
     int order = 0;
     int startOrder = -1, shutdownOrder = -1;
-    uint64_t fixedSteps = 0, updates = 0, renders = 0;
+    uint64_t fixedSteps = 0, updates = 0, renders = 0, frameEnds = 0;
+    bool frameEndOk = true;
     double lastTime = -1.0;
     bool timeOk = true;
 
@@ -53,6 +56,8 @@ protected:
         if (std::abs(t.time - static_cast<double>(updates) * timestep().fixedDt()) > 1e-9 || t.time <= lastTime) timeOk = false;
         lastTime = t.time;
         ++updates;
+        // App-requested capture (requestCapture): written on the next rendered frame (frame 2).
+        if (t.frame == 1) requestCapture(m_appCapture);
     }
     void onRender(zodar::RenderContext& rc) override {
         zodar::gfx::SceneView view;
@@ -60,7 +65,15 @@ protected:
         scene().addToGraph(rc.graph, rc.info, rc.extent, view, rc.output, rc.format, &rc.stats);
         ++renders;
     }
+    void onFrameEnd(const zodar::FrameTime& t) override {
+        // Once per rendered frame, after endFrame: the frame counter already includes it.
+        if (renderer().frameNumber() != t.frame + 1) frameEndOk = false;
+        ++frameEnds;
+    }
     void onShutdown() override { shutdownOrder = order++; }
+
+private:
+    std::filesystem::path m_appCapture;
 };
 
 std::string readFile(const std::filesystem::path& path) {
@@ -142,7 +155,10 @@ int main(int argc, char** argv) {
         if (desc.reportPath) std::filesystem::remove(*desc.reportPath);
         for (uint64_t f : desc.captureFrames) std::filesystem::remove(capturePath(desc, f));
 
-        SmokeApp app(desc);
+        const std::filesystem::path appCapture =
+            desc.screenshot->parent_path() / "runtime_app_capture.png";
+        std::filesystem::remove(appCapture);
+        SmokeApp app(desc, appCapture);
         const char* driver = app.platform().videoDriver();
         result = app.run();
         if (result == 0) result = check(std::string_view(driver) == "offscreen", 1, "video driver is not offscreen");
@@ -151,6 +167,8 @@ int main(int argc, char** argv) {
         if (result == 0) result = check(app.renders == frames && app.renderer().frameNumber() == frames, 4, "frame count");
         if (result == 0) result = check(app.timeOk, 5, "deterministic frame time");
         if (result == 0) result = check(screenshotLooksBlue(*desc.screenshot), 6, "screenshot content");
+        if (result == 0) result = check(app.frameEnds == frames && app.frameEndOk, 9, "onFrameEnd once per frame");
+        if (result == 0) result = check(isPng(appCapture) && screenshotLooksBlue(appCapture), 10, "requestCapture file");
         for (uint64_t f : desc.captureFrames) {
             const std::filesystem::path capture = capturePath(desc, f);
             if (result == 0) result = check(isPng(capture) && screenshotLooksBlue(capture), 7, "capture file");

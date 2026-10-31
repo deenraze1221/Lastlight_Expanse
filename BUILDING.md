@@ -72,6 +72,11 @@ requires **API 1.3** plus the baseline in docs/ARCHITECTURE.md (descriptor index
    [LunarG Vulkan SDK](https://vulkan.lunarg.com/) (sets `VULKAN_SDK`).
 2. Open **x64 Native Tools Command Prompt for VS 2022**:
 
+CMake presets (`debug`, `release`, `gpu-tests`, `ci`; trees in `build/<preset>`) and
+`tools/zodar.py` (short build/test/run/shot output) are described in `docs/guide/RUNNING.md`;
+`cmake --preset gpu-tests && cmake --build --preset gpu-tests && ctest --preset gpu-tests`
+is equivalent to the commands below.
+
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DZODAR_GPU_TESTS=ON
 cmake --build build

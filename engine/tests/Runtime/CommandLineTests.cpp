@@ -21,7 +21,8 @@ TEST_CASE("CommandLine parses the standard options") {
     const auto rest = parse({"--frames", "120", "--headless", "--deterministic", "--fixed-dt", "0.5", "--width", "640",
                              "--height", "360", "--screenshot", "out/shot.png", "--capture-frames", "60,10,60,120",
                              "--capture-dir", "caps", "--report", "run.json", "--log-file", "run.log", "--seed", "42",
-                             "--camera", "1.5,-2,3,90,-10", "--threads", "0", "--no-validation", "--overlay"},
+                             "--camera", "1.5,-2,3,90,-10", "--threads", "0", "--no-validation", "--overlay",
+                             "--log-json", "run.jsonl", "--sync-validation"},
                             desc);
     CHECK(rest.empty());
     CHECK(desc.maxFrames == 120);
@@ -47,6 +48,8 @@ TEST_CASE("CommandLine parses the standard options") {
     CHECK(desc.threads == 0);
     CHECK_FALSE(desc.validation);
     CHECK(desc.overlay);
+    CHECK(desc.jsonLogFile == "run.jsonl");
+    CHECK(desc.synchronizationValidation);
 }
 
 TEST_CASE("CommandLine keeps defaults and returns app arguments in order") {
@@ -58,6 +61,8 @@ TEST_CASE("CommandLine keeps defaults and returns app arguments in order") {
     CHECK(desc.maxFrames == 3);
     CHECK(desc.width == 1600);
     CHECK(desc.seed == 1337u);
+    CHECK(desc.jsonLogFile.empty());
+    CHECK_FALSE(desc.synchronizationValidation);
     CHECK_FALSE(desc.headless);
     CHECK_FALSE(desc.reportPath);
 }
@@ -88,7 +93,8 @@ TEST_CASE("CommandLine help lists every standard option") {
     const std::string help(zodar::standardOptionsHelp());
     for (const char* option : {"--frames", "--headless", "--deterministic", "--fixed-dt", "--width", "--screenshot",
                                "--capture-frames", "--capture-dir", "--report", "--log-file", "--seed", "--camera",
-                               "--threads", "--no-validation", "--overlay", "--help"}) {
+                               "--threads", "--no-validation", "--overlay", "--help", "--log-json",
+                               "--sync-validation"}) {
         CHECK_MESSAGE(help.find(option) != std::string::npos, option);
     }
 }

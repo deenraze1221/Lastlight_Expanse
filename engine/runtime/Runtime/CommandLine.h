@@ -12,10 +12,12 @@
 //   --capture-dir DIR      ... as DIR/frame_000010.png (default: captures)
 //   --report F.json        Write a run report at exit
 //   --log-file F           Also write the log to F
+//   --log-json F.jsonl     Also write the log as JSON lines to F (Core/Log.h)
 //   --seed N               App-defined seed
 //   --camera X,Y,Z,YAW,PITCH  Start camera (degrees), for apps that have a camera
 //   --threads N            Worker threads (0 = run jobs inline)
 //   --no-validation        Disable Vulkan validation layers
+//   --sync-validation      Also enable synchronization validation (slower)
 //   --overlay / --no-overlay  Profiler overlay visible at start
 //   --help                 Print usage and exit
 //

@@ -3,6 +3,8 @@
 #include "Core/Log.h"
 #include "../Support/TempFile.h"
 
+#include <algorithm>
+
 TEST_CASE("log: file sink receives messages and re-init replaces sinks") {
     const zodar::test::TempFile logFile("zodar_log_test.txt");
 
@@ -38,4 +40,30 @@ TEST_CASE("log: warning and error counts survive re-init") {
     CHECK(c.errors == 2);
     zodar::log::resetCounts();
     CHECK(zodar::log::counts().errors == 0);
+}
+
+TEST_CASE("log: JSON lines sink writes one escaped object per message") {
+    const zodar::test::TempFile jsonFile("zodar_log_test.jsonl");
+    zodar::log::init({spdlog::level::info, "", jsonFile.path().string()});
+    ZODAR_LOG_INFO("quote \" backslash \\ newline\n tab\t end");
+    ZODAR_LOG_WARN("second {}", 2);
+    ZODAR_LOG_INFO("utf8 \xc3\xa9 invalid \xe9 truncated \xe2\x82");
+    ZODAR_LOG_DEBUG("filtered out");
+    zodar::log::shutdown();
+
+    const std::string text = zodar::test::readFile(jsonFile.path());
+    CHECK(text.find("filtered out") == std::string::npos);
+    const size_t firstEnd = text.find('\n');
+    REQUIRE(firstEnd != std::string::npos);
+    const std::string first = text.substr(0, firstEnd);
+    const std::string second = text.substr(firstEnd + 1);
+    CHECK(first.starts_with("{\"time\":\""));
+    CHECK(first.find("Z\",\"level\":\"info\",\"thread\":") != std::string::npos);
+    CHECK(first.ends_with("\"msg\":\"quote \\\" backslash \\\\ newline\\n tab\\t end\"}"));
+    CHECK(second.find("\"level\":\"warning\"") != std::string::npos);
+    CHECK(second.find("\"msg\":\"second 2\"}\n") != std::string::npos);
+    CHECK(text.find("\"msg\":\"utf8 \xc3\xa9 invalid \\ufffd truncated \\ufffd\\ufffd\"}") != std::string::npos);
+    CHECK(std::count(text.begin(), text.end(), '\n') == 3);
+    CHECK(jsonFile.remove());
+    zodar::log::init({spdlog::level::warn, ""});
 }

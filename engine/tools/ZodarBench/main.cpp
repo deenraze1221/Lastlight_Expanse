@@ -1,10 +1,9 @@
 // ZodarBench: deterministic rendering benchmark that writes a JSON report.
 //
-//   ZodarBench [--scene grid|unique|city|model] [--model file.glb] [--objects N] [--blocks N] [--lights N]
-//              [--width W] [--height H] [--warmup N] [--frames N] [--path gpu|graph|reference]
-//              [--present immediate|low-latency|vsync] [--overlay] [--no-validation] [--sync-validation]
-//              [--output report.json] [--screenshot out.ppm] [--screenshot-frame N] [--per-frame]
-//              [--frame-cap FPS] [--source-textures] [--no-transfer-queue]
+//   ZodarBench [standard options] [--scene grid|unique|city|model] [--model file.glb] [--objects N]
+//              [--blocks N] [--lights N] [--warmup N] [--path gpu|graph|reference]
+//              [--present immediate|low-latency|vsync] [--output report.json] [--screenshot-frame N]
+//              [--per-frame] [--frame-cap FPS] [--source-textures] [--no-transfer-queue]
 //              [--environment none|sky|file.hdr] [--lighting-quality low|medium|high|ultra] [--no-prepass]
 //              [--brute-force-lights] [--debug-view NAME] [--no-multiscatter]
 //
@@ -27,7 +26,13 @@
 // --source-textures ignores compiled KTX2 textures (decode PNG/JPEG + runtime mips) and
 // --no-transfer-queue uploads on the graphics queue: A/B switches for the S3 asset path.
 // The report's "assets" section has load/upload times, bytes and texture sources.
-// Exit codes: 0 ok, 1 fatal error, 2 validation errors.
+// Built on zodar::Application: the standard options (--help) apply, with two differences:
+// --frames N is the number of *measured* frames (default 600; the run renders warm-up +
+// measured + frames-in-flight frames), and --screenshot saves the measured frame given by
+// --screenshot-frame (default: the middle of the path) instead of the last frame.
+// --report writes the standard run report next to the benchmark report (--output).
+// Exit codes: standard (0 ok, 1 fatal error or unwritable report, 2 validation errors,
+// 3 screenshot failed).
 
 #include "Assets/EnvironmentMaps.h"
 #include "Assets/ModelData.h"
@@ -36,19 +41,16 @@
 #include "Core/Log.h"
 #include "Core/Profiler.h"
 #include "Debug/DebugOverlay.h"
-#include "Platform/Platform.h"
-#include "Platform/Window.h"
 #include "Renderer/GeometryPool.h"
 #include "Renderer/GpuProfiler.h"
 #include "Renderer/GpuScene.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Model.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
-#include "Renderer/Renderer.h"
 #include "Renderer/Resources/UploadContext.h"
-#include "Renderer/SceneRenderer.h"
 #include "Renderer/Vulkan/VulkanContext.h"
 #include "Renderer/Vulkan/VulkanSwapchain.h"
+#include "Runtime/Application.h"
+#include "Runtime/CommandLine.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -63,6 +65,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -73,24 +76,28 @@ namespace {
 using namespace zodar;
 using namespace zodar::gfx;
 
+constexpr std::string_view kUsage =
+    "ZodarBench [standard options] [--scene grid|unique|city|model|lights] [--model file.glb] [--objects N]\n"
+    "           [--blocks N] [--lights N] [--warmup N] [--path gpu|graph|reference]\n"
+    "           [--present immediate|low-latency|vsync] [--output report.json] [--screenshot-frame N] [--per-frame]\n"
+    "           [--frame-cap FPS] [--source-textures] [--no-transfer-queue] [--environment none|sky|file.hdr]\n"
+    "           [--lighting-quality low|medium|high|ultra] [--no-prepass] [--brute-force-lights]\n"
+    "           [--debug-view NAME] [--no-multiscatter]\n"
+    "--frames N = measured frames (default 600); --screenshot saves measured frame --screenshot-frame.";
+
 struct Options {
     std::string scene = "grid";
     std::optional<std::filesystem::path> model;
     uint32_t objects = 4096;
     uint32_t blocks = 32;
     uint32_t lights = 32;
-    uint32_t width = 1920;
-    uint32_t height = 1080;
     uint32_t warmup = 60;
-    uint32_t frames = 600;
+    uint32_t frames = 600; // measured frames (standard --frames)
     std::string path = "gpu"; // gpu: GPU-driven (GpuScene); graph: CPU draw list; reference: pre-graph path
     PresentMode present = PresentMode::Immediate;
-    bool overlay = false;
     bool perFrameSeries = false; // Include per-frame visible/draw/triangle series in the report.
-    bool validation = true;
-    bool syncValidation = false;
     std::filesystem::path output = "zodarbench.json";
-    std::optional<std::filesystem::path> screenshot;
+    std::optional<std::filesystem::path> screenshot; // standard --screenshot, moved here
     std::optional<uint32_t> screenshotFrame; // Measured-frame index; default: middle of the path.
     double frameCap = 0.0;                   // Frames per second; 0 = uncapped.
     bool sourceTextures = false;
@@ -103,13 +110,13 @@ struct Options {
     LightingDebugView debugView = LightingDebugView::None;
 };
 
-Options parse(int argc, char** argv) {
+Options parse(std::span<const std::string> args) {
     Options o;
-    for (int i = 1; i < argc; ++i) {
-        const std::string_view a = argv[i];
+    for (size_t i = 0; i < args.size(); ++i) {
+        const std::string_view a = args[i];
         const auto next = [&]() -> std::string {
-            if (i + 1 >= argc) fail("Missing value for " + std::string(a));
-            return argv[++i];
+            if (i + 1 >= args.size()) fail("Missing value for " + std::string(a));
+            return args[++i];
         };
         if (a == "--scene") o.scene = next();
         else if (a == "--model") { o.model = next(); o.scene = "model"; }
@@ -122,29 +129,23 @@ Options parse(int argc, char** argv) {
         else if (a == "--no-multiscatter") o.lighting.multiscatter = false;
         else if (a == "--brute-force-lights") o.bruteForceLights = true;
         else if (a == "--debug-view") o.debugView = parseLightingDebugView(next());
-        else if (a == "--width") o.width = static_cast<uint32_t>(std::stoul(next()));
-        else if (a == "--height") o.height = static_cast<uint32_t>(std::stoul(next()));
         else if (a == "--warmup") o.warmup = static_cast<uint32_t>(std::stoul(next()));
-        else if (a == "--frames") o.frames = std::max(1u, static_cast<uint32_t>(std::stoul(next())));
         else if (a == "--path") {
             o.path = next();
             if (o.path != "gpu" && o.path != "graph" && o.path != "reference") fail("--path must be gpu, graph or reference");
         } else if (a == "--present") {
             const std::string p = next();
+            if (p != "vsync" && p != "low-latency" && p != "immediate") fail("--present must be immediate, low-latency or vsync");
             o.present = p == "vsync" ? PresentMode::VSync : p == "low-latency" ? PresentMode::LowLatency : PresentMode::Immediate;
-        } else if (a == "--overlay") o.overlay = true;
-        else if (a == "--per-frame") o.perFrameSeries = true;
+        } else if (a == "--per-frame") o.perFrameSeries = true;
         else if (a == "--screenshot-frame") o.screenshotFrame = static_cast<uint32_t>(std::stoul(next()));
-        else if (a == "--no-validation") o.validation = false;
-        else if (a == "--sync-validation") o.syncValidation = true;
         else if (a == "--frame-cap") {
-            o.frameCap = std::stod(next());
+            o.frameCap = parseFloatArgument(a, next()); // finite only
             if (o.frameCap < 0.0) fail("--frame-cap must be >= 0");
         } else if (a == "--source-textures") o.sourceTextures = true;
         else if (a == "--no-transfer-queue") o.transferQueue = false;
         else if (a == "--output") o.output = next();
-        else if (a == "--screenshot") o.screenshot = next();
-        else fail("Unknown argument '" + std::string(a) + "'");
+        else fail("Unknown argument '" + std::string(a) + "' (see --help)");
     }
     if (o.scene == "model" && !o.model) fail("--scene model needs --model <file>");
     if (o.scene == "lights" && !o.lightsSet) o.lights = 4096;
@@ -200,289 +201,239 @@ std::string escape(const std::string& in) {
     return out;
 }
 
-int run(const Options& o) {
-    Platform platform;
-    Window window({"ZodarBench", o.width, o.height, false});
-    Renderer renderer(window, {"ZodarBench", o.validation, o.present,
-                               Platform::userDataPath("ZODAR", "ZodarBench") / "pipeline_cache.bin", o.syncValidation, o.transferQueue});
-    UploadContext upload(renderer.context());
-    renderer.attachUploads(&upload.queue()); // Async uploads are acquired at frame start.
-    const char* base = SDL_GetBasePath();
-    SceneRenderer scene(renderer.context(), upload,
-                        {std::filesystem::path(base ? base : "") / "shaders", VK_FORMAT_R16G16B16A16_SFLOAT,
-                         VK_FORMAT_D32_SFLOAT, Renderer::kFramesInFlight});
-    RenderGraphResources graphResources(renderer.context(), scene.bindless());
-    std::unique_ptr<debug::DebugOverlay> overlay;
-    if (o.overlay) {
-        overlay = std::make_unique<debug::DebugOverlay>(renderer.context(), &window, renderer.swapchain().format(),
-                                                        renderer.swapchain().imageCount());
-    }
+// Benchmark state lives in the app; the runtime owns the frame loop (warm-up + measured
+// frames + frames in flight, see main()).
+class BenchApp final : public Application {
+public:
+    BenchApp(const ApplicationDesc& desc, Options options) : Application(desc), o(std::move(options)) {}
 
-    // --- Scene ---------------------------------------------------------------------
-    std::vector<GpuMesh> meshes;
-    std::unique_ptr<Model> model;
-    std::vector<MeshDraw> draws;
-    Bounds bounds;
-    SceneView view;
-    uint32_t uniqueMeshes = 2;
-    uint32_t uniqueMaterials = 16;
-    float cityHalf = 0.0f;
-    // Asset load metrics (CPU parse/decode, staging, transfer wait).
-    double loadMs = 0.0, stageMs = 0.0, transferMs = 0.0;
-    VkDeviceSize stagedBytes = 0, textureBytes = 0;
-    TextureLoadStats textureStats;
-    const auto msSince = [](std::chrono::steady_clock::time_point t) {
-        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count();
-    };
-    {
-        const auto stageStart = std::chrono::steady_clock::now();
-        UploadBatch batch(upload);
-        if (o.scene == "grid" || o.scene == "lights") {
-            meshes.reserve(3);
-            meshes.emplace_back(batch, primitives::cube(0.8f), &scene.geometry());
-            meshes.emplace_back(batch, primitives::uvSphere(0.45f, 32, 16), &scene.geometry());
-            meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f), &scene.geometry());
-            std::vector<MaterialHandle> materials;
-            for (int i = 0; i < 16; ++i) {
-                MaterialDesc d;
-                d.baseColorFactor = glm::vec4(0.3f + 0.04f * i, 0.5f, 0.9f - 0.04f * i, 1.0f);
-                d.metallic = (i % 4 == 0) ? 1.0f : 0.0f;
-                d.roughness = 0.2f + 0.05f * static_cast<float>(i);
-                materials.push_back(scene.materials().createMaterial(d));
-            }
-            const auto side = static_cast<uint32_t>(std::ceil(std::sqrt(static_cast<double>(o.objects))));
-            for (uint32_t i = 0; i < o.objects; ++i) {
-                const float x = (static_cast<float>(i % side) - side * 0.5f) * 1.2f;
-                const float z = (static_cast<float>(i / side) - side * 0.5f) * 1.2f;
-                const float y = 0.5f + 0.4f * std::sin(x * 0.3f) * std::cos(z * 0.3f);
-                draws.push_back({&meshes[i % 2], 0, materials[(i * 7) % materials.size()],
-                                 glm::translate(glm::mat4(1), {x, y, z})});
-            }
-            MaterialDesc ground;
-            ground.baseColorFactor = {0.35f, 0.35f, 0.37f, 1};
-            ground.roughness = 0.9f;
-            const float extent = side * 1.2f + 4.0f;
-            draws.push_back({&meshes[2], 0, scene.materials().createMaterial(ground),
-                             glm::scale(glm::mat4(1), glm::vec3(extent, 1, extent))});
-        } else if (o.scene == "unique") {
-            // Every object: its own deformed mesh and its own material (no instancing possible).
-            const uint32_t materialCount = std::min(o.objects, MaterialSystem::kMaxMaterials - 64);
-            std::vector<MaterialHandle> materials;
-            for (uint32_t i = 0; i < materialCount; ++i) {
-                MaterialDesc d;
-                d.baseColorFactor = glm::vec4(hash01(i, 1), hash01(i, 2), hash01(i, 3), 1.0f);
-                d.metallic = hash01(i, 4) < 0.25f ? 1.0f : 0.0f;
-                d.roughness = 0.15f + 0.8f * hash01(i, 5);
-                materials.push_back(scene.materials().createMaterial(d));
-            }
-            meshes.reserve(o.objects + 1);
-            for (uint32_t i = 0; i < o.objects; ++i) {
-                MeshData mesh = (i % 2 == 0)
-                    ? primitives::uvSphere(0.45f, 8 + static_cast<uint32_t>(hash01(i, 6) * 16), 6 + static_cast<uint32_t>(hash01(i, 7) * 10))
-                    : primitives::cube(0.8f);
-                for (size_t v = 0; v < mesh.vertices.size(); ++v) {
-                    mesh.vertices[v].position *= 0.85f + 0.3f * hash01(i, 100 + static_cast<uint32_t>(v));
+protected:
+    void onStart() override {
+        // The reference path records outside the render graph and never drew the overlay.
+        if (o.path == "reference") overlay().visible = false;
+            // --- Scene ---------------------------------------------------------------------
+        const auto msSince = [](std::chrono::steady_clock::time_point t) {
+            return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count();
+        };
+        {
+            const auto stageStart = std::chrono::steady_clock::now();
+            UploadBatch batch(upload());
+            if (o.scene == "grid" || o.scene == "lights") {
+                meshes.reserve(3);
+                meshes.emplace_back(batch, primitives::cube(0.8f), &scene().geometry());
+                meshes.emplace_back(batch, primitives::uvSphere(0.45f, 32, 16), &scene().geometry());
+                meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f), &scene().geometry());
+                std::vector<MaterialHandle> materials;
+                for (int i = 0; i < 16; ++i) {
+                    MaterialDesc d;
+                    d.baseColorFactor = glm::vec4(0.3f + 0.04f * i, 0.5f, 0.9f - 0.04f * i, 1.0f);
+                    d.metallic = (i % 4 == 0) ? 1.0f : 0.0f;
+                    d.roughness = 0.2f + 0.05f * static_cast<float>(i);
+                    materials.push_back(scene().materials().createMaterial(d));
                 }
-                mesh.generateNormals();
-                mesh.generateTangents();
-                mesh.computeBounds();
-                mesh.name = "Unique" + std::to_string(i);
-                meshes.emplace_back(batch, mesh, &scene.geometry());
-            }
-            const auto side = static_cast<uint32_t>(std::ceil(std::sqrt(static_cast<double>(o.objects))));
-            for (uint32_t i = 0; i < o.objects; ++i) {
-                const float x = (static_cast<float>(i % side) - side * 0.5f) * 1.2f;
-                const float z = (static_cast<float>(i / side) - side * 0.5f) * 1.2f;
-                draws.push_back({&meshes[i], 0, materials[i % materials.size()], glm::translate(glm::mat4(1), {x, 0.5f, z})});
-            }
-            uniqueMeshes = o.objects;
-            uniqueMaterials = materialCount;
-            meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f), &scene.geometry());
-            MaterialDesc ground;
-            ground.baseColorFactor = {0.35f, 0.35f, 0.37f, 1};
-            ground.roughness = 0.9f;
-            draws.push_back({&meshes.back(), 0, scene.materials().createMaterial(ground),
-                             glm::scale(glm::mat4(1), glm::vec3(side * 1.2f + 4.0f, 1, side * 1.2f + 4.0f))});
-        } else if (o.scene == "city") {
-            // Street grid: each block holds 2x2 buildings and a ring of props on the sidewalk.
-            meshes.reserve(3);
-            meshes.emplace_back(batch, primitives::cube(1.0f), &scene.geometry());
-            meshes.emplace_back(batch, primitives::uvSphere(0.5f, 16, 8), &scene.geometry());
-            meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f), &scene.geometry());
-            std::vector<MaterialHandle> facades, props;
-            for (uint32_t i = 0; i < 48; ++i) {
-                MaterialDesc d;
-                const float g = 0.25f + 0.5f * hash01(i, 11);
-                d.baseColorFactor = glm::vec4(g * (0.9f + 0.2f * hash01(i, 12)), g, g * (0.9f + 0.2f * hash01(i, 13)), 1);
-                d.roughness = 0.6f + 0.35f * hash01(i, 14);
-                facades.push_back(scene.materials().createMaterial(d));
-            }
-            for (uint32_t i = 0; i < 8; ++i) {
-                MaterialDesc d;
-                d.baseColorFactor = glm::vec4(hash01(i, 21), hash01(i, 22), hash01(i, 23), 1);
-                d.metallic = i % 2 == 0 ? 1.0f : 0.0f;
-                d.roughness = 0.3f + 0.5f * hash01(i, 24);
-                props.push_back(scene.materials().createMaterial(d));
-            }
-            const float block = 40.0f, street = 10.0f, pitch = block + street;
-            const float half = o.blocks * pitch * 0.5f;
-            uint32_t id = 0;
-            for (uint32_t bz = 0; bz < o.blocks; ++bz) {
-                for (uint32_t bx = 0; bx < o.blocks; ++bx) {
-                    const glm::vec2 origin{bx * pitch - half + street * 0.5f, bz * pitch - half + street * 0.5f};
-                    for (uint32_t k = 0; k < 4; ++k, ++id) {
-                        const float w = 15.0f + 4.0f * hash01(id, 31), d = 15.0f + 4.0f * hash01(id, 32);
-                        const float h = 8.0f + 52.0f * hash01(id, 33) * hash01(id, 34);
-                        const glm::vec3 centre{origin.x + (k % 2 + 0.5f) * block * 0.5f, h * 0.5f, origin.y + (k / 2 + 0.5f) * block * 0.5f};
-                        draws.push_back({&meshes[0], 0, facades[id % facades.size()],
-                                         glm::scale(glm::translate(glm::mat4(1), centre), {w, h, d})});
+                const auto side = static_cast<uint32_t>(std::ceil(std::sqrt(static_cast<double>(o.objects))));
+                for (uint32_t i = 0; i < o.objects; ++i) {
+                    const float x = (static_cast<float>(i % side) - side * 0.5f) * 1.2f;
+                    const float z = (static_cast<float>(i / side) - side * 0.5f) * 1.2f;
+                    const float y = 0.5f + 0.4f * std::sin(x * 0.3f) * std::cos(z * 0.3f);
+                    draws.push_back({&meshes[i % 2], 0, materials[(i * 7) % materials.size()],
+                                     glm::translate(glm::mat4(1), {x, y, z})});
+                }
+                MaterialDesc ground;
+                ground.baseColorFactor = {0.35f, 0.35f, 0.37f, 1};
+                ground.roughness = 0.9f;
+                const float extent = side * 1.2f + 4.0f;
+                draws.push_back({&meshes[2], 0, scene().materials().createMaterial(ground),
+                                 glm::scale(glm::mat4(1), glm::vec3(extent, 1, extent))});
+            } else if (o.scene == "unique") {
+                // Every object: its own deformed mesh and its own material (no instancing possible).
+                const uint32_t materialCount = std::min(o.objects, MaterialSystem::kMaxMaterials - 64);
+                std::vector<MaterialHandle> materials;
+                for (uint32_t i = 0; i < materialCount; ++i) {
+                    MaterialDesc d;
+                    d.baseColorFactor = glm::vec4(hash01(i, 1), hash01(i, 2), hash01(i, 3), 1.0f);
+                    d.metallic = hash01(i, 4) < 0.25f ? 1.0f : 0.0f;
+                    d.roughness = 0.15f + 0.8f * hash01(i, 5);
+                    materials.push_back(scene().materials().createMaterial(d));
+                }
+                meshes.reserve(o.objects + 1);
+                for (uint32_t i = 0; i < o.objects; ++i) {
+                    MeshData mesh = (i % 2 == 0)
+                        ? primitives::uvSphere(0.45f, 8 + static_cast<uint32_t>(hash01(i, 6) * 16), 6 + static_cast<uint32_t>(hash01(i, 7) * 10))
+                        : primitives::cube(0.8f);
+                    for (size_t v = 0; v < mesh.vertices.size(); ++v) {
+                        mesh.vertices[v].position *= 0.85f + 0.3f * hash01(i, 100 + static_cast<uint32_t>(v));
                     }
-                    for (uint32_t p = 0; p < 16; ++p, ++id) {
-                        const float along = (p % 4 + 0.5f) * block / 4.0f;
-                        const glm::vec2 pos = p < 4 ? glm::vec2{along, 1.0f} : p < 8 ? glm::vec2{along, block - 1.0f}
-                                            : p < 12 ? glm::vec2{1.0f, along} : glm::vec2{block - 1.0f, along};
-                        const bool lamp = p % 2 == 0;
-                        const glm::vec3 scale = lamp ? glm::vec3(0.25f, 4.5f, 0.25f) : glm::vec3(0.9f);
-                        draws.push_back({&meshes[lamp ? 0 : 1], 0, props[id % props.size()],
-                                         glm::scale(glm::translate(glm::mat4(1), {origin.x + pos.x, scale.y * 0.5f, origin.y + pos.y}), scale)});
+                    mesh.generateNormals();
+                    mesh.generateTangents();
+                    mesh.computeBounds();
+                    mesh.name = "Unique" + std::to_string(i);
+                    meshes.emplace_back(batch, mesh, &scene().geometry());
+                }
+                const auto side = static_cast<uint32_t>(std::ceil(std::sqrt(static_cast<double>(o.objects))));
+                for (uint32_t i = 0; i < o.objects; ++i) {
+                    const float x = (static_cast<float>(i % side) - side * 0.5f) * 1.2f;
+                    const float z = (static_cast<float>(i / side) - side * 0.5f) * 1.2f;
+                    draws.push_back({&meshes[i], 0, materials[i % materials.size()], glm::translate(glm::mat4(1), {x, 0.5f, z})});
+                }
+                uniqueMeshes = o.objects;
+                uniqueMaterials = materialCount;
+                meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f), &scene().geometry());
+                MaterialDesc ground;
+                ground.baseColorFactor = {0.35f, 0.35f, 0.37f, 1};
+                ground.roughness = 0.9f;
+                draws.push_back({&meshes.back(), 0, scene().materials().createMaterial(ground),
+                                 glm::scale(glm::mat4(1), glm::vec3(side * 1.2f + 4.0f, 1, side * 1.2f + 4.0f))});
+            } else if (o.scene == "city") {
+                // Street grid: each block holds 2x2 buildings and a ring of props on the sidewalk.
+                meshes.reserve(3);
+                meshes.emplace_back(batch, primitives::cube(1.0f), &scene().geometry());
+                meshes.emplace_back(batch, primitives::uvSphere(0.5f, 16, 8), &scene().geometry());
+                meshes.emplace_back(batch, primitives::plane(1.0f, 1.0f), &scene().geometry());
+                std::vector<MaterialHandle> facades, props;
+                for (uint32_t i = 0; i < 48; ++i) {
+                    MaterialDesc d;
+                    const float g = 0.25f + 0.5f * hash01(i, 11);
+                    d.baseColorFactor = glm::vec4(g * (0.9f + 0.2f * hash01(i, 12)), g, g * (0.9f + 0.2f * hash01(i, 13)), 1);
+                    d.roughness = 0.6f + 0.35f * hash01(i, 14);
+                    facades.push_back(scene().materials().createMaterial(d));
+                }
+                for (uint32_t i = 0; i < 8; ++i) {
+                    MaterialDesc d;
+                    d.baseColorFactor = glm::vec4(hash01(i, 21), hash01(i, 22), hash01(i, 23), 1);
+                    d.metallic = i % 2 == 0 ? 1.0f : 0.0f;
+                    d.roughness = 0.3f + 0.5f * hash01(i, 24);
+                    props.push_back(scene().materials().createMaterial(d));
+                }
+                const float block = 40.0f, street = 10.0f, pitch = block + street;
+                const float half = o.blocks * pitch * 0.5f;
+                uint32_t id = 0;
+                for (uint32_t bz = 0; bz < o.blocks; ++bz) {
+                    for (uint32_t bx = 0; bx < o.blocks; ++bx) {
+                        const glm::vec2 origin{bx * pitch - half + street * 0.5f, bz * pitch - half + street * 0.5f};
+                        for (uint32_t k = 0; k < 4; ++k, ++id) {
+                            const float w = 15.0f + 4.0f * hash01(id, 31), d = 15.0f + 4.0f * hash01(id, 32);
+                            const float h = 8.0f + 52.0f * hash01(id, 33) * hash01(id, 34);
+                            const glm::vec3 buildingCentre{origin.x + (k % 2 + 0.5f) * block * 0.5f, h * 0.5f, origin.y + (k / 2 + 0.5f) * block * 0.5f};
+                            draws.push_back({&meshes[0], 0, facades[id % facades.size()],
+                                             glm::scale(glm::translate(glm::mat4(1), buildingCentre), {w, h, d})});
+                        }
+                        for (uint32_t p = 0; p < 16; ++p, ++id) {
+                            const float along = (p % 4 + 0.5f) * block / 4.0f;
+                            const glm::vec2 pos = p < 4 ? glm::vec2{along, 1.0f} : p < 8 ? glm::vec2{along, block - 1.0f}
+                                                : p < 12 ? glm::vec2{1.0f, along} : glm::vec2{block - 1.0f, along};
+                            const bool lamp = p % 2 == 0;
+                            const glm::vec3 scale = lamp ? glm::vec3(0.25f, 4.5f, 0.25f) : glm::vec3(0.9f);
+                            draws.push_back({&meshes[lamp ? 0 : 1], 0, props[id % props.size()],
+                                             glm::scale(glm::translate(glm::mat4(1), {origin.x + pos.x, scale.y * 0.5f, origin.y + pos.y}), scale)});
+                        }
                     }
                 }
+                MaterialDesc asphalt;
+                asphalt.baseColorFactor = {0.12f, 0.12f, 0.13f, 1};
+                asphalt.roughness = 0.95f;
+                draws.push_back({&meshes[2], 0, scene().materials().createMaterial(asphalt),
+                                 glm::scale(glm::mat4(1), glm::vec3(half * 2.0f + 40.0f, 1, half * 2.0f + 40.0f))});
+                uniqueMaterials = 57;
+                uniqueMeshes = 3;
+                cityHalf = half;
+            } else {
+                GltfLoadOptions loadOptions;
+                loadOptions.useCompiledTextures = !o.sourceTextures;
+                const auto loadStart = std::chrono::steady_clock::now();
+                const ModelData data = loadGltf(*o.model, loadOptions);
+                loadMs = msSince(loadStart);
+                textureStats = data.textureStats;
+                for (const ImageData& image : data.images) textureBytes += image.byteSize();
+                ModelUploadOptions modelOptions;
+                modelOptions.geometryPool = &scene().geometry();
+                model = std::make_unique<Model>(batch, scene(), data, modelOptions);
+                model->appendDraws(draws);
+                uniqueMeshes = static_cast<uint32_t>(model->meshCount());
+                uniqueMaterials = static_cast<uint32_t>(model->materials().size());
             }
-            MaterialDesc asphalt;
-            asphalt.baseColorFactor = {0.12f, 0.12f, 0.13f, 1};
-            asphalt.roughness = 0.95f;
-            draws.push_back({&meshes[2], 0, scene.materials().createMaterial(asphalt),
-                             glm::scale(glm::mat4(1), glm::vec3(half * 2.0f + 40.0f, 1, half * 2.0f + 40.0f))});
-            uniqueMaterials = 57;
-            uniqueMeshes = 3;
-            cityHalf = half;
-        } else {
-            GltfLoadOptions loadOptions;
-            loadOptions.useCompiledTextures = !o.sourceTextures;
-            const auto loadStart = std::chrono::steady_clock::now();
-            const ModelData data = loadGltf(*o.model, loadOptions);
-            loadMs = msSince(loadStart);
-            textureStats = data.textureStats;
-            for (const ImageData& image : data.images) textureBytes += image.byteSize();
-            ModelUploadOptions modelOptions;
-            modelOptions.geometryPool = &scene.geometry();
-            model = std::make_unique<Model>(batch, scene, data, modelOptions);
-            model->appendDraws(draws);
-            uniqueMeshes = static_cast<uint32_t>(model->meshCount());
-            uniqueMaterials = static_cast<uint32_t>(model->materials().size());
+            stagedBytes = batch.stagingBytes();
+            stageMs = msSince(stageStart) - loadMs;
+            const auto transferStart = std::chrono::steady_clock::now();
+            batch.submit(); // Transfer queue + graphics acquire, blocking.
+            transferMs = msSince(transferStart);
         }
-        stagedBytes = batch.stagingBytes();
-        stageMs = msSince(stageStart) - loadMs;
-        const auto transferStart = std::chrono::steady_clock::now();
-        batch.submit(); // Transfer queue + graphics acquire, blocking.
-        transferMs = msSince(transferStart);
-    }
-    for (const auto& d : draws) bounds.expand(d.mesh->bounds().transformed(d.transform));
-    const glm::vec3 centre = bounds.center();
-    const float radius = std::max(0.5f * glm::length(bounds.extent()), 0.1f);
-    view.clearColor = {0.05f, 0.06f, 0.08f, 1};
-    view.lighting.ambientIntensity = 0.2f;
-    view.lighting.sun = {{-0.4f, -1.0f, -0.3f}, {1.0f, 0.95f, 0.9f}, 2.5f, true};
-    const uint32_t lightCount = o.lights;
-    // Lights scene: dynamic point/spot lights over the grid, moved every frame (see the loop).
-    struct MovingLight {
-        glm::vec3 base;
-        float phase;
-        float speed;
-    };
-    std::vector<MovingLight> moving;
-    const float gridHalf = std::sqrt(float(o.objects)) * 0.6f;
-    for (uint32_t i = 0; o.scene == "lights" && i < lightCount; ++i) {
-        const glm::vec3 origin((hash01(i, 11) * 2.0f - 1.0f) * gridHalf, 0.6f + hash01(i, 12) * 2.5f,
-                               (hash01(i, 13) * 2.0f - 1.0f) * gridHalf);
-        const glm::vec3 color(0.3f + hash01(i, 14), 0.3f + hash01(i, 15), 0.3f + hash01(i, 16));
-        moving.push_back({origin, hash01(i, 17) * 6.2832f, 0.5f + hash01(i, 18)});
-        if (i % 4 == 3) {
-            SpotLight spot;
-            spot.position = origin + glm::vec3(0, 2.0f, 0);
-            spot.direction = {0.2f, -1.0f, 0.1f};
-            spot.color = color;
-            spot.intensity = 6.0f;
-            spot.range = 6.0f;
-            spot.innerConeRadians = 0.3f;
-            spot.outerConeRadians = 0.5f;
-            view.lighting.spotLights.push_back(spot);
-        } else {
-            view.lighting.pointLights.push_back({origin, color, 1.5f, 3.0f});
+        for (const auto& d : draws) bounds.expand(d.mesh->bounds().transformed(d.transform));
+        centre = bounds.center();
+        radius = std::max(0.5f * glm::length(bounds.extent()), 0.1f);
+        view.clearColor = {0.05f, 0.06f, 0.08f, 1};
+        view.lighting.ambientIntensity = 0.2f;
+        view.lighting.sun = {{-0.4f, -1.0f, -0.3f}, {1.0f, 0.95f, 0.9f}, 2.5f, true};
+        const uint32_t lightCount = o.lights;
+        const float gridHalf = std::sqrt(float(o.objects)) * 0.6f;
+        for (uint32_t i = 0; o.scene == "lights" && i < lightCount; ++i) {
+            const glm::vec3 origin((hash01(i, 11) * 2.0f - 1.0f) * gridHalf, 0.6f + hash01(i, 12) * 2.5f,
+                                   (hash01(i, 13) * 2.0f - 1.0f) * gridHalf);
+            const glm::vec3 color(0.3f + hash01(i, 14), 0.3f + hash01(i, 15), 0.3f + hash01(i, 16));
+            moving.push_back({origin, hash01(i, 17) * 6.2832f, 0.5f + hash01(i, 18)});
+            if (i % 4 == 3) {
+                SpotLight spot;
+                spot.position = origin + glm::vec3(0, 2.0f, 0);
+                spot.direction = {0.2f, -1.0f, 0.1f};
+                spot.color = color;
+                spot.intensity = 6.0f;
+                spot.range = 6.0f;
+                spot.innerConeRadians = 0.3f;
+                spot.outerConeRadians = 0.5f;
+                view.lighting.spotLights.push_back(spot);
+            } else {
+                view.lighting.pointLights.push_back({origin, color, 1.5f, 3.0f});
+            }
         }
-    }
-    for (uint32_t i = 0; o.scene != "lights" && i < lightCount; ++i) {
-        const float a = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(std::max(1u, o.lights));
+        for (uint32_t i = 0; o.scene != "lights" && i < lightCount; ++i) {
+            const float a = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(std::max(1u, o.lights));
+            if (o.scene == "city") {
+                // Street lights along the driven street.
+                const float z = -cityHalf + (static_cast<float>(i) + 0.5f) * (2.0f * cityHalf / static_cast<float>(lightCount));
+                view.lighting.pointLights.push_back({{(i % 2 ? 3.5f : -3.5f), 4.5f, z}, {1.0f, 0.8f, 0.55f}, 60.0f, 25.0f});
+                continue;
+            }
+            view.lighting.pointLights.push_back({centre + glm::vec3(std::cos(a), 0.3f, std::sin(a)) * radius * 0.6f,
+                                                 glm::vec3(0.5f + 0.5f * std::cos(a), 0.6f, 0.5f + 0.5f * std::sin(a)),
+                                                 radius * 2.0f, radius * 0.5f});
+        }
         if (o.scene == "city") {
-            // Street lights along the driven street.
-            const float z = -cityHalf + (static_cast<float>(i) + 0.5f) * (2.0f * cityHalf / static_cast<float>(lightCount));
-            view.lighting.pointLights.push_back({{(i % 2 ? 3.5f : -3.5f), 4.5f, z}, {1.0f, 0.8f, 0.55f}, 60.0f, 25.0f});
-            continue;
+            view.lighting.sun = {{-0.3f, -1.0f, -0.5f}, {1.0f, 0.9f, 0.8f}, 2.0f, true};
+            view.camera.projection.nearPlane = 0.1f;
         }
-        view.lighting.pointLights.push_back({centre + glm::vec3(std::cos(a), 0.3f, std::sin(a)) * radius * 0.6f,
-                                             glm::vec3(0.5f + 0.5f * std::cos(a), 0.6f, 0.5f + 0.5f * std::sin(a)),
-                                             radius * 2.0f, radius * 0.5f});
-    }
-    if (o.scene == "city") {
-        view.lighting.sun = {{-0.3f, -1.0f, -0.5f}, {1.0f, 0.9f, 0.8f}, 2.0f, true};
-        view.camera.projection.nearPlane = 0.1f;
-    }
-    if (o.scene != "city") view.camera.projection.nearPlane = std::max(0.01f, radius * 0.001f);
-    if (o.scene == "lights") {
-        view.lighting.sun.enabled = false;
-        view.lighting.ambientIntensity = 0.02f;
-    }
-    scene.setLightingSettings(o.lighting);
-    view.bruteForceLights = o.bruteForceLights;
-    view.debugView = o.debugView;
-    std::unique_ptr<Environment> environment;
-    if (o.environment != "none") {
-        ProceduralSkyDesc sky;
-        sky.sunDirection = view.lighting.sun.direction;
-        const ImageData source = o.environment == "sky" ? proceduralSky(1024, sky) : loadHdrImage(o.environment);
-        environment = scene.ibl().bake(source, iblSettings(o.lighting.quality));
-        view.lighting.environment = environment.get();
-    }
-    // GPU-driven path: register every object once in a persistent GpuScene.
-    std::unique_ptr<GpuScene> gpuScene;
-    if (o.path == "gpu") {
-        gpuScene = std::make_unique<GpuScene>(renderer.context(), scene.materials(),
-                                              std::filesystem::path(base ? base : "") / "shaders", Renderer::kFramesInFlight);
-        for (const MeshDraw& d : draws) gpuScene->add(*d.mesh, d.submesh, d.material, d.transform);
-        view.gpuScene = gpuScene.get();
-    } else {
-        view.draws = draws;
-    }
-    ZODAR_LOG_INFO("Benchmark scene '{}': {} draws, path {}", o.scene, draws.size(), o.path);
+        if (o.scene != "city") view.camera.projection.nearPlane = std::max(0.01f, radius * 0.001f);
+        if (o.scene == "lights") {
+            view.lighting.sun.enabled = false;
+            view.lighting.ambientIntensity = 0.02f;
+        }
+        scene().setLightingSettings(o.lighting);
+        view.bruteForceLights = o.bruteForceLights;
+        view.debugView = o.debugView;
+        if (o.environment != "none") {
+            ProceduralSkyDesc sky;
+            sky.sunDirection = view.lighting.sun.direction;
+            const ImageData source = o.environment == "sky" ? proceduralSky(1024, sky) : loadHdrImage(o.environment);
+            environment = scene().ibl().bake(source, iblSettings(o.lighting.quality));
+            view.lighting.environment = environment.get();
+        }
+        // GPU-driven path: register every object once in a persistent GpuScene.
+        if (o.path == "gpu") {
+            gpuScene = std::make_unique<GpuScene>(renderer().context(), scene().materials(),
+                                                  shaderDirectory(), Renderer::kFramesInFlight);
+            for (const MeshDraw& d : draws) gpuScene->add(*d.mesh, d.submesh, d.material, d.transform);
+            view.gpuScene = gpuScene.get();
+        } else {
+            view.draws = draws;
+        }
+        ZODAR_LOG_INFO("Benchmark scene '{}': {} draws, path {}", o.scene, draws.size(), o.path);
 
-    // --- Frame loop ------------------------------------------------------------------
-    CpuProfiler cpu;
-    Stats cpuFrame, gpuFrame;
-    std::map<std::string, Stats> gpuPasses, cpuScopes;
-    Stats drawCalls, visible, culled, triangles; // Per measured frame (the view changes along the path).
-    std::map<std::string, Stats> fragmentInvocations, rasterPrimitives; // Pipeline statistics per scope.
-    Stats pacingWait;                                                    // --frame-cap wait per measured frame.
-    Stats clusterAssignments;                                            // Light-list entries per frame
-    uint32_t maxLightsInCluster = 0, overflowClusters = 0;
-    // GPU-driven statistics describe the frame rendered statsLatencyFrames earlier: they are
-    // credited to that frame so both paths average over exactly the same frames.
-    std::map<uint32_t, RenderStats> sceneStats;
-    RenderStats lastStats;
-    // A few extra, untimed frames at the end deliver the delayed GPU-driven statistics of
-    // the last measured frames, so every path reports scene statistics for all of them.
-    const uint32_t measuredEnd = o.warmup + o.frames;
-    const uint32_t total = measuredEnd + Renderer::kFramesInFlight;
-    auto last = std::chrono::steady_clock::now();
-    const auto capPeriod = o.frameCap > 0.0 ? std::chrono::nanoseconds(static_cast<int64_t>(1e9 / o.frameCap))
-                                            : std::chrono::nanoseconds(0);
-    auto nextDeadline = std::chrono::steady_clock::now() + capPeriod;
-    uint32_t rendered = 0;
-    while (rendered < total && !window.shouldClose()) {
-        window.pollEvents([&](const SDL_Event& e) {
-            if (overlay) overlay->processEvent(e);
-            if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) window.requestClose();
-        });
-        const bool measuring = rendered >= o.warmup && rendered < measuredEnd;
+        nextDeadline = std::chrono::steady_clock::now() + capPeriod;
+        started = true;
+    }
+
+    void onUpdate(const FrameTime&) override {
+        if (o.path == "reference") overlay().visible = false; // F1 must not add an overlay pass
+        const uint32_t rendered = static_cast<uint32_t>(renderer().frameNumber());
         const float t = rendered < o.warmup ? 0.0f
                         : static_cast<float>(std::min(rendered, measuredEnd - 1) - o.warmup) / static_cast<float>(o.frames);
         const float angle = glm::two_pi<float>() * t;
@@ -508,57 +459,27 @@ int run(const Options& o) {
         }
 
         // Screenshot from the middle of the measured path (representative view).
-        if (rendered == o.warmup + o.screenshotFrame.value_or(o.frames / 2) && o.screenshot) {
-            renderer.requestScreenshot(*o.screenshot);
+        if (o.screenshot && !screenshotRequested && rendered == o.warmup + o.screenshotFrame.value_or(o.frames / 2)) {
+            requestCapture(*o.screenshot);
+            screenshotRequested = true;
         }
-        cpu.beginFrame();
-        const uint32_t waitScope = cpu.begin("Wait + acquire");
-        auto frame = renderer.beginFrame();
-        cpu.end(waitScope);
-        if (!frame) {
-            cpu.endFrame();
-            continue;
-        }
-        const FrameInfo info = frame->info();
+    }
+
+    void onRender(RenderContext& rc) override {
         if (o.path == "reference") {
-            const uint32_t s = cpu.begin("Prepare + record");
-            lastStats = scene.render(info, frame->extent, view);
-            scene.resolve(info, frame->imageView, frame->format, frame->extent);
-            cpu.end(s);
+            ZODAR_CPU_SCOPE(cpuProfiler(), "Prepare + record");
+            rc.stats = scene().render(rc.info, rc.extent, view);
+            scene().resolve(rc.info, rc.frame.imageView, rc.format, rc.extent);
         } else {
-            const uint32_t s1 = cpu.begin("Prepare + build graph");
-            RenderGraph graph(graphResources);
-            RGImportedImage image;
-            image.image = frame->image;
-            image.view = frame->imageView;
-            image.format = frame->format;
-            image.extent = frame->extent;
-            image.initial = usageState(ResourceUsage::ColorAttachment);
-            image.final = usageState(ResourceUsage::ColorAttachment);
-            const RGImage output = graph.importImage("Swapchain", image);
-            scene.addToGraph(graph, info, frame->extent, view, output, frame->format, &lastStats);
-            if (overlay) {
-                const auto now = std::chrono::steady_clock::now();
-                overlay->newFrame(frame->extent, std::chrono::duration<float>(now - last).count());
-                debug::ProfilerSnapshot snap;
-                snap.cpu = &cpu;
-                snap.gpu = &renderer.profiler();
-                snap.render = lastStats;
-                snap.memory = queryMemoryStats(renderer.context());
-                snap.resolution = frame->extent;
-                snap.frameNumber = frame->frameNumber;
-                overlay->drawProfiler(snap);
-                overlay->addToGraph(graph, output);
-            }
-            cpu.end(s1);
-            const uint32_t s2 = cpu.begin("Record");
-            graph.execute(info);
-            cpu.end(s2);
+            ZODAR_CPU_SCOPE(cpuProfiler(), "Prepare + build graph");
+            scene().addToGraph(rc.graph, rc.info, rc.extent, view, rc.output, rc.format, &rc.stats);
         }
-        const uint32_t s3 = cpu.begin("Submit + present");
-        renderer.endFrame(*frame);
-        cpu.end(s3);
-        cpu.endFrame();
+    }
+
+    void onFrameEnd(const FrameTime&) override {
+        const uint32_t rendered = static_cast<uint32_t>(renderer().frameNumber() - 1); // this frame's index
+        const bool measuring = rendered >= o.warmup && rendered < measuredEnd;
+        lastStats = lastRenderStats();
         double waitedMs = 0.0;
         if (o.frameCap > 0.0) {
             // Fixed-rate pacing; a late frame restarts the schedule instead of bursting.
@@ -571,7 +492,6 @@ int run(const Options& o) {
                 nextDeadline = now + capPeriod;
             }
         }
-        last = std::chrono::steady_clock::now();
 
         if (measuring && lastStats.lightingStatsValid) {
             clusterAssignments.add(lastStats.clusterAssignments);
@@ -582,23 +502,27 @@ int run(const Options& o) {
             sceneStats[rendered - lastStats.statsLatencyFrames] = lastStats;
         }
         if (measuring) {
-            cpuFrame.add(cpu.lastFrameMs());
-            for (const auto& s : cpu.lastFrame()) cpuScopes[s.name].add(s.ms);
+            cpuFrame.add(cpuProfiler().lastFrameMs());
+            for (const auto& s : cpuProfiler().lastFrame()) cpuScopes[s.name].add(s.ms);
             // GPU results lag by the frames in flight; they belong to measured frames once
             // the lag has passed the warm-up.
-            if (renderer.profiler().enabled() && rendered >= o.warmup + Renderer::kFramesInFlight) {
-                gpuFrame.add(renderer.profiler().lastFrameMs());
-                for (const auto& s : renderer.profiler().lastResults()) gpuPasses[s.name].add(s.ms);
-                for (const auto& s : renderer.profiler().lastStatistics()) {
+            if (renderer().profiler().enabled() && rendered >= o.warmup + Renderer::kFramesInFlight) {
+                gpuFrame.add(renderer().profiler().lastFrameMs());
+                for (const auto& s : renderer().profiler().lastResults()) gpuPasses[s.name].add(s.ms);
+                for (const auto& s : renderer().profiler().lastStatistics()) {
                     fragmentInvocations[s.name].add(static_cast<double>(s.fragmentInvocations));
                     rasterPrimitives[s.name].add(static_cast<double>(s.clippingPrimitives));
                 }
             }
             if (o.frameCap > 0.0) pacingWait.add(waitedMs);
         }
-        ++rendered;
     }
-    renderer.waitIdle();
+
+    void onShutdown() override {
+        if (!started) return; // onStart failed: nothing measured, no report (run() returns 1)
+        if (o.screenshot && !screenshotRequested) {
+            ZODAR_LOG_WARN("The run ended before the --screenshot frame; no screenshot written");
+        }
     for (const auto& [frameIndex, st] : sceneStats) {
         if (frameIndex < o.warmup || frameIndex >= measuredEnd) continue;
         drawCalls.add(st.drawCalls);
@@ -608,7 +532,7 @@ int run(const Options& o) {
     }
 
     // --- Report ----------------------------------------------------------------------
-    const auto& ctx = renderer.context();
+    const auto& ctx = renderer().context();
     const auto& info = ctx.deviceInfo();
     const GpuMemoryStats memory = queryMemoryStats(ctx);
     std::ostringstream j;
@@ -623,12 +547,12 @@ int run(const Options& o) {
       << (info.isSoftwareRasterizer ? "Software rasterizer: GPU times are NOT GPU performance." : "Hardware GPU.")
       << "\",\n";
     j << "  \"scene\": \"" << o.scene << "\", \"renderPath\": \"" << (o.path)
-      << "\", \"overlay\": " << (o.overlay ? "true" : "false") << ",\n";
+      << "\", \"overlay\": " << (desc().overlay ? "true" : "false") << ",\n";
     j << "  \"sceneDetails\": {\"objects\": " << draws.size() << ", \"uniqueMeshes\": " << uniqueMeshes
       << ", \"uniqueMaterials\": " << uniqueMaterials << ", \"pointLights\": " << view.lighting.pointLights.size()
       << (o.scene == "city" ? ", \"blocks\": " + std::to_string(o.blocks) : std::string()) << "},\n";
-    j << "  \"resolution\": [" << renderer.swapchain().extent().width << ", " << renderer.swapchain().extent().height
-      << "], \"presentMode\": \"" << toString(o.present) << "\",\n";
+    j << "  \"resolution\": [" << renderer().swapchain().extent().width << ", " << renderer().swapchain().extent().height
+      << "], \"presentMode\": \"" << toString(desc().presentMode) << "\",\n";
     j << "  \"warmupFrames\": " << o.warmup << ", \"measuredFrames\": " << cpuFrame.samples.size() << ",\n";
     j << "  \"cpuFrameMs\": " << cpuFrame.json() << ",\n";
     j << "  \"gpuFrameMs\": " << (gpuFrame.samples.empty() ? "null" : gpuFrame.json()) << ",\n";
@@ -660,21 +584,21 @@ int run(const Options& o) {
     }
     j << "  \"frameCap\": {\"fps\": " << o.frameCap << ", \"waitMs\": "
       << (pacingWait.samples.empty() ? "null" : pacingWait.json()) << "},\n";
-    const double pixels = double(renderer.swapchain().extent().width) * double(renderer.swapchain().extent().height);
-    j << "  \"pipelineStatistics\": {\"supported\": " << (renderer.profiler().statisticsEnabled() ? "true" : "false");
+    const double pixels = double(renderer().swapchain().extent().width) * double(renderer().swapchain().extent().height);
+    j << "  \"pipelineStatistics\": {\"supported\": " << (renderer().profiler().statisticsEnabled() ? "true" : "false");
     for (const auto& [name, st] : fragmentInvocations) {
         j << ", \"" << escape(name) << "\": {\"fragmentInvocations\": " << st.json()
           << ", \"fragmentInvocationsPerPixel\": " << st.avg() / std::max(pixels, 1.0)
           << ", \"rasterPrimitives\": " << rasterPrimitives[name].json() << "}";
     }
     j << "},\n";
-    j << "  \"assets\": {\"uploadQueue\": \"" << (upload.queue().dedicated() ? "transfer" : "graphics")
+    j << "  \"assets\": {\"uploadQueue\": \"" << (upload().queue().dedicated() ? "transfer" : "graphics")
       << "\", \"loadMs\": " << loadMs << ", \"stageMs\": " << stageMs << ", \"transferMs\": " << transferMs
       << ", \"stagedMiB\": " << stagedBytes / 1048576.0 << ", \"textureMiB\": " << textureBytes / 1048576.0
       << ", \"textures\": {\"compiled\": " << textureStats.compiled << ", \"source\": " << textureStats.source
       << ", \"runtimeMips\": " << textureStats.runtimeMips << ", \"stale\": " << textureStats.stale << "}},\n";
     {
-        const ClusterGrid grid = makeClusterGrid(renderer.swapchain().extent().width, renderer.swapchain().extent().height,
+        const ClusterGrid grid = makeClusterGrid(renderer().swapchain().extent().width, renderer().swapchain().extent().height,
                                                  clusterConfig(o.lighting.quality), view.camera.projection.nearPlane,
                                                  o.lighting.clusterFar);
         j << "  \"lighting\": {\"quality\": \"" << toString(o.lighting.quality) << "\", \"pointLights\": "
@@ -689,7 +613,7 @@ int run(const Options& o) {
           << ", \"debugView\": \"" << toString(o.debugView) << "\", \"environment\": \"" << escape(o.environment)
           << "\", \"iblBakeMs\": " << (environment ? environment->bakeMs() : 0.0)
           << ", \"iblMiB\": " << (environment ? environment->gpuBytes() / 1048576.0 : 0.0)
-          << ", \"clusterBuffersMiB\": " << scene.clusteredLighting().gpuBytes() / 1048576.0 << "},\n";
+          << ", \"clusterBuffersMiB\": " << scene().clusteredLighting().gpuBytes() / 1048576.0 << "},\n";
     }
     j << "  \"commandDraws\": " << lastStats.commandDraws << ", \"statsLatencyFrames\": " << lastStats.statsLatencyFrames
       << ",\n";
@@ -704,26 +628,94 @@ int run(const Options& o) {
     j << "  \"validation\": {\"enabled\": " << (ctx.validationEnabled() ? "true" : "false")
       << ", \"errors\": " << ctx.validationErrorCount() << ", \"warnings\": " << ctx.validationWarningCount() << "}\n";
     j << "}\n";
-    std::ofstream(o.output) << j.str();
+    std::ofstream out(o.output);
+    out << j.str();
+    if (!out.flush()) fail("Cannot write benchmark report '" + o.output.string() + "'");
     ZODAR_LOG_INFO("Report written to {}", o.output.string());
     ZODAR_LOG_INFO("CPU frame avg {:.3f} ms | GPU frame avg {:.3f} ms | {} draws, {} visible, {} triangles",
                    cpuFrame.avg(), gpuFrame.avg(), lastStats.drawCalls, lastStats.instances, lastStats.triangles);
     if (info.isSoftwareRasterizer) {
         ZODAR_LOG_WARN("Software rasterizer: these numbers are not GPU performance");
     }
-    return ctx.validationEnabled() && ctx.validationErrorCount() > 0 ? 2 : 0;
+    }
+
+private:
+    Options o;
+    // Scene
+    std::vector<GpuMesh> meshes;
+    std::unique_ptr<Model> model;
+    std::vector<MeshDraw> draws;
+    Bounds bounds;
+    SceneView view;
+    uint32_t uniqueMeshes = 2;
+    uint32_t uniqueMaterials = 16;
+    float cityHalf = 0.0f;
+    glm::vec3 centre{0.0f};
+    float radius = 1.0f;
+    // Asset load metrics (CPU parse/decode, staging, transfer wait).
+    double loadMs = 0.0, stageMs = 0.0, transferMs = 0.0;
+    VkDeviceSize stagedBytes = 0, textureBytes = 0;
+    TextureLoadStats textureStats;
+    // Lights scene: dynamic point/spot lights over the grid, moved every frame (onUpdate).
+    struct MovingLight {
+        glm::vec3 base;
+        float phase;
+        float speed;
+    };
+    std::vector<MovingLight> moving;
+    std::unique_ptr<Environment> environment;
+    std::unique_ptr<GpuScene> gpuScene; // GPU-driven path
+    // Measurements
+    Stats cpuFrame, gpuFrame;
+    std::map<std::string, Stats> gpuPasses, cpuScopes;
+    Stats drawCalls, visible, culled, triangles; // Per measured frame (the view changes along the path).
+    std::map<std::string, Stats> fragmentInvocations, rasterPrimitives; // Pipeline statistics per scope.
+    Stats pacingWait;                                                    // --frame-cap wait per measured frame.
+    Stats clusterAssignments;                                            // Light-list entries per frame
+    uint32_t maxLightsInCluster = 0, overflowClusters = 0;
+    // GPU-driven statistics describe the frame rendered statsLatencyFrames earlier: they are
+    // credited to that frame so both paths average over exactly the same frames.
+    std::map<uint32_t, RenderStats> sceneStats;
+    RenderStats lastStats;
+    // A few extra, untimed frames at the end deliver the delayed GPU-driven statistics of
+    // the last measured frames, so every path reports scene statistics for all of them.
+    uint32_t measuredEnd = o.warmup + o.frames;
+    std::chrono::nanoseconds capPeriod = o.frameCap > 0.0
+        ? std::chrono::nanoseconds(static_cast<int64_t>(1e9 / o.frameCap)) : std::chrono::nanoseconds(0);
+    std::chrono::steady_clock::time_point nextDeadline;
+    bool screenshotRequested = false;
+    bool started = false; // onStart completed
+};
+
+ApplicationDesc defaultDesc() {
+    ApplicationDesc desc;
+    desc.name = "ZodarBench";
+    desc.identifier = "ZodarBench";
+    desc.width = 1920;
+    desc.height = 1080;
+    desc.resizable = false;
+    desc.presentMode = PresentMode::Immediate;
+    return desc;
 }
 
 } // namespace
 
 int main(int argc, char** argv) {
-    zodar::log::init({spdlog::level::info, ""});
-    int code = EXIT_FAILURE;
-    try {
-        code = run(parse(argc, argv));
-    } catch (const std::exception& e) {
-        ZODAR_LOG_ERROR("Fatal: {}", e.what());
-    }
-    zodar::log::shutdown();
-    return code;
+    return zodar::runMain(argc, argv, defaultDesc(), kUsage,
+                          [](const zodar::ApplicationDesc& standard, std::span<const std::string> args) {
+                              Options o = parse(args);
+                              zodar::ApplicationDesc desc = standard;
+                              // --frames counts measured frames; the runtime renders warm-up +
+                              // measured + frames in flight (delayed GPU statistics).
+                              if (desc.maxFrames > 0) o.frames = static_cast<uint32_t>(std::min<uint64_t>(desc.maxFrames, 1u << 24));
+                              desc.maxFrames = uint64_t(o.warmup) + o.frames + Renderer::kFramesInFlight;
+                              if (o.screenshotFrame && *o.screenshotFrame >= o.frames) {
+                                  fail("--screenshot-frame must be below the measured frame count (--frames)");
+                              }
+                              o.screenshot = std::move(desc.screenshot); // taken mid-path (onUpdate)
+                              desc.screenshot.reset();
+                              desc.presentMode = o.present;
+                              desc.dedicatedTransferQueue = o.transferQueue;
+                              return std::make_unique<BenchApp>(desc, std::move(o));
+                          });
 }

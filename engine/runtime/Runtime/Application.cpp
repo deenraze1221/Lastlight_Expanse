@@ -79,7 +79,8 @@ Application::Application(ApplicationDesc desc)
     m_window = std::make_unique<Window>(WindowDesc{m_desc.name, m_desc.width, m_desc.height, m_desc.resizable});
     m_renderer = std::make_unique<Renderer>(
         *m_window, RendererDesc{m_desc.name, m_desc.validation, m_desc.presentMode,
-                                Platform::userDataPath(m_desc.organization, m_desc.identifier) / "pipeline_cache.bin"});
+                                Platform::userDataPath(m_desc.organization, m_desc.identifier) / "pipeline_cache.bin",
+                                m_desc.synchronizationValidation, m_desc.dedicatedTransferQueue});
     m_upload = std::make_unique<UploadContext>(m_renderer->context());
     m_renderer->attachUploads(&m_upload->queue());
 
@@ -101,6 +102,11 @@ Application::Application(ApplicationDesc desc)
 Application::~Application() {
     // Derived members are gone; make sure nothing is in flight before engine teardown.
     if (m_renderer) m_renderer->waitIdle();
+}
+
+void Application::requestCapture(std::filesystem::path path) {
+    createParentDirectory(path);
+    m_pendingCaptures.push_back(std::move(path));
 }
 
 int Application::run() {
@@ -144,6 +150,18 @@ int Application::verifyOutputs() const {
             ZODAR_LOG_ERROR("Capture of frame {} was not written", frame);
             return 3;
         }
+    }
+    // App captures (requestCapture): every attempt must have succeeded and none may be left.
+    for (const RunReport::Capture& c : m_captures) {
+        if (!c.ok) {
+            ZODAR_LOG_ERROR("Capture '{}' (frame {}) was not written", c.path, c.frame);
+            return 3;
+        }
+    }
+    if (!m_pendingCaptures.empty()) {
+        ZODAR_LOG_ERROR("Capture '{}' was requested but no frame was rendered after it",
+                        m_pendingCaptures.front().string());
+        return 3;
     }
     return 0;
 }
@@ -243,15 +261,20 @@ void Application::renderFrame(const FrameTime& time, bool lastFrame) {
     std::vector<std::filesystem::path> request;
     if (lastFrame && m_desc.screenshot) request.push_back(*m_desc.screenshot);
     if (captureThis) request.push_back(capturePath);
+    request.insert(request.end(), m_pendingCaptures.begin(), m_pendingCaptures.end());
     if (!request.empty()) m_renderer->requestScreenshot(request);
 
+    const uint32_t acquireScope = m_cpuProfiler.begin("Wait + acquire");
     auto frame = m_renderer->beginFrame();
+    m_cpuProfiler.end(acquireScope);
     if (!frame) {
         // Minimized or swapchain out of date: skip rendering this iteration.
         m_cpuProfiler.endFrame();
         SDL_Delay(5);
         return;
     }
+    m_pendingCaptures.clear(); // part of this frame's request
+    const uint32_t buildScope = m_cpuProfiler.begin("Build graph");
     const FrameInfo info = frame->info();
     RenderGraph graph(*m_graphResources);
     RGImportedImage swapchainImage;
@@ -263,7 +286,7 @@ void Application::renderFrame(const FrameTime& time, bool lastFrame) {
     swapchainImage.final = usageState(ResourceUsage::ColorAttachment);
     const RGImage output = graph.importImage("Swapchain", swapchainImage);
 
-    RenderContext context{graph, info, frame->extent, output, frame->format, m_renderStats};
+    RenderContext context{graph, info, frame->extent, output, frame->format, m_renderStats, *frame};
     onRender(context);
 
     m_overlay->newFrame(frame->extent, static_cast<float>(time.dt));
@@ -273,14 +296,22 @@ void Application::renderFrame(const FrameTime& time, bool lastFrame) {
     snapshot.cpuFrameMs = &m_cpuFrameMs;
     snapshot.gpuFrameMs = &m_gpuFrameMs;
     snapshot.render = m_renderStats;
-    snapshot.memory = queryMemoryStats(m_renderer->context());
+    // Memory query only when someone reads it (visible overlay, run report).
+    if (m_overlay->visible || m_collectReport) snapshot.memory = queryMemoryStats(m_renderer->context());
     snapshot.resolution = frame->extent;
     snapshot.frameNumber = frame->frameNumber;
     m_overlay->drawProfiler(snapshot);
     m_overlay->addToGraph(graph, output);
+    m_cpuProfiler.end(buildScope);
 
-    graph.execute(info);
-    m_renderer->endFrame(*frame); // a requested screenshot is written before this returns
+    {
+        ZODAR_CPU_SCOPE(m_cpuProfiler, "Record");
+        graph.execute(info);
+    }
+    {
+        ZODAR_CPU_SCOPE(m_cpuProfiler, "Submit + present");
+        m_renderer->endFrame(*frame); // a requested screenshot is written before this returns
+    }
     m_cpuProfiler.endFrame();
     m_cpuFrameMs.push(static_cast<float>(m_cpuProfiler.lastFrameMs()));
     const GpuProfiler& gpu = m_renderer->profiler();
@@ -309,6 +340,7 @@ void Application::renderFrame(const FrameTime& time, bool lastFrame) {
         }
         m_report.peakDeviceLocalUsage = std::max(m_report.peakDeviceLocalUsage, snapshot.memory.deviceLocalUsage);
     }
+    onFrameEnd(time);
 }
 
 } // namespace zodar

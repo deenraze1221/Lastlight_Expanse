@@ -61,6 +61,26 @@
   standards, palette/texel density, sampling + mips, Blockbench → glTF workflow, engine/game asset
   split, future technical requirements). Documentation only; no rendering or pipeline change.
 
+- Phase A3 (Phase A complete): `CMakePresets.json` (debug, release, gpu-tests, ci + `ci`
+  workflow; trees in `build/<preset>`); `tools/zodar.py` (build|test|run|shot|bench|report,
+  stdlib Python, failures/summaries only, logs to files, timeouts exit 124);
+  `docs/guide/RUNNING.md`; ModelViewer and ZodarBench migrated to `Application` (bench keeps
+  its CLI: `--frames` = measured frames, mid-path `--screenshot`); `Application`: `onFrameEnd`,
+  `requestCapture` (verified, exit 3), `RenderContext::frame` (reference paths), standard CPU
+  scopes (`Wait + acquire`, `Build graph`, `Record`, `Submit + present`), sync-validation and
+  transfer-queue desc fields, memory query only for overlay/report; JSON-lines log sink
+  (`--log-json`, UTF-8 validated); `--sync-validation` standard. Tests: JSON log unit case,
+  CLI cases extended, runtime smoke checks `onFrameEnd` + `requestCapture`,
+  `gpu.zodar_shot_game` (exit criterion: `zodar.py shot game --frames 120` -> PNG + report).
+  Verified: `ci` preset (GCC 13 Debug, warnings as errors) + GCC 13 Release + Clang 18 Debug,
+  0 warnings, 19/19 ctest each (138 unit cases), validation 0 errors. Screenshots vs pre-A3:
+  game byte-identical; ModelViewer identical with `--no-overlay` and `--reference-path` (overlay
+  text varies run to run); ZodarBench grid/city/unique/reference screenshots and per-frame stats
+  identical. lavapipe Release bench city (interleaved medians of 3): CPU 22.15 -> 22.12 ms,
+  GPU 22.12 -> 22.10 ms: no regression. Behaviour changes: bench `cpuFrameMs` includes events +
+  update, scope names standardised; ModelViewer animation on the runtime clock; bench rejects
+  unknown `--present` and non-finite `--frame-cap`. Not verified: MinGW/Windows, MSVC.
+
 ## Engine audit: open items (from SECTOR-ENGINE docs)
 - Renderer S4 awaiting RTX benchmarks; S5 shadows, S6 post (tonemap, TAA), S7 AO/GI, S8 volumetrics/fog, S9 HZB/meshlets planned.
 - Asset streaming designed (docs/ASSET_STREAMING.md), not implemented. MSVC/Windows build unverified here.
@@ -71,16 +91,16 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- Branch `claude/youthful-ride-bzkozz`: Phase A1 (9cc73eb) and Phase A2 committed and pushed.
+- Branch `claude/dazzling-allen-03abzg` (from `claude/youthful-ride-bzkozz` A2 550ba4c): Phase A3
+  committed and pushed. Phase A complete.
 
 ## Current task
-- **Next: Phase A3** (docs/AI_FIRST_ROADMAP.md §2 Phase A): `CMakePresets.json`,
-  `tools/zodar.py` (build|test|run|shot|bench|report, short summaries), `docs/guide/RUNNING.md`,
-  migrate ModelViewer and ZodarBench to `Application`, opt-in JSON-lines log sink. Not started.
+- **Next: Phase B1** (docs/AI_FIRST_ROADMAP.md Phase B): EnTT world + transforms + renderer
+  bridge. Not started.
 
 ## Next steps
-1. Phase A3 (above).
-2. Phase B1/B2: EnTT world + transforms + renderer bridge; scene/material JSON.
+1. Phase B1/B2: EnTT world + transforms + renderer bridge; scene/material JSON.
+2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.
 

@@ -20,7 +20,7 @@
 //   int main() { return MyApp().run(); }
 //
 // Frame order: events -> fixed steps (onFixedUpdate x N) -> onUpdate -> [beginFrame ->
-// onRender -> debug overlay -> graph execute -> endFrame]. The subsystems exist from the
+// onRender -> debug overlay -> graph execute -> endFrame -> onFrameEnd]. The subsystems exist from the
 // constructor on; hooks run only inside run(). Members of the derived class are destroyed
 // before the engine subsystems; run() waits for the GPU before returning. A derived class that
 // creates GPU objects without calling run() must call renderer().waitIdle() in its destructor.
@@ -83,6 +83,8 @@ struct ApplicationDesc {
     // Requires maxFrames > 0 so the app terminates.
     bool headless = false;
     bool validation = true;
+    bool synchronizationValidation = false;  // slower; for correctness runs
+    bool dedicatedTransferQueue = true;      // false: uploads on the graphics queue (A/B tests)
     gfx::PresentMode presentMode = gfx::PresentMode::VSync;
     bool overlay = false;                    // profiler overlay visible at start (F1 toggles)
     uint64_t maxFrames = 0;                  // 0 = until the window closes
@@ -100,6 +102,8 @@ struct ApplicationDesc {
     std::optional<std::filesystem::path> reportPath;
     // Log file opened by runMain() before the app is constructed (empty: console only).
     std::filesystem::path logFile;
+    // Structured log (JSON lines) opened by runMain() next to the human log (empty: none).
+    std::filesystem::path jsonLogFile;
     // App-defined meaning; reported in the run report. Empty: the app's default seed.
     std::optional<uint64_t> seed;
     std::optional<CameraOverride> camera;
@@ -124,6 +128,10 @@ struct RenderContext {
     gfx::RGImage output; // swapchain image (colour attachment)
     VkFormat format;
     gfx::RenderStats& stats; // fill for the profiler overlay (SceneRenderer::addToGraph)
+    // Raw frame (command buffer, swapchain image) for paths that record outside the render
+    // graph (A/B reference paths). Commands recorded here run before the graph's passes; the
+    // swapchain image must be left in COLOR_ATTACHMENT_OPTIMAL.
+    const gfx::FrameContext& frame;
 };
 
 class Application {
@@ -138,6 +146,9 @@ public:
     int run();
     // Ends the loop after the current frame.
     void requestQuit() { m_quit = true; }
+    // Saves the next rendered frame to `path` (.png or .ppm). Listed in the run report;
+    // run() returns 3 if it is not written (failed, or the loop ended first).
+    void requestCapture(std::filesystem::path path);
 
     const ApplicationDesc& desc() const { return m_desc; }
     Platform& platform() { return *m_platform; }
@@ -148,6 +159,7 @@ public:
     gfx::RenderGraphResources& graphResources() { return *m_graphResources; }
     debug::DebugOverlay& overlay() { return *m_overlay; }
     JobSystem& jobs() { return *m_jobs; }
+    // Frame CPU profiler (scopes appear in the overlay and the run report).
     CpuProfiler& cpuProfiler() { return m_cpuProfiler; }
     const FixedTimestep& timestep() const { return m_timestep; }
     const gfx::RenderStats& lastRenderStats() const { return m_renderStats; }
@@ -161,6 +173,9 @@ protected:
     virtual void onFixedUpdate(double dt) { (void)dt; }
     virtual void onUpdate(const FrameTime& time) { (void)time; }
     virtual void onRender(RenderContext& context) { (void)context; }
+    // After a frame was submitted and presented (not called for skipped frames). The frame's
+    // CPU time is final; waiting here (frame pacing) is not part of it.
+    virtual void onFrameEnd(const FrameTime& time) { (void)time; }
     // After the GPU is idle; GPU resources may be released here or in the destructor.
     virtual void onShutdown() {}
 
@@ -188,6 +203,7 @@ private:
     bool m_quit = false;
     // Captures attempted (--screenshot, --capture-frames) and run-report samples.
     std::vector<RunReport::Capture> m_captures;
+    std::vector<std::filesystem::path> m_pendingCaptures; // requestCapture(), next frame
     bool m_collectReport = false;
     RunReport m_report;
     double m_loopSeconds = 0.0;

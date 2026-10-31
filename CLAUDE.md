@@ -21,7 +21,7 @@ Instructions for Claude Code sessions in this repository.
 
 - Repo: Lastlight Expanse game (`game/`) on the reusable ZODAR engine (`engine/`). Engine code
   never depends on `game/`. Layout and module rules: `docs/ARCHITECTURE.md`.
-- Status and next task: `PROGRESS.md`; plan: `docs/AI_FIRST_ROADMAP.md` (next: Phase A3).
+- Status and next task: `PROGRESS.md`; plan: `docs/AI_FIRST_ROADMAP.md` (Phase A done; next: Phase B1).
 - Art direction (voxel/pixel art, texture sizes, Blockbench → glTF workflow): `docs/ART_DIRECTION.md`.
 - Language **C++23** (GCC 13, Clang 18, MinGW-w64 verified; MSVC unverified). Use only features
   listed as usable in `BUILDING.md` ("C++23 policy").
@@ -37,10 +37,13 @@ cmake --build build
 SDL_VIDEO_DRIVER=offscreen ctest --test-dir build --output-on-failure
 ```
 
+- Short output: `python3 tools/zodar.py [--preset P | --build-dir DIR] build|test|run|shot|bench|report`
+  (presets `debug|release|gpu-tests|ci` in `CMakePresets.json`; guide: `docs/guide/RUNNING.md`).
 - Focused: `./build/bin/ZodarTests -tc='name*'`, `./build/bin/ZodarGpuTests -tc='name*'`.
 - Game smoke: `./build/bin/LastlightExpanse --headless --deterministic --frames 60 --screenshot out.png --report run.json`
   (standard options of every `Application` app: `--help`).
-- New apps derive from `zodar::Application` (`engine/runtime/Runtime/Application.h`).
+- New apps derive from `zodar::Application` (`engine/runtime/Runtime/Application.h`); game,
+  ModelViewer and ZodarBench do (ZodarBench: `--frames` = measured frames).
 - Benchmarks: `ZodarBench ... --no-validation --output report.json`; on lavapipe (software)
   compare runs interleaved and treat ±5% as noise.
 - Cloud containers: needs `glslang-tools`, `mesa-vulkan-drivers`, `vulkan-validationlayers`

@@ -3,8 +3,9 @@
 **Status:** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
 (`zodar::Application`, `FixedTimestep`, headless/deterministic modes, game migrated).
 **Phase A2 done** (standard CLI + `runMain`, PNG screenshots, capture sequences, `--camera`,
-run report JSON). **Next task: Phase A3** (CMake presets, `tools/zodar.py`, RUNNING guide,
-migrate ModelViewer/ZodarBench; JSON-lines log sink).
+run report JSON). **Phase A3 done** (CMake presets, `tools/zodar.py`, `docs/guide/RUNNING.md`,
+ModelViewer + ZodarBench on `Application`, JSON-lines log sink): **Phase A complete**.
+**Next: Phase B1** (EnTT world + transforms + renderer bridge).
 
 Goal: ZODAR is driven by Claude Code (code, CLI, files, logs, screenshots), not by a visual
 editor. Every engine capability must be reachable through documented C++ APIs, text data

@@ -28,10 +28,12 @@ constexpr std::string_view kHelp =
     "  --capture-dir DIR          Directory for --capture-frames (default: captures)\n"
     "  --report F.json            Write a run report at exit\n"
     "  --log-file F               Also write the log to F\n"
+    "  --log-json F.jsonl         Also write the log as JSON lines to F\n"
     "  --seed N                   App-defined seed\n"
     "  --camera X,Y,Z,YAW,PITCH   Start camera (degrees), for apps that have a camera\n"
     "  --threads N                Worker threads (0 = run jobs inline)\n"
     "  --no-validation            Disable Vulkan validation layers\n"
+    "  --sync-validation          Also enable synchronization validation (slower)\n"
     "  --overlay | --no-overlay   Profiler overlay visible at start\n"
     "  --help                     Print usage and exit\n"
     "Exit codes: 0 ok, 1 fatal error or bad arguments, 2 Vulkan validation errors,\n"
@@ -105,6 +107,7 @@ std::vector<std::string> parseStandardOptions(std::span<const std::string> args,
         } else if (arg == "--capture-dir") desc.captureDir = std::filesystem::path(std::string(next()));
         else if (arg == "--report") desc.reportPath = std::filesystem::path(std::string(next()));
         else if (arg == "--log-file") desc.logFile = std::filesystem::path(std::string(next()));
+        else if (arg == "--log-json") desc.jsonLogFile = std::filesystem::path(std::string(next()));
         else if (arg == "--seed") desc.seed = parseNumber<uint64_t>(arg, next());
         else if (arg == "--camera") {
             const auto parts = splitList(next());
@@ -117,6 +120,7 @@ std::vector<std::string> parseStandardOptions(std::span<const std::string> args,
             desc.camera = camera;
         } else if (arg == "--threads") desc.threads = parseNumber<uint32_t>(arg, next());
         else if (arg == "--no-validation") desc.validation = false;
+        else if (arg == "--sync-validation") desc.synchronizationValidation = true;
         else if (arg == "--overlay") desc.overlay = true;
         else if (arg == "--no-overlay") desc.overlay = false;
         else rest.emplace_back(arg);
@@ -152,8 +156,8 @@ int runMain(int argc, char** argv, ApplicationDesc defaults, std::string_view ap
             log::shutdown();
             return 0;
         }
-        if (!desc.logFile.empty()) {
-            log::init({spdlog::level::info, desc.logFile.string()});
+        if (!desc.logFile.empty() || !desc.jsonLogFile.empty()) {
+            log::init({spdlog::level::info, desc.logFile.string(), desc.jsonLogFile.string()});
         }
         std::unique_ptr<Application> app = factory(desc, appArgs);
         exitCode = app->run();

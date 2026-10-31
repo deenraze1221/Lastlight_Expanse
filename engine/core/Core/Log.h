@@ -12,6 +12,9 @@ struct Config {
     spdlog::level::level_enum level = spdlog::level::info;
     // Optional log file. Empty means console only.
     std::string filePath;
+    // Optional structured log: one JSON object per line (JSON Lines), written next to the
+    // human-readable log. Fields: "time" (UTC, ISO 8601, ms), "level", "thread", "msg".
+    std::string jsonFilePath;
 };
 
 // Creates the engine logger. Safe to call more than once; later calls replace the sinks.

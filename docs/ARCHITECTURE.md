@@ -16,7 +16,7 @@ Engine code never includes game headers or links game targets.
 | `engine/assets/AssetPipeline` | `Zodar::AssetPipeline` | Offline BCn encoding, mip baking |
 | `engine/scene/Scene` | `Zodar::Scene` | Noise, voxel chunks, greedy mesher, LOD, chunk streaming (no GPU) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
-| `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON |
+| `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON. Used by the game, ModelViewer and ZodarBench |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarUISandbox |
 | `engine/ui` | `Zodar::UI` | Engine/tooling UI, UI resources |
 | `engine/samples`, `engine/tests` | — | HelloTriangle, ModelViewer; doctest unit + GPU tests |
@@ -211,7 +211,23 @@ Minecraft-inspired voxel look built only from engine capabilities (`game/`):
 Frame order: events -> `onFixedUpdate` x N -> `onUpdate` -> `beginFrame` -> `onRender` (records
 into the frame's render graph, swapchain image imported as `output`) -> debug overlay pass ->
 graph execute -> `endFrame`. The screenshot is requested before the last frame's `beginFrame`.
-Migrated: `game/`. ModelViewer and ZodarBench keep their own loops until Phase A3.
+Migrated: `game/` (A1), ModelViewer and ZodarBench (A3). HelloTriangle (Milestone 1 raw
+Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own loops.
+
+### Agent tooling and remaining migrations (Phase A3)
+
+| Decision | Reason |
+| --- | --- |
+| `onFrameEnd(FrameTime)` hook after `endFrame` (rendered frames only) | Per-frame statistics and frame pacing (ZodarBench `--frame-cap`) outside the measured CPU frame |
+| `RenderContext::frame` exposes the raw `FrameContext` | A/B reference paths (`--reference-path`, `--path reference`) record outside the render graph without a second loop; they hide the overlay as before |
+| `requestCapture(path)`: next rendered frame, recorded and verified like `--capture-frames` (exit 3) | Apps choose capture frames (ZodarBench mid-path screenshot) without bypassing the evidence checks |
+| Standard CPU scopes in the runtime: `Wait + acquire`, `Build graph`, `Record`, `Submit + present` | Same frame breakdown in every app's overlay, run report and benchmark report |
+| `ApplicationDesc::synchronizationValidation`, `dedicatedTransferQueue`; `--sync-validation` is standard | Correctness runs and S3 A/B switches without app-owned renderer construction |
+| ZodarBench keeps its CLI: `--frames` = measured frames, `--screenshot` = measured frame `--screenshot-frame`; runtime renders warm-up + measured + frames in flight | Existing benchmark commands and reports stay valid. Changed: `cpuFrameMs` now spans the whole runtime frame (events + update included) and `cpuScopesMs` uses the standard scope names; compare CPU numbers only against A3+ runs (measured equal within noise on lavapipe) |
+| Animation in ModelViewer uses the runtime clock (`FrameTime::dt`/`time`, clamped to 0.1 s) | Deterministic runs render identical frames; after a stall spin/light phase follow simulation time, not wall time |
+| JSON-lines log sink (`log::Config::jsonFilePath`, `--log-json`): own spdlog sink, ISO 8601 UTC ms, escaped message | One object per line is greppable and parseable; no JSON dependency; opt-in |
+| `CMakePresets.json` (debug, release, gpu-tests, ci + `ci` workflow), trees in `build/<preset>` (git-ignored) | One documented way to configure; each preset has its own `_deps` |
+| `tools/zodar.py`: Python stdlib only, prints failures/summaries, full logs to files, returns the underlying exit code | Agents spend few tokens per build/test/run; no extra install |
 
 ## Frame flow (Milestone 1)
 
