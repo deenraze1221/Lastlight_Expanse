@@ -107,7 +107,26 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase C1 complete (asset manager). Phases A, B1.x, B2 unchanged.
+- `main`: Phase C2 complete (async asset loading). Phases A, B, C1 unchanged.
+
+## Phase C2 — async asset loading (done)
+- `AssetCache`: `Loading` state, `getOrCreatePending`, `resolve`, `reject`; handles
+  `loading()`, `state()`; `get()` throws while loading.
+- `AssetManager`: `loadTextureAsync`, `loadModelAsync`, `loadMaterialAsync`,
+  `createMaterialAsync`, `createSceneMaterialsAsync` (+ `SceneMaterialAssets::loading/errors`),
+  `update()` (per frame), `waitAll()`, `pendingCount()`, stats `pending`/`uploading`;
+  `AssetManagerDesc::jobs` (decode workers), `uploadBudgetBytes` (default 32 MiB per update).
+  Decode on JobSystem -> budgeted `submitAsync` uploads -> ready after the frame loop's acquire.
+  Blocking loads share decode/create code and wait for pending async loads of the same key.
+  Cancellation by dropping handles. Blocking API unchanged.
+- Sample `ZodarAssetLoading` now loads asynchronously (`--deterministic` waits in onStart);
+  new ctest `gpu.asset_loading_async` (real frame loop, no wait: scene ready at frame 2,
+  fails if anything is still loading at exit).
+- Tests: unit `asset cache: pending entries ...`; GPU `asset manager: async*` (3: workers +
+  waitAll + rendering, upload budget + blocking wait + cancel while decoding/uploading,
+  async failures incl. scene errors); async GPU cases run 30x without failure. Verified GCC 13
+  Debug, 0 warnings, 177/177 unit, 55/55 GPU cases, 21/21 ctest, 0 validation messages.
+  Not run: ThreadSanitizer, Release, Clang, MinGW, MSVC.
 
 ## Phase C1 — asset manager (done)
 - Module `Zodar::AssetManager` (`engine/rendering/AssetManager`): `loadTexture` (PNG/JPEG/TGA/BMP,
@@ -164,9 +183,8 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Remaining Phase C (when requested): async loads (JobSystem + UploadQueue), `assets.json`
-   registry + `zodar import/assets` CLI, streaming budgets, hot reload, scene-file model
-   references, audio/FBX importers. Optionally migrate game draws/terrain textures to assets.
+1. Remaining Phase C (when requested): C3 `assets.json` registry + `zodar import/assets` CLI,
+   C4 scene-file model references, C5 hot reload, streaming budgets, audio/FBX importers. Optionally migrate game draws/terrain textures to assets.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.

@@ -141,6 +141,11 @@ if(ZODAR_GPU_TESTS)
         COMMAND ZodarAssetLoading --headless --deterministic --frames 30 --width 640 --height 360
                 --screenshot ${CMAKE_BINARY_DIR}/asset_loading_example.png)
     set_tests_properties(gpu.asset_loading_example PROPERTIES TIMEOUT 300)
+    # Async path through the real frame loop (assets appear as uploads are acquired).
+    add_test(NAME gpu.asset_loading_async
+        COMMAND ZodarAssetLoading --headless --frames 90 --width 320 --height 180
+                --screenshot ${CMAKE_BINARY_DIR}/asset_loading_async.png)
+    set_tests_properties(gpu.asset_loading_async PROPERTIES TIMEOUT 300)
     add_test(NAME gpu.zodarbench_smoke
         COMMAND ZodarBench --objects 256 --lights 8 --width 640 --height 360 --warmup 5 --frames 20
                 --output ${CMAKE_BINARY_DIR}/zodarbench_smoke.json)

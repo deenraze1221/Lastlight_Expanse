@@ -9,7 +9,8 @@ Phase C1 example for `zodar::AssetManager` (guide: `docs/guide/ASSETS.md`).
 - `asset_loading.scene.json`: the rune material (file) and an inline `crateLinear` material
   (same crate PNG, `linear` filter) on two cubes, sun, sky, camera.
 
-Run (renders the glTF crate between the pixel-art and the linear cube):
+Run (renders the glTF crate between the pixel-art and the linear cube; assets load
+asynchronously, `--deterministic` waits for them before the first frame):
 
 ```bash
 ./build/bin/ZodarAssetLoading --headless --deterministic --frames 30 --screenshot asset_loading.png

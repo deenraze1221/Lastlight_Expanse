@@ -1,9 +1,11 @@
-// Phase C on a real device: AssetManager loading, caching, release and pixel-art sampling.
+// Phase C on a real device: AssetManager loading (blocking and async), caching, release and
+// pixel-art sampling.
 #include "GpuTestContext.h"
 
 #include "AssetManager/AssetManager.h"
 #include "Assets/Primitives.h"
 #include "Core/ImageIO.h"
+#include "Core/JobSystem.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Resources/UploadContext.h"
 #include "Renderer/RenderGraph/RenderGraph.h"
@@ -318,4 +320,133 @@ TEST_CASE("asset manager: glTF model and scene materials from the asset_loading 
     CHECK(materials.freeMaterialCount() == freeBefore + 4 + 2);
     CHECK(assets.stats().models == 0);
     CHECK(assets.stats().textures == 0);
+}
+
+TEST_CASE("asset manager: async loads decode on workers and become ready through update/waitAll") {
+    zodar::test::ValidationGuard guard;
+    const AssetDir files;
+    Fixture f;
+    JobSystem jobs(2);
+    AssetManagerDesc desc;
+    desc.root = files.dir;
+    desc.jobs = &jobs;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+
+    TextureHandle texture = assets.loadTextureAsync("checker.png");
+    MaterialAssetHandle pixel = assets.loadMaterialAsync("materials/pixel.material.json");
+    ModelHandle crate = assets.loadModelAsync(kExampleDir / "crate.gltf");
+    // Nothing is ready before update() hands the work over, whatever the workers did.
+    CHECK(texture.loading());
+    CHECK(pixel.loading());
+    CHECK(crate.loading());
+    CHECK_THROWS_AS((void)crate.get(), Error);
+    CHECK(assets.loadTextureAsync("checker.png") == texture); // shared while loading
+    CHECK(assets.stats().pending == 3); // texture decode, model decode, material
+
+    assets.waitAll();
+    CHECK(assets.pendingCount() == 0);
+    REQUIRE(texture.ready());
+    REQUIRE(pixel.ready());
+    REQUIRE(crate.ready());
+    CHECK(pixel->textures.at(0) == texture); // the material waited for the shared texture
+    CHECK(texture->mipLevels == 6);
+    CHECK(crate->model.meshCount() == 1);
+    CHECK(f.scene.materials().material(crate->model.materials()[0]).baseColor.sampler.magFilter == Filter::Nearest);
+
+    // Async results render exactly like blocking ones.
+    std::optional<GpuMesh> plane;
+    {
+        UploadBatch batch(*gpu().upload);
+        plane.emplace(batch, primitives::plane(2.0f, 2.0f));
+        batch.submit();
+    }
+    std::vector<MeshDraw> draws;
+    const auto asyncImage = f.render(planeView(*plane, pixel->handle, draws), {128, 96});
+    CHECK(distinctColors(asyncImage) == 2);
+    // A blocking load of a ready async asset is a cache hit.
+    CHECK(assets.loadMaterial("materials/pixel.material.json") == pixel);
+    gpu().context->waitIdle();
+}
+
+TEST_CASE("asset manager: async upload budget, blocking waits and cancellation") {
+    zodar::test::ValidationGuard guard;
+    const AssetDir files;
+    Fixture f;
+    JobSystem jobs(2);
+    AssetManagerDesc desc;
+    desc.root = files.dir;
+    desc.jobs = &jobs;
+    desc.uploadBudgetBytes = 1; // one upload per update()
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+
+    std::vector<TextureHandle> textures{assets.loadTextureAsync("checker.png"),
+                                        assets.loadTextureAsync("odd.png"),
+                                        assets.loadTextureAsync("checker.png", {TextureUsage::Data, false})};
+    jobs.waitIdle(); // every decode finished
+    const auto started = [&] {
+        size_t ready = 0;
+        for (const TextureHandle& t : textures) {
+            ready += t.ready() ? 1 : 0;
+        }
+        return assets.stats().uploading + ready;
+    };
+    assets.update();
+    CHECK(started() == 1);
+    assets.update();
+    CHECK(started() == 2);
+    // A blocking load of a loading asset waits for it (and everything else pending).
+    const TextureHandle odd = assets.loadTexture("odd.png");
+    CHECK(odd.ready());
+    CHECK(odd == textures[1]);
+    CHECK(assets.pendingCount() == 0);
+    CHECK(textures[1]->warnings.size() == 1); // size warnings survive the async path
+    textures.clear();
+
+    // Cancel while decoding: dropped handles discard the result.
+    TextureHandle canceled = assets.loadTextureAsync("checker.png");
+    canceled = {};
+    assets.waitAll();
+    CHECK(assets.stats().textures == 1); // only `odd`
+    // Cancel while uploading: the finished upload is retired like a released asset.
+    TextureHandle inFlight = assets.loadTextureAsync("checker.png");
+    jobs.waitIdle();
+    assets.update();
+    inFlight = {};
+    assets.waitAll();
+    CHECK(assets.stats().textures == 1);
+    Fixture::collect();
+}
+
+TEST_CASE("asset manager: async failures carry messages") {
+    zodar::test::ValidationGuard guard;
+    const AssetDir files;
+    Fixture f;
+    JobSystem jobs(1);
+    AssetManagerDesc desc;
+    desc.root = files.dir;
+    desc.jobs = &jobs;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+
+    const TextureHandle missing = assets.loadTextureAsync("nope.png");
+    const ModelHandle badModel = assets.loadModelAsync("checker.png");
+    const MaterialAssetHandle badTexture = assets.loadMaterialAsync("materials/missing.material.json");
+    const MaterialAssetHandle badShader = assets.loadMaterialAsync("materials/shader.material.json");
+    const MaterialAssetHandle noFile = assets.loadMaterialAsync("materials/none.material.json");
+    CHECK(badShader.failed()); // known at once
+    CHECK(noFile.failed());
+    const SceneDocument doc = parseScene(R"({"version": 1, "materials": {
+        "a": {"baseColorTexture": "missing_a.png"}, "b": {"baseColorTexture": "checker.png"}}})",
+                                         (files.dir / "s.scene.json").generic_string());
+    const SceneMaterialAssets scene = assets.createSceneMaterialsAsync(doc, files.dir / "s.scene.json");
+    CHECK(scene.loading());
+    assets.waitAll();
+    CHECK_FALSE(scene.loading());
+    CHECK(missing.failed());
+    CHECK(missing.error().find("nope.png") != std::string::npos);
+    CHECK(badModel.failed());
+    CHECK(badTexture.failed());
+    CHECK(badTexture.error().find("baseColorTexture") != std::string::npos);
+    REQUIRE(scene.errors().size() == 1);
+    CHECK(scene.errors()[0].starts_with("a: "));
+    CHECK(scene.byId.at("b").ready());
 }

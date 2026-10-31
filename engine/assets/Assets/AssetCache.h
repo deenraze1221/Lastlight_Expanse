@@ -25,10 +25,12 @@
 // queues it on the device deletion queue, so frames in flight can still read it). Failed
 // loads are cached like successful ones while handles exist (state Failed + message), so a
 // broken file is not retried every frame; dropping every handle allows a fresh attempt.
+// Async loads (Phase C2): getOrCreatePending() returns a Loading entry that the loader later
+// completes with resolve() or reject(); the handle is shared and cached meanwhile.
 // Not thread safe: use from one thread (the main/render thread).
 namespace zodar {
 
-enum class AssetState : uint8_t { Ready, Failed };
+enum class AssetState : uint8_t { Loading, Ready, Failed };
 
 template <class T>
 struct AssetRecord {
@@ -49,15 +51,20 @@ public:
     bool valid() const { return m_record != nullptr; }
     bool ready() const { return m_record && m_record->state == AssetState::Ready; }
     bool failed() const { return m_record && m_record->state == AssetState::Failed; }
+    bool loading() const { return m_record && m_record->state == AssetState::Loading; }
+    AssetState state() const { return record().state; }
     explicit operator bool() const { return ready(); }
 
     const std::string& key() const { return record().key; }
     // Empty unless failed().
     const std::string& error() const { return record().error; }
 
-    // The asset; throws zodar::Error (with the load error) if the handle is empty or failed.
+    // The asset; throws zodar::Error if the handle is empty, still loading or failed.
     T& get() const {
         const AssetRecord<T>& r = record();
+        if (r.state == AssetState::Loading) {
+            fail("asset '" + r.key + "' is still loading");
+        }
         if (r.state != AssetState::Ready) {
             fail("asset '" + r.key + "' failed to load: " + r.error);
         }
@@ -138,6 +145,43 @@ public:
         }
         m_shared->entries[key] = owned;
         return AssetHandle<T>(std::move(owned));
+    }
+
+    // Async: the cached entry for `key` (any state; `created` = false), or a new Loading entry
+    // (`created` = true) that the caller must complete with resolve() or reject().
+    AssetHandle<T> getOrCreatePending(const std::string& key, bool& created) {
+        if (AssetHandle<T> cached = find(key); cached.valid()) {
+            ++m_shared->stats.hits;
+            created = false;
+            return cached;
+        }
+        created = true;
+        std::shared_ptr<AssetRecord<T>> owned(new AssetRecord<T>{key, AssetState::Loading, nullptr, {}},
+                                              Deleter{m_shared});
+        ++m_shared->stats.loads;
+        m_shared->entries[key] = owned;
+        return AssetHandle<T>(std::move(owned));
+    }
+
+    // Completes a Loading entry. A null value rejects it. No effect on other states.
+    void resolve(const AssetHandle<T>& handle, std::unique_ptr<T> value) {
+        if (!handle.loading()) {
+            return;
+        }
+        if (!value) {
+            reject(handle, "loader returned no asset");
+            return;
+        }
+        handle.m_record->value = std::move(value);
+        handle.m_record->state = AssetState::Ready;
+    }
+    void reject(const AssetHandle<T>& handle, std::string error) {
+        if (!handle.loading()) {
+            return;
+        }
+        handle.m_record->error = std::move(error);
+        handle.m_record->state = AssetState::Failed;
+        ++m_shared->stats.failures;
     }
 
     // Entries with at least one live handle.

@@ -1,7 +1,9 @@
 // Asset loading example (Phase C): a glTF 2.0 crate with a 64x64 PNG texture (nearest glTF
 // sampler), plus a scene file whose materials reference PNG textures (pixel-art and linear
-// filtering side by side), all loaded through zodar::AssetManager. Exit code 1 (fatal error)
-// if an asset fails to load or is still alive after its handles were released.
+// filtering side by side), all loaded asynchronously through zodar::AssetManager (decoding on
+// the JobSystem, uploads acquired by the frame loop). Assets appear as they become ready;
+// --deterministic waits for them in onStart so every frame is reproducible. Exit code 1
+// (fatal error) if an asset fails, is still loading at exit, or outlives its handles.
 //   ZodarAssetLoading [--assets DIR] [standard options, see --help]
 #include "AssetManager/AssetManager.h"
 #include "Assets/Primitives.h"
@@ -41,42 +43,64 @@ protected:
         AssetManagerDesc desc;
         desc.root = m_assetDir;
         desc.defaultSampler = SamplerDesc::pixelArt(); // pixel-art project default
+        desc.jobs = &jobs();
         m_assets = std::make_unique<AssetManager>(renderer().context(), upload(), scene(), desc);
 
-        m_crate = m_assets->loadModel("crate.gltf");
-        if (m_crate.failed()) {
-            fail(m_crate.error());
-        }
+        m_crate = m_assets->loadModelAsync("crate.gltf");
         {
             UploadBatch batch(upload());
             m_cube.emplace(batch, primitives::cube(1.0f));
             batch.submit();
         }
         const std::filesystem::path scenePath = m_assets->resolve("asset_loading.scene.json");
-        const SceneDocument doc = loadSceneFile(scenePath);
-        m_sceneMaterials = m_assets->createSceneMaterials(doc, scenePath);
+        m_document = loadSceneFile(scenePath);
+        m_sceneMaterials = m_assets->createSceneMaterialsAsync(m_document, scenePath);
+        if (Application::desc().deterministic) {
+            m_assets->waitAll();
+        }
+        trySpawnScene();
+    }
+
+    // Instantiates the scene once its materials are ready (they are bound by handle).
+    void trySpawnScene() {
+        if (m_spawned || m_sceneMaterials.loading()) {
+            return;
+        }
+        if (const auto errors = m_sceneMaterials.errors(); !errors.empty()) {
+            fail("scene materials failed: " + errors.front());
+        }
         SceneBindings bindings;
         bindings.meshes = {{"cube", &*m_cube}};
         bindings.materials = m_sceneMaterials.handles();
-        instantiateScene(doc, m_world, bindings);
-
+        instantiateScene(m_document, m_world, bindings);
         m_view.clearColor = {};
         collectLighting(m_world, m_view);
         collectCamera(m_world, m_view.camera);
+        m_spawned = true;
+        logStats("Scene ready");
+    }
+
+    void logStats(const char* what) {
         const AssetManager::Stats s = m_assets->stats();
-        ZODAR_LOG_INFO("Assets: {} textures, {} models, {} materials ({} loads, {} cache hits, {} failures)", s.textures,
-                       s.models, s.materials, s.loads, s.hits, s.failures);
-        if (s.failures != 0) {
-            fail("asset loading failed");
-        }
+        ZODAR_LOG_INFO("{} (frame {}): {} textures, {} models, {} materials ({} loads, {} cache hits, {} failures, "
+                       "{} pending)",
+                       what, renderer().frameNumber(), s.textures, s.models, s.materials, s.loads, s.hits, s.failures,
+                       s.pending);
     }
 
     void onUpdate(const FrameTime& time) override {
+        m_assets->update();
+        trySpawnScene();
+        if (m_crate.failed()) {
+            fail(m_crate.error());
+        }
         m_draws.clear();
         collectDraws(m_world, m_draws);
         const float angle = static_cast<float>(time.time) * 0.6f;
-        m_crate->model.appendDraws(m_draws, glm::translate(glm::mat4(1.0f), {0.0f, 0.5f, -0.4f}) *
+        if (m_crate.ready()) {
+            m_crate->model.appendDraws(m_draws, glm::translate(glm::mat4(1.0f), {0.0f, 0.5f, -0.4f}) *
                                                      glm::rotate(glm::mat4(1.0f), angle, {0.0f, 1.0f, 0.0f}));
+        }
         m_view.draws = m_draws;
     }
 
@@ -86,6 +110,8 @@ protected:
 
     void onShutdown() override {
         renderer().waitIdle();
+        const bool complete = m_spawned && m_crate.ready() && m_assets->pendingCount() == 0;
+        logStats("Shutdown");
         m_view.draws = {};
         m_draws.clear();
         m_world.clear();
@@ -98,6 +124,9 @@ protected:
         m_cube.reset();
         const bool leaked = s.textures + s.models + s.materials != 0;
         m_assets.reset();
+        if (!complete) {
+            fail("assets still loading at exit (run more frames)");
+        }
         if (leaked) {
             fail("assets still alive after their handles were released");
         }
@@ -108,6 +137,8 @@ private:
     std::unique_ptr<AssetManager> m_assets; // declared first: destroyed after the handles
     ModelHandle m_crate;
     SceneMaterialAssets m_sceneMaterials;
+    SceneDocument m_document;
+    bool m_spawned = false;
     std::optional<GpuMesh> m_cube;
     World m_world;
     std::vector<MeshDraw> m_draws;

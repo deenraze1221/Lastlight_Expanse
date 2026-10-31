@@ -308,7 +308,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
     equivalent C++ scene via both WorldRender paths and after capture/reload; mutable material
     updates match freshly created materials (CPU path and GpuScene, sync validation clean).
 
-## Asset manager (Phase C1)
+## Asset manager (Phases C1-C2)
 
 - Module `Zodar::AssetManager` (`engine/rendering/AssetManager`, depends on Renderer + SceneFile).
   Guide: `docs/guide/ASSETS.md`; example `examples/asset_loading` + sample `ZodarAssetLoading`.
@@ -327,8 +327,16 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   glTF sampler filters are honoured end to end (GPU test checks the material's sampler).
 - Texture standards (`Assets/TextureStandards.h`): 32/64/128/256 square; anything else loads
   with a warning (asset warnings + log), never an error.
-- Loading is synchronous (one `UploadBatch` per asset). Not yet (later Phase C steps): async
-  loads on `JobSystem` + `UploadQueue`, `assets.json` registry and `zodar import/assets` CLI,
+- Async loads (C2): `AssetCache` entries have a `Loading` state (`getOrCreatePending`,
+  `resolve`, `reject`). Decode jobs run on `AssetManagerDesc::jobs` and push results (by
+  request id) into a mutex-protected queue; they never touch handles or caches, so record
+  deleters always run on the render thread. `update()` sorts results by request id, uploads
+  within `uploadBudgetBytes` via `submitAsync`, keeps the GPU object staged until
+  `UploadQueue::isReady` (acquired by the frame loop) and only then resolves the handle, so no
+  frame can sample an unacquired image. Async materials are created when their textures are
+  ready. Cancellation = all user handles dropped (request holds the last one).
+  `waitAll()` = `JobSystem::waitIdle` + `UploadQueue::wait` per ticket.
+- Not yet (later Phase C steps): `assets.json` registry and `zodar import/assets` CLI,
   streaming budgets (`docs/ASSET_STREAMING.md`), hot reload, audio/FBX importers,
   scene-file `model` references (meshes still bound by name in `SceneBindings`).
 

@@ -115,3 +115,46 @@ TEST_CASE("texture standards: size classes and warnings") {
     CHECK(warning->find("64x64 primary") != std::string::npos);
     CHECK(std::string(toString(TextureSizeClass::Primary)) == "primary (64x64)");
 }
+
+TEST_CASE("asset cache: pending entries resolve or reject later (async loads)") {
+    int retired = 0;
+    AssetCache<Dummy> cache([&](std::unique_ptr<Dummy>) { ++retired; });
+    bool created = false;
+    AssetHandle<Dummy> a = cache.getOrCreatePending("tex", created);
+    CHECK(created);
+    CHECK(a.loading());
+    CHECK((a.state() == AssetState::Loading));
+    CHECK_FALSE(a.ready());
+    CHECK_THROWS_WITH_AS((void)a.get(), doctest::Contains("still loading"), Error);
+    AssetHandle<Dummy> b = cache.getOrCreatePending("tex", created);
+    CHECK_FALSE(created);
+    CHECK(a == b);
+    // A blocking-style request finds the pending entry instead of loading again.
+    AssetHandle<Dummy> c = cache.getOrLoad("tex", [] { return std::make_unique<Dummy>(Dummy{9}); });
+    CHECK(c.loading());
+    CHECK(cache.stats().loads == 1);
+    CHECK(cache.stats().hits == 2);
+
+    cache.resolve(a, std::make_unique<Dummy>(Dummy{5}));
+    CHECK(b.ready());
+    CHECK(c->value == 5);
+    cache.reject(a, "ignored once ready");
+    CHECK(a.ready());
+
+    AssetHandle<Dummy> bad = cache.getOrCreatePending("bad", created);
+    cache.reject(bad, "decode failed");
+    CHECK(bad.failed());
+    CHECK(bad.error() == "decode failed");
+    AssetHandle<Dummy> empty = cache.getOrCreatePending("empty", created);
+    cache.resolve(empty, nullptr);
+    CHECK(empty.failed());
+    CHECK(cache.stats().failures == 2);
+
+    a = b = c = {};
+    CHECK(retired == 1);
+    // Dropping a pending entry before completion: nothing to retire.
+    AssetHandle<Dummy> dropped = cache.getOrCreatePending("x", created);
+    dropped = {};
+    CHECK(retired == 1);
+    CHECK_FALSE(cache.find("x").valid());
+}

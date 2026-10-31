@@ -1,8 +1,8 @@
-# Assets: textures, glTF models and materials (Phase C1)
+# Assets: textures, glTF models and materials (Phase C1, async C2)
 
 Module `Zodar::AssetManager` (`engine/rendering/AssetManager/AssetManager/AssetManager.h`).
 Working example: `examples/asset_loading` rendered by the sample `ZodarAssetLoading`
-(ctest `gpu.asset_loading_example`).
+(ctests `gpu.asset_loading_example` deterministic, `gpu.asset_loading_async` frame-loop path).
 
 ## Loading
 
@@ -30,6 +30,34 @@ view.draws = draws;
   no filter.
 - Scene files: `assets.createSceneMaterials(doc, scenePath)` creates every scene material with
   its textures; `.handles()` fills `SceneBindings::materials`. Meshes are still bound by name.
+
+## Async loading (Phase C2)
+
+```cpp
+desc.jobs = &jobs();                                    // Application's JobSystem
+zodar::ModelHandle crate = assets.loadModelAsync("crate.gltf");     // returns at once, loading()
+zodar::SceneMaterialAssets mats = assets.createSceneMaterialsAsync(doc, scenePath);
+
+void onUpdate(const zodar::FrameTime&) override {
+    assets.update();                                    // once per frame, before recording
+    if (crate.ready()) crate->model.appendDraws(draws);  // draw only ready assets
+    if (!mats.loading() && mats.errors().empty()) { /* instantiate the scene */ }
+}
+```
+
+- Pipeline: decode (PNG/glTF parse, mips) on the `JobSystem` -> `update()` uploads with
+  `UploadBatch::submitAsync` (at most `uploadBudgetBytes` staged per update, at least one
+  asset) -> ready once the frame loop acquired the upload (`UploadQueue::isReady`). Async
+  materials become ready when all their textures are; a failed texture fails the material.
+- `waitAll()` blocks until nothing is pending (loading screens, `--deterministic` runs, tests).
+  A blocking `load*()` of an asset that is loading asynchronously also waits.
+- `handle.loading()`; `get()` / `->` throw while loading. `stats().pending` / `uploading`.
+- Cancel: drop every handle. Decoding results are discarded; a finished upload is retired.
+- Without `desc.jobs` (or with 0 workers) decoding runs inline in the load call; uploads stay
+  asynchronous. When an asset becomes ready depends on worker and transfer timing: wait
+  (`waitAll`) where frames must be reproducible.
+- Worker jobs touch only their inputs and a mutex-protected result queue; caches and handles
+  stay on the render thread.
 
 ## Material texture slots
 
@@ -68,5 +96,5 @@ Square 64×64 (primary), 32×32 (small props), 128×128 (characters, weapons), u
   The failure is cached while handles exist; drop them to retry.
 - Single-threaded (render thread). Release every handle before the AssetManager is destroyed;
   declare it before the members holding handles. Its destructor waits for the device.
-- Loads are synchronous (one upload batch each). Async loading, an asset registry and hot
-  reload are later Phase C steps (`docs/AI_FIRST_ROADMAP.md`).
+- Pending async loads at destruction are dropped after a device wait. An asset registry and
+  hot reload are later Phase C steps (`docs/AI_FIRST_ROADMAP.md`).
