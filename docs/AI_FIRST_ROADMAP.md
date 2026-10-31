@@ -125,6 +125,9 @@ Make every app start, run, capture and report the same way.
 - Hot reload of textures, materials, shaders and scene files (file watcher, debug builds). (done: C5/C6)
 
 ### Phase D — Gameplay foundation (3 sessions)
+- **Priority (2026-10-31):** plan Phase D around building the Lastlight Expanse bunker first,
+  with a unified Blockbench asset pipeline (Blockbench -> glTF -> registry -> scene files ->
+  hot reload). The items below are scheduled within that plan.
 - Input: action maps (`input.json`), keyboard/mouse/gamepad (SDL3), recorded input files that
   replay deterministically (agents test gameplay without a human).
 - System scheduling (ordered phases: input, fixed simulation, animation, late update, render),

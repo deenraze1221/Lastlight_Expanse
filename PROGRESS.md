@@ -107,7 +107,18 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase C complete (C1-C7; C6 shader + scene hot reload last). Phase D not started.
+- `main`: **Phase C complete** (C1-C7 + audit, commit `54eae81`; Debug + Release 24/24 ctest,
+  199 unit, 64 GPU cases, 0 warnings, 0 validation messages). Phase D not started.
+
+## Current task
+- **Phase D planning (not implementation).** Plan Phase D around building the Lastlight
+  Expanse **bunker first** (first playable space), including a **unified Blockbench asset
+  pipeline**: Blockbench -> glTF export -> `zodar.py import` (registry, texture standards,
+  palette, lossless pixel art) -> scene/prefab files -> `LiveScene`/hot reload in the game.
+  Inputs: `docs/ART_DIRECTION.md` (§3 Blockbench workflow, §4 requirements),
+  `docs/AI_FIRST_ROADMAP.md` (Phase D: input, system scheduling, save/load),
+  `docs/guide/ASSETS.md`, `docs/guide/SCENE_FILES.md`. Output: a written Phase D plan
+  (bunker scope, pipeline steps, engine vs game split, sessions, tests) for approval.
 
 ## Phase C audit (C1-C7, done)
 - Two independent reviews (runtime/lifetime; registry/pipeline/palette) + doc pass. No Vulkan
@@ -283,7 +294,7 @@
   0 validation messages. Not run: Release, Clang, MinGW, MSVC.
 - Behaviour change: `*Texture` keys in material files are now parsed (previously errors).
 
-## Current task
+## Phase B2 (done)
 - **Phase B2 core done**: module `Zodar::SceneFile` (`engine/rendering/SceneFile`, nlohmann/json
   v3.11.3 private, hash-pinned tarball). `*.material.json` (`MaterialData`, parse/serialize,
   `toMaterialDesc`, `createMaterial`), `*.scene.json` (`SceneDocument`: materials inline or by
@@ -313,8 +324,9 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Phase D (gameplay foundation) when requested. Streaming budgets, FBX/audio import and skins
-   are moved to later phases. Game: re-author terrain textures to 32×32. Optionally migrate game draws/terrain textures to assets.
+1. Write the Phase D plan (see Current task): bunker-first, unified Blockbench pipeline;
+   implement only after approval. Streaming budgets, FBX/audio import and skins stay in later
+   phases. Game: re-author terrain textures to 32×32 (currently 256²/512², violate 64 max).
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.
