@@ -21,7 +21,7 @@ Instructions for Claude Code sessions in this repository.
 
 - Repo: Lastlight Expanse game (`game/`) on the reusable ZODAR engine (`engine/`). Engine code
   never depends on `game/`. Layout and module rules: `docs/ARCHITECTURE.md`.
-- Status and next task: `PROGRESS.md`; plan: `docs/AI_FIRST_ROADMAP.md` (Phase A done, B1.1 World done; next: B1.2 transforms).
+- Status and next task: `PROGRESS.md`; plan: `docs/AI_FIRST_ROADMAP.md` (Phase A done, B1.2 transforms done; next: B1.3 renderer bridge).
 - Art direction (voxel/pixel art, texture sizes, Blockbench → glTF workflow): `docs/ART_DIRECTION.md`.
 - Language **C++23** (GCC 13, Clang 18, MinGW-w64 verified; MSVC unverified). Use only features
   listed as usable in `BUILDING.md` ("C++23 policy").

@@ -1,5 +1,5 @@
 # Entity world (Phase B): zodar::World / zodar::Entity, a thin API over EnTT so the ECS
-# backend stays replaceable. CPU only; components and the renderer bridge come later (B1.2+).
+# backend stays replaceable. CPU only: components, Name/Transform, hierarchy (B1.2); renderer bridge in B1.3.
 add_library(ZodarWorld STATIC
     World/World.cpp)
 add_library(Zodar::World ALIAS ZodarWorld)

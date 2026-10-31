@@ -15,7 +15,7 @@ Engine code never includes game headers or links game targets.
 | `engine/assets/Assets` | `Zodar::Assets` | CPU meshes/images/models, glTF, KTX2, texture cache |
 | `engine/assets/AssetPipeline` | `Zodar::AssetPipeline` | Offline BCn encoding, mip baking |
 | `engine/scene/Scene` | `Zodar::Scene` | Noise, voxel chunks, greedy mesher, LOD, chunk streaming (no GPU) |
-| `engine/world/World` | `Zodar::World` | Entities: `zodar::World` / `zodar::Entity` over EnTT (Phase B1.1; no GPU) |
+| `engine/world/World` | `Zodar::World` | Entities over EnTT: `zodar::World` / `zodar::Entity`, components, `Name`/`Transform`, hierarchy (B1.1-B1.2; no GPU) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
 | `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON. Used by the game, ModelViewer and ZodarBench |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarUISandbox |
@@ -230,7 +230,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
 | `CMakePresets.json` (debug, release, gpu-tests, ci + `ci` workflow), trees in `build/<preset>` (git-ignored) | One documented way to configure; each preset has its own `_deps` |
 | `tools/zodar.py`: Python stdlib only, prints failures/summaries, full logs to files, returns the underlying exit code | Agents spend few tokens per build/test/run; no extra install |
 
-## Entity world (Phase B1.1)
+## Entity world (Phases B1.1-B1.2)
 
 - Module `Zodar::World` (`engine/world/World`), depends on `Core` + `Zodar::EnTT` only (EnTT
   v3.15.0, header-only, MIT, pinned in `cmake/ZodarDependencies.cmake`). No GPU, no Renderer.
@@ -242,8 +242,20 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   single-threaded. Callers never touch EnTT types; the backend stays replaceable.
 - EnTT headers are visible through `World.h` (components are templates from B1.2 on), but
   only `World/*.h` may include `<entt/...>`.
-- Planned: B1.2 `Name` + `Transform` components (hierarchy, cached world matrix); B1.3 renderer
-  bridge (components -> `SceneView` / `GpuScene`).
+- Components (B1.2): `add<T>(e, args...)` (adds or replaces; throws `std::invalid_argument`
+  for dead entities), `get<T>` (throws `std::out_of_range` if dead/missing), `tryGet<T>`
+  (nullptr), `has<T>`, `remove<T>` (false if dead/missing). One instance per type per entity;
+  returned references are invalidated by later add/remove of that type and by destroy/clear.
+- `World/Components.h`: `Name { std::string value; }`; `Transform` (local position, unit quat
+  rotation, scale; `localMatrix()` = T * R * S, glm).
+- Hierarchy: internal `detail::HierarchyNode` (parent + ordered child vector), changed only via
+  `setParent(child, parent|null)`; rejects dead entities, self and cycles. `parent`, `children`
+  (span), `isDescendantOf`. Policy: `destroy(e)` destroys the whole subtree (iterative) and
+  detaches `e` from its parent.
+- `localMatrix(e)` / `worldMatrix(e)`: computed on demand, O(depth), identity for entities
+  without `Transform` or dead. No cached world matrix / dirty flags yet: add when the renderer
+  bridge (B1.3) needs per-frame bulk updates.
+- Planned: B1.3 renderer bridge (components -> `SceneView` / `GpuScene`).
 
 ## Frame flow (Milestone 1)
 

@@ -22,6 +22,7 @@ add_executable(ZodarTests
     Renderer/ApiVersionTests.cpp
     Scene/VoxelTests.cpp
     World/WorldTests.cpp
+    World/WorldComponentTests.cpp
     Runtime/FixedTimestepTests.cpp
     Runtime/CommandLineTests.cpp
     Runtime/RunReportTests.cpp
