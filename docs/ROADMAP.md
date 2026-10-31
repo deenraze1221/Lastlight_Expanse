@@ -1,5 +1,8 @@
 # ZODAR Engine — Roadmap
 
+> Engine-usability priorities (AI-first: APIs, data files, CLI tools, docs) are planned in
+> [AI_FIRST_ROADMAP.md](AI_FIRST_ROADMAP.md); the rendering stages below continue alongside.
+
 Each milestone ends with: clean build (GCC/Clang, and MSVC once verified), passing tests,
 validation-clean GPU runs, screenshots for graphics work, and updated docs. Nothing is marked
 done before it is verified.

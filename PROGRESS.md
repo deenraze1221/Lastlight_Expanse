@@ -22,7 +22,9 @@
 - GeometryPool cannot free meshes; streamed terrain uses the CPU draw path.
 
 ## Current task
-- Visual style: shadows, weather, performance.
+- AI-first engine: audit done, phased plan in docs/AI_FIRST_ROADMAP.md. Next: Phase A1
+  (`zodar::Application` + headless mode, migrate the game).
+- Visual style follow-ups (shadows, weather, performance) continue alongside.
 
 ## Next steps
 1. S5 shadows: cascaded shadow maps for the sun (engine), sampled in pbr.frag and voxel.frag.

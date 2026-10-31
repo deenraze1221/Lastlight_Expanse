@@ -39,6 +39,7 @@ docs/               Architecture, roadmap, reports, specs
 | Document | Contents |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Modules, dependency rules, decisions |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Engine milestones and stages |
+| [docs/AI_FIRST_ROADMAP.md](docs/AI_FIRST_ROADMAP.md) | AI-first engine audit and phased plan |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Engine milestones and rendering stages |
 | [BUILDING.md](BUILDING.md) | Toolchain, dependency pins, build/test commands |
 | [PROGRESS.md](PROGRESS.md) | Completed work, current task, next steps |
