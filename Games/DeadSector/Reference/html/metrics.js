@@ -1,0 +1,5 @@
+export class PerformanceMetrics {
+ constructor(element){this.element=element;this.reset();}
+ reset(){this.last=null;this.elapsed=0;this.frames=0;this.sample=null;}
+ update(now,mode,ping,network){if(this.last===null)this.last=now;const dt=Math.max(0,now-this.last);this.last=now;this.elapsed+=dt;this.frames++;if(this.elapsed>=500){this.sample={fps:Math.round(this.frames*1000/this.elapsed),ms:this.elapsed/this.frames};this.elapsed=0;this.frames=0;}this.element.hidden=mode==='off';if(mode==='off')return;const s=this.sample;let text=s?`${s.fps} FPS`:'— FPS';if(mode==='extended'||mode==='advanced')text+=` · ${s?s.ms.toFixed(1):'—'} ms/frame · Ping ${network?(Number.isFinite(ping)?Math.round(ping)+' ms':'…'):'— (offline)'}`;if(mode==='advanced'){const memory=globalThis.performance?.memory;text+=`\n${memory?`JS memory: ${Math.round(memory.usedJSHeapSize/1048576)} / ${Math.round(memory.jsHeapSizeLimit/1048576)} MB`:'Memory usage: unavailable in this browser'}`;if(globalThis.navigator?.deviceMemory)text+=` · Device RAM ~${navigator.deviceMemory} GB`;}this.element.textContent=text;}
+}

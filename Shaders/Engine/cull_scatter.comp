@@ -1,0 +1,43 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "zodar/cull_common.glsl"
+
+// Pass 3: write visible instances to their compacted positions and fill each draw group's
+// indirect command (firstInstance + instanceCount) and the statistics.
+layout(local_size_x = ZODAR_CULL_GROUP_SIZE) in;
+
+// Number of visible positions before `position` (position may equal pc.count).
+uint visibleBefore(uint position) {
+    if (position >= pc.count) {
+        return UintBuffer(pc.blockOffsets).values[pc.blockCount];
+    }
+    return UintBuffer(pc.blockOffsets).values[position / ZODAR_CULL_GROUP_SIZE] +
+           (UintBuffer(pc.prefix).values[position] >> 1u);
+}
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i < pc.count) {
+        uint packed = UintBuffer(pc.prefix).values[i];
+        if ((packed & 1u) != 0u) {
+            uint target = UintBuffer(pc.blockOffsets).values[i / ZODAR_CULL_GROUP_SIZE] + (packed >> 1u);
+            UintBuffer(pc.visible).values[target] = UintBuffer(pc.order).values[i];
+        }
+    }
+    if (i < pc.groupCount) {
+        DrawGroup group = GroupBuffer(pc.groups).groups[i];
+        uint start = visibleBefore(group.base);
+        uint end = visibleBefore(group.base + group.count);
+        CommandBuffer commands = CommandBuffer(pc.commands);
+        commands.commands[i].firstInstance = start;
+        commands.commands[i].instanceCount = end - start;
+        if (end > start) {
+            StatsBuffer stats = StatsBuffer(pc.stats);
+            atomicAdd(stats.drawCommands, 1u);
+            atomicAdd(stats.triangles, (commands.commands[i].indexCount / 3u) * (end - start));
+        }
+    }
+    if (i == 0u) {
+        StatsBuffer(pc.stats).visible = UintBuffer(pc.blockOffsets).values[pc.blockCount];
+    }
+}

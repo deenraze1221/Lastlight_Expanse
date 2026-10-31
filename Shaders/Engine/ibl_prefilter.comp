@@ -1,0 +1,43 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "zodar/ibl_common.glsl"
+
+// GGX-prefiltered specular cube (split-sum, n = v = r), one roughness per mip, with filtered
+// importance sampling (Karis 2013; Colbert & Krivanek 2007).
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0) uniform samplerCube environment;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2DArray target; // One mip
+layout(push_constant) uniform Push {
+    uint size;
+    uint samples;
+    uint environmentSize;
+    uint environmentMips;
+    float roughness;
+} pc;
+
+void main() {
+    if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(pc.size)))) return;
+    vec3 n = texelDirection(gl_GlobalInvocationID, pc.size);
+    if (pc.roughness <= 0.0) { // Mirror: the environment itself
+        imageStore(target, ivec3(gl_GlobalInvocationID), vec4(textureLod(environment, n, 0.0).rgb, 1.0));
+        return;
+    }
+    mat3 frame = tangentFrame(n);
+    float alpha = max(pc.roughness * pc.roughness, 0.002);
+    float texelSolidAngle = 4.0 * IBL_PI / (6.0 * float(pc.environmentSize * pc.environmentSize));
+    vec3 sum = vec3(0.0);
+    float weight = 0.0;
+    for (uint i = 0u; i < pc.samples; ++i) {
+        vec3 h = frame * importanceSampleGgx(hammersley(i, pc.samples), alpha);
+        vec3 l = reflect(-n, h);
+        float nDotL = dot(n, l);
+        if (nDotL <= 0.0) continue;
+        float nDotH = max(dot(n, h), 0.0);
+        float pdf = ggxD(nDotH, alpha) * 0.25; // D * NoH / (4 VoH) with v = n
+        float sampleSolidAngle = 1.0 / (float(pc.samples) * max(pdf, 1e-6));
+        float lod = clamp(0.5 * log2(sampleSolidAngle / texelSolidAngle) + 1.0, 0.0, float(pc.environmentMips - 1u));
+        sum += textureLod(environment, l, lod).rgb * nDotL;
+        weight += nDotL;
+    }
+    imageStore(target, ivec3(gl_GlobalInvocationID), vec4(sum / max(weight, 1e-6), 1.0));
+}

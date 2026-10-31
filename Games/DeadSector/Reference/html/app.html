@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111612" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23111612'/%3E%3Cpath d='M9 7h8l7 9-7 9H9z' fill='%23c6db78'/%3E%3C/svg%3E" />
+    <title>DEAD SECTOR — зачистка сектора</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <canvas id="scene" aria-label="Трёхмерный зачистка сектора"></canvas>
+    <div id="low-health-vignette" hidden aria-hidden="true"></div><div class="grain" aria-hidden="true"></div>
+    <header class="topline"><span>DS / FIELD SYSTEMS</span><span>BUILD 0.4 · ВЫЖИВАНИЕ В ВОЛНАХ</span></header>
+    <main id="menu" class="menu">
+      <div class="eyebrow"><span class="status-dot"></span> СВЯЗЬ УСТАНОВЛЕНА / СЕКТОР 00</div>
+      <h1>DEAD<br /><span>SECTOR</span><i>®</i></h1>
+      <p class="subtitle">За периметром — тишина.<br />Проверь снаряжение. Осмотрись. Двигайся.</p>
+      <div class="menu-actions">
+        <button id="start" class="primary" disabled>ЗАГРУЗКА СЕКТОРА…</button>
+        <button id="restart" class="secondary" hidden>НАЧАТЬ СНАЧАЛА <span>↺</span></button>
+        <button id="join-toggle" class="secondary">ВОЙТИ ПО КОДУ</button>
+        <button id="settings-button" class="secondary" aria-expanded="false">НАСТРОЙКИ <span>+</span></button>
+      </div>
+      <section id="network-panel" class="settings" hidden><div class="settings-heading"><h2>ВОЙТИ ПО КОДУ</h2><button id="close-network" type="button" aria-label="Close join panel">×</button></div><label for="room-code">КОД ЛОББИ</label><input id="room-code" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" placeholder="00000000" /><button id="join-room">ВОЙТИ</button><p id="network-status" role="status"></p></section>
+      <section id="settings" class="settings" aria-label="Settings" hidden><div class="settings-heading"><h2>НАСТРОЙКИ</h2><button id="close-settings" type="button" aria-label="Close settings">×</button></div>
+        <div class="settings-tabs" role="tablist"><button type="button" data-setting-tab="audio" aria-selected="true">ЗВУК</button><button type="button" data-setting-tab="controls" aria-selected="false">УПРАВЛЕНИЕ</button><button type="button" data-setting-tab="graphics" aria-selected="false">ГРАФИКА</button></div>
+        <div data-setting-panel="audio"><label for="volume-master">Общая громкость <output id="volume-master-value"></output></label><input id="volume-master" type="range" min="0" max="1" step=".01" /><label for="volume-music">Громкость музыки <output id="volume-music-value"></output></label><input id="volume-music" type="range" min="0" max="1" step=".01" /><label for="volume-weather">Громкость погоды <output id="volume-weather-value"></output></label><input id="volume-weather" type="range" min="0" max="1" step=".01" /></div>
+        <div data-setting-panel="controls" hidden>        <label for="sensitivity">Чувствительность мыши <output id="sensitivity-value">1.0</output></label>
+        <input id="sensitivity" type="range" min="0.2" max="2" value="1" step="0.1" />
+        <dl class="controls-map"><dt>WASD</dt><dd>Движение</dd><dt>МЫШЬ</dt><dd>Обзор</dd><dt>SHIFT / SPACE</dt><dd>Бег / Прыжок</dd><dt>ЛКМ / R</dt><dd>Огонь / Перезарядка</dd><dt>1 / 2</dt><dd>Основное / Пистолет</dd><dt>E</dt><dd>Терминал / Помощь</dd><dt>H / J</dt><dd>Малая / Большая аптечка</dd><dt>F / B</dt><dd>Фонарик / Батарея</dd><dt>3 / ЛКМ</dt><dd>Капкан / Установить</dd><dt>ESC</dt><dd>Пауза</dd></dl></div>
+        <div data-setting-panel="graphics" hidden><label for="graphics-quality">Качество графики</label><select id="graphics-quality"><option value="low">Низкая</option><option value="medium">Средняя</option><option value="high">Высокая</option></select><label class="metrics-toggle"><input id="metrics-enabled" type="checkbox"> Performance metrics</label><label for="metrics-mode">Metrics detail</label><select id="metrics-mode"><option value="basic">Basic · FPS</option><option value="extended">Extended · FPS, frame time, ping</option><option value="advanced">Advanced · FPS, ping, memory</option></select><p class="metrics-note">Memory data depends on browser support.</p></div>
+        <div class="connection-settings"><label for="connection-mode">ПОДКЛЮЧЕНИЕ</label><select id="connection-mode"><option value="render">ИНТЕРНЕТ · RENDER / WSS</option><option value="lan">ЛОКАЛЬНАЯ СЕТЬ · LAN</option></select><label for="server-url">СЕРВЕР</label><input id="server-url" placeholder="wss://your-server.example" /><p class="server-help">Для сети нужен общий сервер. Одиночная игра работает без него.</p><button id="resume-room" type="button">ПЕРЕПОДКЛЮЧИТЬСЯ</button><label for="language">Язык</label><select id="language"><option value="en">English</option><option value="ru">Русский</option></select>
+</div>
+      </section>
+      <p id="message" class="message" role="status">60 секунд подготовки · Уничтожь всех · 30 секунд перерыва.</p>
+    </main>
+    <aside id="briefing" hidden></aside>
+    <div id="hud" hidden><div id="compass" aria-label="Compass"><div class="compass-tape"></div><div class="compass-markers"></div><strong class="compass-heading">0°</strong></div><div id="squad-status"></div><div id="weather-status"></div>
+      <div class="sector-tag"><span class="status-dot"></span> СЕКТОР 00 <small>БОЕВАЯ ЗОНА</small></div>
+      <div id="mission-notice" role="status" aria-live="polite" hidden></div><div id="wave-notice" role="status" aria-live="polite" hidden></div><div id="poison-status" role="status"></div><div id="gear-status"><span id="gear-summary"></span><span id="flashlight-battery" role="meter" aria-label="Flashlight battery" aria-valuemin="0" aria-valuemax="120" aria-valuenow="0" hidden><span id="flashlight-charge"></span></span><span id="flashlight-percent" hidden></span><span id="gear-supplies"></span></div><div id="weapon-slots" class="weapon-slots"><span id="slot-primary"></span><span id="slot-pistol"></span></div><div class="crosshair" aria-hidden="true"></div><div id="hit-marker" hidden aria-hidden="true">×</div><div id="interaction" class="interaction"></div><div class="wave-panel"><div id="objective" class="objective"></div><div id="wave-details"></div><div id="event-objective"></div><div id="survival-objective"></div><div id="airdrop-status"></div></div><div class="ammo-panel"><small id="weapon-state">ВИНТОВКА / 5.56</small><strong><span id="ammo">30</span> <small>/ <span id="reserve">90</span></small></strong><small><span id="ammo-total">72/500</span> · ПАТРОНЫ</small></div>
+      <div class="hud-bottom">
+        <div class="vital"><small>ЗДОРОВЬЕ</small><strong><b id="health">100</b><span> HP</span></strong><div class="meter"><div id="health-bar"></div></div></div>
+        <div class="vital"><small>СТАМИНА</small><strong id="stamina">100%</strong><div class="meter"><div id="stamina-bar"></div></div></div>
+        <div class="hud-wallet"><small>ДЕНЬГИ</small><strong id="money">$0</strong></div>
+        <div class="hud-condition"><small>ПРОЧНОСТЬ</small><strong id="durability">100%</strong><small id="medkit-counts">H · 0 / J · 0</small></div>
+        <span id="movement">ПЕШКОМ</span>
+      </div>
+    </div>
+    <button id="capture-mouse" hidden>ВОЙТИ В МАТЧ</button>
+    <section id="lobby" class="lobby-overlay" aria-labelledby="lobby-title" hidden><div class="lobby-window"><h2 id="lobby-title">ЛОББИ · DEAD SECTOR</h2><p>ДО 4 ИГРОКОВ</p><div id="lobby-slots"></div><p id="lobby-countdown" role="status" aria-live="polite"></p><div class="lobby-actions"><button id="lobby-play">ИГРАТЬ</button><button id="host-room">ОТКРЫТЬ ДЛЯ СЕТИ</button><button id="lobby-leave">НАЗАД</button></div><div id="lobby-invite" hidden><label for="invite-code">КОД ПРИГЛАШЕНИЯ</label><input id="invite-code" readonly /><button id="copy-code">КОПИРОВАТЬ</button></div><p id="lobby-status" role="status"></p></div></section>
+    <section id="shop-panel" class="shop-overlay" role="dialog" aria-modal="true" aria-labelledby="shop-title" hidden>
+      <div class="shop-window"><header><div><h2 id="shop-title">ТЕРМИНАЛ · SECTOR MART</h2><p id="shop-balance"></p></div><button id="close-shop" type="button">ЗАКРЫТЬ · ESC</button></header>
+      <div id="shop-owned" class="shop-owned"></div><p id="shop-medkits"></p><div id="shop-tabs" role="tablist"><button type="button" role="tab" data-shop-tab="weapon" aria-selected="true">ОРУЖИЕ</button><button type="button" role="tab" data-shop-tab="gear" aria-selected="false">СНАРЯЖЕНИЕ</button></div><div id="shop-products" class="shop-products" tabindex="0" aria-label="Store items"></div><p id="shop-status" role="status" aria-live="polite"></p></div>
+    </section>
+    <footer id="footer"><span>RESTRICTED AREA / AUTHORIZED PERSONNEL ONLY</span><span>ОПЕРАЦИЯ / ЗАЧИСТКА</span></footer>
+    <output id="performance-metrics" hidden aria-label="Performance metrics"></output>
+    <noscript>Enable JavaScript to play DEAD SECTOR.</noscript>
+    <script type="module" src="/game.js"></script>
+  </body>
+</html>

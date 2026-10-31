@@ -1,0 +1,20 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {WebSocket} from 'ws';import {createGameServer} from '../server/index.js';import {STORE} from '../economy.js';
+test('room cash and market purchases are atomic, preserve two slots and survive reconnect',async()=>{
+ const game=createGameServer();await new Promise(r=>game.server.listen(0,'127.0.0.1',r));const sockets=[];
+ async function connect(){const s=new WebSocket('ws://127.0.0.1:'+game.server.address().port);sockets.push(s);s.messages=[];s.on('message',b=>s.messages.push(JSON.parse(b)));await new Promise(r=>s.once('open',r));return s;}
+ async function message(s,type){for(let i=0;i<200;i++){const ix=s.messages.findIndex(m=>m.type===type);if(ix>=0)return s.messages.splice(ix,1)[0];await new Promise(r=>setTimeout(r,5));}throw Error('Missing '+type);}
+ const send=(s,m)=>s.send(JSON.stringify(m));
+ try{
+  const host=await connect();send(host,{type:'create',seed:42});const room=await message(host,'room'),state=game.rooms.get(room.code);const guest=await connect();send(guest,{type:'join',code:room.code});const g=await message(guest,'room');
+  send(host,{type:'state',enemies:['runner','zombie','eye','brute'].map((type,id)=>({id,type,hp:0,x:id*4,z:0})),cash:[]});const packet=await message(guest,'state');assert.deepEqual(packet.cash.map(c=>c.value),[15,30,20,100]);
+  send(guest,{type:'pose',x:0,y:0,z:0,yaw:0,hp:100,inventory:g.account});await message(host,'pose');send(guest,{type:'pickup',id:'cash-0'});const collected=await message(guest,'economy');assert.equal(collected.account.money,15);send(guest,{type:'pickup',id:'cash-0'});send(guest,{type:'market',action:'equip',id:'Pistol',inventory:collected.account});assert.equal((await message(guest,'economy')).account.money,15);
+  const shared=await message(host,'economy');assert.equal(shared.account.money,15);assert.equal(state.host.account.money,15);assert.equal((await message(host,'loot-state')).cash.some(c=>c.id==='cash-0'),false);const a=state.host.account;a.money=20000;a.completedWave=25;send(host,{type:'pose',x:STORE.terminal.x+1,y:0,z:STORE.terminal.z,yaw:0,hp:100,inventory:a});await message(guest,'pose');
+  async function command(action,id,account=state.host.account){send(host,{type:'market',action,id,inventory:structuredClone(account),health:account.health});return await message(host,'economy');}
+  let result=await command('buy','Kalash');assert.equal(result.ok,true);assert.equal(result.account.money,15500);result=await command('buy','Vector');assert.deepEqual(Object.keys(result.account.weapons).sort(),['Pistol','Vector']);
+  result=await command('buy','smallMedkit');state.host.account.health=10;state.host.pose.hp=10;result=await command('use','smallMedkit');assert.equal(result.account.health,35);
+  state.host.account.weapons.Vector.durability=30;const stale=structuredClone(state.host.account);result=await command('buy','repair');assert.equal(result.account.weapons.Vector.durability,80);send(host,{type:'pose',x:STORE.terminal.x+1,y:0,z:STORE.terminal.z,yaw:0,hp:10,inventory:stale});await message(guest,'pose');assert.equal(state.host.account.weapons.Vector.durability,80);
+  const hostBefore=state.host.account.money,guestBefore=state.guest.account.money;
+  const rewardPacket={type:'state',enemies:[],wave:{number:5,rest:true},operations:{mission:{id:'generator',key:'mission-5',wave:5,reward:400,status:'complete'}}};send(host,rewardPacket);await message(host,'economy');await message(guest,'economy');send(host,rewardPacket);await message(guest,'state');assert.equal(state.host.account.money,hostBefore+900);assert.equal(state.guest.account.money,guestBefore+900);
+  guest.terminate();await message(host,'away');const resumed=await connect();send(resumed,{type:'resume',code:room.code,token:g.token});const restored=await message(resumed,'room');assert.equal(restored.account.money,guestBefore+900);assert.equal(restored.snapshot.cash.some(c=>c.id==='cash-0'),false);
+ }finally{for(const s of sockets)s.terminate();await new Promise(r=>game.wss.close(r));await new Promise(r=>game.server.close(r));}
+});

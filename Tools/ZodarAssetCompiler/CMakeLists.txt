@@ -1,0 +1,3 @@
+add_executable(ZodarAssetCompiler main.cpp)
+target_link_libraries(ZodarAssetCompiler PRIVATE Zodar::AssetPipeline)
+zodar_set_warnings(ZodarAssetCompiler)

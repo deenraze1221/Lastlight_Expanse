@@ -1,0 +1,36 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "zodar/ibl_common.glsl"
+
+// Diffuse irradiance cube: stores E(n) / pi (= radiance-weighted cosine average), so the
+// Lambert term is albedo * texel. Cosine-weighted importance sampling with filtered
+// importance sampling (reads coarser mips for low-pdf samples; noise-free at low counts).
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0) uniform samplerCube environment; // Full mip chain
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2DArray target;
+layout(push_constant) uniform Push {
+    uint size;
+    uint samples;
+    uint environmentSize;
+    uint environmentMips;
+} pc;
+
+void main() {
+    if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(pc.size)))) return;
+    vec3 n = texelDirection(gl_GlobalInvocationID, pc.size);
+    mat3 frame = tangentFrame(n);
+    float texelSolidAngle = 4.0 * IBL_PI / (6.0 * float(pc.environmentSize * pc.environmentSize));
+    vec3 sum = vec3(0.0);
+    for (uint i = 0u; i < pc.samples; ++i) {
+        vec2 xi = hammersley(i, pc.samples);
+        float phi = 2.0 * IBL_PI * xi.x;
+        float cosTheta = sqrt(1.0 - xi.y);
+        float sinTheta = sqrt(xi.y);
+        vec3 l = frame * vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+        float pdf = cosTheta / IBL_PI;
+        float sampleSolidAngle = 1.0 / (float(pc.samples) * max(pdf, 1e-6));
+        float lod = clamp(0.5 * log2(sampleSolidAngle / texelSolidAngle) + 1.0, 0.0, float(pc.environmentMips - 1u));
+        sum += textureLod(environment, l, lod).rgb;
+    }
+    imageStore(target, ivec3(gl_GlobalInvocationID), vec4(sum / float(pc.samples), 1.0));
+}
