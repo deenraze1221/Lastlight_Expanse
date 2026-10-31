@@ -13,12 +13,20 @@ namespace zodar::voxel {
 
 // Linear RGBA colour per voxel id (index 0, empty, is unused). Written into vertex colours,
 // which the engine's surface shaders multiply with the material base colour.
+//
+// Optional texture layers: when `faceLayers` is non-empty the mesher writes the layer of each
+// face into the vertex colour's alpha (exact small integer; voxels are opaque) for shaders that
+// sample a texture array (e.g. zodarSampleArray). Order per voxel id: top (+Y), side, bottom (-Y).
 struct VoxelPalette {
     std::vector<glm::vec4> colors;
+    std::vector<std::array<uint16_t, 3>> faceLayers;
 
     glm::vec4 color(Voxel v) const {
         return v < colors.size() ? colors[v] : glm::vec4(1.0f, 0.0f, 1.0f, 1.0f);
     }
+    bool hasLayers() const { return !faceLayers.empty(); }
+    // face: 0 top, 1 side, 2 bottom.
+    float layer(Voxel v, int face) const { return v < faceLayers.size() ? float(faceLayers[v][face]) : 0.0f; }
 };
 
 // A chunk and its 26 neighbours. Missing neighbours (nullptr) read as empty space.

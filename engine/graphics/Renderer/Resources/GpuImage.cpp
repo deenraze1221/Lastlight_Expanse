@@ -48,7 +48,7 @@ uint32_t fullMipCount(uint32_t width, uint32_t height) {
 
 GpuImage::GpuImage(const VulkanContext& context, const ImageDesc& desc)
     : m_device(context.device()), m_allocator(context.allocator()), m_format(desc.format),
-      m_extent{desc.width, desc.height}, m_mipLevels(desc.mipLevels), m_layers(desc.cube ? 6u : 1u) {
+      m_extent{desc.width, desc.height}, m_mipLevels(desc.mipLevels), m_layers(desc.cube ? 6u : std::max(1u, desc.arrayLayers)), m_cube(desc.cube) {
     ZODAR_ENSURE(!desc.cube || desc.width == desc.height, "cube images must be square");
     ZODAR_ENSURE(desc.width > 0 && desc.height > 0, "image extent must be non-zero");
     ZODAR_ENSURE(desc.mipLevels >= 1 && desc.mipLevels <= fullMipCount(desc.width, desc.height),
@@ -85,7 +85,7 @@ GpuImage::GpuImage(const VulkanContext& context, const ImageDesc& desc)
 
     VkImageViewCreateInfo viewInfo{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     viewInfo.image = m_image;
-    viewInfo.viewType = desc.cube ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.viewType = desc.cube ? VK_IMAGE_VIEW_TYPE_CUBE : m_layers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
     viewInfo.format = desc.format;
     // Sampled depth views read the depth aspect only.
     viewInfo.subresourceRange = {isDepthFormat(desc.format) ? VkImageAspectFlags(VK_IMAGE_ASPECT_DEPTH_BIT) : m_aspect,
@@ -123,6 +123,7 @@ GpuImage& GpuImage::operator=(GpuImage&& other) noexcept {
         m_extent = std::exchange(other.m_extent, {});
         m_mipLevels = std::exchange(other.m_mipLevels, 0);
         m_layers = std::exchange(other.m_layers, 1);
+        m_cube = std::exchange(other.m_cube, false);
         m_aspect = std::exchange(other.m_aspect, 0);
     }
     return *this;

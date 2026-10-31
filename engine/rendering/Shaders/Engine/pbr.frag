@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "zodar/surface.glsl"
 #include "zodar/lighting.glsl"
+#include "zodar/fog.glsl"
 
 layout(location = 0) out vec4 outColor;
 
@@ -32,7 +33,7 @@ void main() {
     case ZODAR_DEBUG_DIRECT: color = r.direct; break;
     case ZODAR_DEBUG_INDIRECT: color = r.diffuseIndirect + r.specularIndirect; break;
     case ZODAR_DEBUG_SPECULAR_IBL: color = r.specularIndirect; break;
-    default: break;
+    default: color = zodarApplyFrameFog(color, vWorldPosition); break;
     }
     float alpha = (m.flags & ZODAR_MATERIAL_ALPHA_BLEND) != 0u ? base.a : 1.0;
     outColor = vec4(color, alpha);

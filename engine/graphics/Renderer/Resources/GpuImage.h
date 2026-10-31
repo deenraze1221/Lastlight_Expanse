@@ -17,6 +17,8 @@ struct ImageDesc {
     uint32_t mipLevels = 1;
     const char* debugName = nullptr;
     bool cube = false; // 6 layers, CUBE_COMPATIBLE, default view is a cube view
+    // > 1: 2D array image; the default view is a 2D_ARRAY view (texture arrays). Ignored for cubes.
+    uint32_t arrayLayers = 1;
 };
 
 // Move-only owner of a 2D (or cube) VkImage, its allocation and a view covering all mips and layers.
@@ -42,7 +44,8 @@ public:
     uint32_t mipLevels() const { return m_mipLevels; }
     VkImageAspectFlags aspect() const { return m_aspect; }
     uint32_t layers() const { return m_layers; }
-    bool isCube() const { return m_layers == 6; }
+    bool isCube() const { return m_cube; }
+    bool isArray() const { return !m_cube && m_layers > 1; }
     VkImageSubresourceRange fullRange() const { return {m_aspect, 0, m_mipLevels, 0, m_layers}; }
 
 private:
@@ -55,6 +58,7 @@ private:
     VkExtent2D m_extent{};
     uint32_t m_mipLevels = 0;
     uint32_t m_layers = 1;
+    bool m_cube = false;
     VkImageAspectFlags m_aspect = 0;
 };
 

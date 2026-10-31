@@ -74,6 +74,8 @@ layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer Zo
     uvec2 reserved0;
     uvec4 ibl;             // x: irradiance cube, y: prefiltered cube, z: DFG LUT (bindless slots), w: sampler
     vec4 iblParams;        // x: intensity, y: prefiltered mip count, z: skybox mip
+    vec4 fogColor;         // rgb: linear colour, w: density (0 = fog off)
+    vec4 fogParams;        // x: height falloff, y: base height, z: start distance, w: max opacity
 };
 
 struct ZodarInstance {

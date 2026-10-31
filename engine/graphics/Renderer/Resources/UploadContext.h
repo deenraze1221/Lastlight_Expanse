@@ -107,7 +107,8 @@ public:
     // Uploads all provided mip levels (level i goes to mip i) and hands the image to the
     // graphics queue in SHADER_READ_ONLY_OPTIMAL. The image must not have been used yet and
     // have at least levels.size() mips. Block-compressed formats take whole 4x4 blocks.
-    void uploadImage(const GpuImage& image, std::span<const ImageLevelData> levels);
+    // `layer` selects the array layer (texture arrays; each layer is uploaded separately).
+    void uploadImage(const GpuImage& image, std::span<const ImageLevelData> levels, uint32_t layer = 0);
 
     // Submits and waits. Called automatically by the destructor if neither submit function
     // was called (errors are then logged instead of thrown).

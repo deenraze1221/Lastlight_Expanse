@@ -123,6 +123,8 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | Scene/Voxel | `VoxelChunk` | 32³ `uint16` voxels (0 = empty), uniform chunks store no array |
 | Scene/Voxel | `meshChunk` | Greedy mesher with per-vertex AO (merges only uniform-AO faces), LOD 0–5 by majority downsampling, boundary sealing |
 | Scene/Voxel | `VoxelWorld` | Chunk streaming around an observer: nearest-first job scheduling with per-update budget, distance LOD, unload hysteresis, copy-on-write edits kept across unloads, DDA raycast, mesh events |
+| Renderer | `TextureArray` | 2D array textures (`GpuImage` `arrayLayers`, per-layer uploads), bindless 2D_ARRAY view, `zodarSampleArray()` |
+| Renderer/Lighting | `FogSettings` | Analytic distance + exponential height fog in frame constants (`zodar/fog.glsl`); applied by `pbr.frag`, off by default |
 | Renderer | `StreamedMeshSet` | Runtime mesh residency: async transfer-queue uploads, old mesh drawn until the new one is ready, deferred deletion |
 
 ## Voxel terrain decisions
@@ -135,6 +137,17 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | LOD seams sealed with boundary walls; sealing skipped where the neighbour is empty or solid ≥ one coarse cell deep | Crack-free without stitching; no hidden walls inside solid ground |
 | Below the lowest chunk layer reads as solid ("bedrock") | The world's underside is never meshed |
 | Streamed chunk meshes own their buffers and use the CPU draw path | `GeometryPool` cannot free yet; per-mesh free + GPU-driven terrain is follow-up work |
+
+## Lastlight Expanse visual style (game-side)
+
+Minecraft-inspired voxel look built only from engine capabilities (`game/`):
+- Procedural pixel-art block textures (`game/src/Rendering/BlockTextures`): palette-quantised,
+  tileable, 2×2-texel art pixels; 256² standard layers and 512² hero layers in two
+  `TextureArray`s; alpha < 1 marks emissive pixels.
+- `game/shaders/voxel.frag` (with the engine `mesh.vert`): world-aligned UVs, layer from vertex
+  alpha (`VoxelPalette::faceLayers`, ≥ 1000 selects the hero array), point sampling with
+  linear mips, engine PBR lighting + IBL, emissive, frame fog. One material, one draw per chunk.
+- Fog is an engine capability (`SceneLighting::fog`), tuned by the game for dusk haze.
 
 ## Vulkan decisions
 

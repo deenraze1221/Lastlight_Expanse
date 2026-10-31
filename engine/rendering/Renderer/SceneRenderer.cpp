@@ -41,8 +41,10 @@ struct GpuFrameData {
     VkDeviceAddress reserved0;
     glm::uvec4 ibl;           // Bindless slots: irradiance, prefiltered, DFG LUT, sampler
     glm::vec4 iblParams;      // x: intensity, y: prefiltered mips, z: skybox mip
+    glm::vec4 fogColor;       // rgb, w: density (0 = off)
+    glm::vec4 fogParams;      // x: height falloff, y: base height, z: start distance, w: max opacity
 };
-static_assert(sizeof(GpuFrameData) == 384, "GpuFrameData must match zodar/scene.glsl");
+static_assert(sizeof(GpuFrameData) == 416, "GpuFrameData must match zodar/scene.glsl");
 
 constexpr uint32_t kLightingIbl = 1u, kLightingMultiscatter = 2u, kLightingBruteForce = 4u;
 constexpr uint32_t kNoSlot = 0xFFFFFFFFu;
@@ -209,6 +211,9 @@ SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkEx
     data.cameraPosition = glm::vec4(view.camera.position, view.time);
     data.viewport = glm::vec4(extent.width, extent.height, 1.0f / extent.width, 1.0f / extent.height);
     data.ambient = glm::vec4(view.lighting.ambientColor * view.lighting.ambientIntensity, 0.0f);
+    const FogSettings& fog = view.lighting.fog;
+    data.fogColor = glm::vec4(fog.color, fog.enabled ? fog.density : 0.0f);
+    data.fogParams = glm::vec4(fog.heightFalloff, fog.baseHeight, fog.startDistance, fog.maxOpacity);
     const DirectionalLight& sun = view.lighting.sun;
     const float sunLength = glm::length(sun.direction);
     data.sunDirection = glm::vec4(sunLength > 0.0f ? sun.direction / sunLength : glm::vec3(0, -1, 0),

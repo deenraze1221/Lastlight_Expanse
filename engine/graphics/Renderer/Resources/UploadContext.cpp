@@ -241,10 +241,11 @@ void UploadBatch::keepAlive(std::shared_ptr<void> object) {
     m_work.keepAlive.push_back(std::move(object));
 }
 
-void UploadBatch::uploadImage(const GpuImage& image, std::span<const ImageLevelData> levels) {
+void UploadBatch::uploadImage(const GpuImage& image, std::span<const ImageLevelData> levels, uint32_t layer) {
     ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
     ZODAR_ENSURE(!levels.empty() && levels.size() <= image.mipLevels(), "uploadImage: bad level count");
     ZODAR_ENSURE(formatBlock(image.format()).bytes > 0, "uploadImage: unsupported format");
+    ZODAR_ENSURE(layer < image.layers(), "uploadImage: layer out of range");
 
     VkDeviceSize total = 0;
     for (size_t i = 0; i < levels.size(); ++i) {
@@ -263,7 +264,7 @@ void UploadBatch::uploadImage(const GpuImage& image, std::span<const ImageLevelD
         staging.write(levels[i].bytes.data(), levels[i].bytes.size(), offset);
         VkBufferImageCopy region{};
         region.bufferOffset = offset;
-        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), 0, 1};
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), layer, 1};
         region.imageExtent = {levels[i].width, levels[i].height, 1};
         regions.push_back(region);
         offset += (levels[i].bytes.size() + 15) & ~VkDeviceSize(15);
@@ -271,7 +272,7 @@ void UploadBatch::uploadImage(const GpuImage& image, std::span<const ImageLevelD
 
     const VkBuffer src = staging.handle();
     const VkImage dst = image.handle();
-    const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, static_cast<uint32_t>(levels.size()), 0, 1};
+    const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, static_cast<uint32_t>(levels.size()), layer, 1};
     m_work.commands.push_back([src, dst, range, regions = std::move(regions)](VkCommandBuffer cmd) {
         transitionImage(cmd, dst, range, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                         VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COPY_BIT,

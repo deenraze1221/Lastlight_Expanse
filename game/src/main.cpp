@@ -2,12 +2,14 @@
 //
 //   LastlightExpanse [--seed N] [--view-radius CHUNKS] [--threads N] [--frames N] [--screenshot out.ppm]
 //                    [--width W] [--height H] [--no-validation] [--no-overlay]
-//                    [--lighting-quality low|medium|high|ultra]
+//                    [--lighting-quality low|medium|high|ultra] [--untextured] [--no-fog]
+//                    [--spawn-height H] [--pitch DEG]
 //
 // Controls: hold right mouse to look, WASD move, Space/Ctrl up/down, Shift fast,
 // left click digs the targeted voxel, F places stone on it, F1 profiler, Esc quits.
 // Exit codes: 0 ok, 1 fatal error, 2 validation errors, 3 screenshot failed.
 
+#include "Rendering/BlockTextures.h"
 #include "World/LastlightTerrain.h"
 
 #include "Assets/EnvironmentMaps.h"
@@ -24,6 +26,7 @@
 #include "Renderer/Resources/UploadContext.h"
 #include "Renderer/SceneRenderer.h"
 #include "Renderer/StreamedMeshSet.h"
+#include "Renderer/TextureArray.h"
 #include "Renderer/Vulkan/VulkanContext.h"
 #include "Renderer/Vulkan/VulkanSwapchain.h"
 #include "Scene/Voxel/VoxelWorld.h"
@@ -35,6 +38,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <bit>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -59,6 +63,10 @@ struct Options {
     bool validation = true;
     bool overlay = false;
     LightingQuality quality = LightingQuality::High;
+    bool textured = true; // pixel-art texture arrays (false: flat palette colours, A/B tests)
+    bool fog = true;
+    float spawnHeight = 14.0f; // above the terrain surface
+    float pitch = -12.0f;      // degrees
 };
 
 Options parseOptions(int argc, char** argv) {
@@ -80,6 +88,10 @@ Options parseOptions(int argc, char** argv) {
         else if (arg == "--no-overlay") o.overlay = false;
         else if (arg == "--overlay") o.overlay = true;
         else if (arg == "--lighting-quality") o.quality = parseLightingQuality(next());
+        else if (arg == "--untextured") o.textured = false;
+        else if (arg == "--no-fog") o.fog = false;
+        else if (arg == "--spawn-height") o.spawnHeight = std::stof(next());
+        else if (arg == "--pitch") o.pitch = std::stof(next());
         else fail("Unknown argument '" + std::string(arg) + "'");
     }
     return o;
@@ -118,7 +130,11 @@ int run(const Options& options) {
     streaming.minChunkY = -2;
     streaming.maxChunkY = 3;
     streaming.lodDistances = {3.0f, 6.0f, 11.0f};
-    VoxelWorld world(terrain, lastlight::makePalette(), streaming, &jobs);
+    VoxelPalette palette = lastlight::makePalette();
+    if (options.textured) {
+        lastlight::assignFaceLayers(palette);
+    }
+    VoxelWorld world(terrain, palette, streaming, &jobs);
     StreamedMeshSet chunkMeshes(renderer.context(), upload);
     ZODAR_LOG_INFO("World seed {}, view radius {} chunks, {} worker threads", options.seed, options.viewRadius,
                    jobs.workerCount());
@@ -127,6 +143,31 @@ int run(const Options& options) {
     ground.name = "Terrain";
     ground.baseColorFactor = glm::vec4(1.0f); // voxel colours come from vertex colours
     ground.roughness = 0.92f;
+    // Pixel-art look: block textures in two arrays (256^2 standard, 512^2 hero) sampled
+    // point-filtered by the game's voxel shader; one material and one descriptor for all blocks.
+    TextureArray standardTextures;
+    TextureArray heroTextures;
+    if (options.textured) {
+        const auto start = std::chrono::steady_clock::now();
+        const lastlight::BlockTextureSet textures = lastlight::generateBlockTextures(options.seed);
+        UploadBatch batch(upload);
+        standardTextures = TextureArray(batch, scene.bindless(), textures.standard, "BlockTextures256");
+        heroTextures = TextureArray(batch, scene.bindless(), textures.hero, "BlockTextures512");
+        batch.submit();
+        SamplerDesc crisp;
+        crisp.magFilter = Filter::Nearest; // hard texel edges up close
+        crisp.minFilter = Filter::Nearest;
+        crisp.mipFilter = Filter::Linear;  // mips stop distant shimmer
+        crisp.maxAnisotropy = 1.0f;
+        ground.shader = scene.materials().registerShader("lastlight/voxel", "mesh.vert.spv", "voxel.frag.spv");
+        ground.custom0 = {std::bit_cast<float>(standardTextures.bindlessIndex()),
+                          std::bit_cast<float>(scene.bindless().sampler(crisp)),
+                          std::bit_cast<float>(heroTextures.bindlessIndex()), 0.0f};
+        ground.custom1 = {4.0f, 1.0f / streaming.voxelSize, 0.0f, 0.0f}; // emissive strength, voxels per unit
+        ZODAR_LOG_INFO("Block textures: {} x {}^2 + {} x {}^2 in {:.0f} ms", textures.standard.size(),
+                       lastlight::kStandardTextureSize, textures.hero.size(), lastlight::kHeroTextureSize,
+                       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+    }
     const MaterialHandle terrainMaterial = scene.materials().createMaterial(ground);
 
     LightingSettings lightingSettings;
@@ -149,12 +190,20 @@ int run(const Options& options) {
     view.lighting.environmentIntensity = 0.6f;
     view.lighting.sun = {sunDirection, {1.0f, 0.62f, 0.38f}, 3.5f, true};
     view.camera.projection.nearPlane = 0.1f;
+    // Dusk haze: dense in the valleys, thinning with altitude; never fully hides the far ridges.
+    view.lighting.fog.enabled = options.fog;
+    view.lighting.fog.color = {0.55f, 0.36f, 0.3f};
+    view.lighting.fog.density = 0.006f;
+    view.lighting.fog.heightFalloff = 0.025f;
+    view.lighting.fog.baseHeight = 10.0f;
+    view.lighting.fog.startDistance = 24.0f;
+    view.lighting.fog.maxOpacity = 0.85f;
 
     // Spawn above the terrain at the origin.
     const int spawnHeight = terrain->surfaceHeight(0, 0);
-    view.camera.position = {0.5f, static_cast<float>(spawnHeight) + 14.0f, 0.5f};
+    view.camera.position = {0.5f, static_cast<float>(spawnHeight) + options.spawnHeight, 0.5f};
     float yaw = glm::radians(200.0f);
-    float pitch = glm::radians(-12.0f);
+    float pitch = glm::radians(options.pitch);
 
     // Loading: stream the area around the spawn point before the first frame.
     {

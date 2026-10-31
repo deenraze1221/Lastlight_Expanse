@@ -98,7 +98,8 @@ if(ZODAR_GPU_TESTS)
     target_compile_definitions(ZodarGpuTests PRIVATE ZODAR_TEST_SHADER_DIR="${ZODAR_OUTPUT_DIR}/shaders")
     zodar_compile_shaders(ZodarGpuTests SOURCES
         Gpu/Shaders/test_sample.vert
-        Gpu/Shaders/test_sample.frag)
+        Gpu/Shaders/test_sample.frag
+        Gpu/Shaders/test_sample_array.frag)
     add_test(NAME gpu.subsystems COMMAND ZodarGpuTests)
     set_tests_properties(gpu.subsystems PROPERTIES TIMEOUT 300)
 

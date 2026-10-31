@@ -43,6 +43,18 @@ struct SpotLight {
     float outerConeRadians = 0.55f; // Zero outside (max ~89.9 degrees)
 };
 
+// Analytic distance + exponential height fog applied by the engine's lit shaders
+// (zodar/fog.glsl). Off by default; custom shaders read the same frame constants.
+struct FogSettings {
+    bool enabled = false;
+    glm::vec3 color{0.5f, 0.6f, 0.7f}; // linear
+    float density = 0.01f;             // extinction per world unit at baseHeight
+    float heightFalloff = 0.0f;        // 0 = uniform
+    float baseHeight = 0.0f;
+    float startDistance = 0.0f;
+    float maxOpacity = 1.0f;
+};
+
 struct SceneLighting {
     // Constant ambient radiance, used only when no environment is set.
     glm::vec3 ambientColor{1.0f};
@@ -54,6 +66,7 @@ struct SceneLighting {
     const Environment* environment = nullptr;
     float environmentIntensity = 1.0f;
     bool drawEnvironmentBackground = true; // Sky where no geometry was drawn (else clear colour)
+    FogSettings fog;
 };
 
 enum class LightingDebugView : uint32_t {

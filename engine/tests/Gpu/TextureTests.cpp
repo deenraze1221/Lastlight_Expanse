@@ -5,6 +5,7 @@
 #include "Assets/Ktx2.h"
 #include "Renderer/BindlessRegistry.h"
 #include "Renderer/Texture.h"
+#include "Renderer/TextureArray.h"
 #include "Renderer/Vulkan/VulkanPipeline.h"
 
 #include <algorithm>
@@ -24,10 +25,11 @@ struct Push {
 };
 
 // Renders a fullscreen triangle that samples one bindless texture into a small RGBA8 target.
-std::vector<uint8_t> renderSample(BindlessRegistry& registry, uint32_t size, const Push& push) {
+std::vector<uint8_t> renderSample(BindlessRegistry& registry, uint32_t size, const Push& push,
+                                  const char* fragmentSpv = "test_sample.frag.spv") {
     const auto& ctx = *gpu().context;
     ShaderModule vs(ctx.device(), loadSpirv(zodar::test::shaderDir() + "/test_sample.vert.spv"));
-    ShaderModule fs(ctx.device(), loadSpirv(zodar::test::shaderDir() + "/test_sample.frag.spv"));
+    ShaderModule fs(ctx.device(), loadSpirv(zodar::test::shaderDir() + "/" + fragmentSpv));
     GraphicsPipelineDesc desc;
     desc.vertexShader = vs.handle();
     desc.fragmentShader = fs.handle();
@@ -213,5 +215,41 @@ TEST_CASE("textures: compiled BCn KTX2 textures upload byte-exact and sample lik
         }
         MESSAGE(formatName << ": max |GPU - CPU decode| = " << maxDiff);
         CHECK(maxDiff <= 3); // Hardware BCn interpolation may differ slightly from bcdec.
+    }
+}
+
+TEST_CASE("texture arrays: every layer is sampled through the bindless 2D_ARRAY view") {
+    zodar::test::ValidationGuard guard;
+    BindlessRegistry registry(*gpu().context);
+    const uint8_t colours[3][4] = {{255, 0, 0, 255}, {0, 255, 0, 255}, {0, 0, 255, 128}};
+    std::vector<ImageData> layers;
+    for (const auto& c : colours) {
+        ImageData image;
+        image.name = "Layer";
+        image.width = image.height = 4;
+        image.colorSpace = ColorSpace::Linear;
+        image.levels.emplace_back();
+        for (int i = 0; i < 16; ++i) image.levels[0].insert(image.levels[0].end(), c, c + 4);
+        image.generateMips();
+        layers.push_back(std::move(image));
+    }
+    TextureArray array;
+    {
+        UploadBatch batch(*gpu().upload);
+        array = TextureArray(batch, registry, layers, "TestArray");
+        batch.submit();
+    }
+    CHECK(array.layerCount() == 3);
+    CHECK(array.image().isArray());
+    CHECK(array.image().mipLevels() == 3);
+    const uint32_t sampler = registry.sampler(SamplerDesc::nearest());
+    for (uint32_t layer = 0; layer < 3; ++layer) {
+        const auto image = renderSample(registry, 8, {array.bindlessIndex(), sampler, float(layer)},
+                                        "test_sample_array.frag.spv");
+        const uint8_t* p = pixel(image, 8, 4, 4);
+        CHECK(p[0] == colours[layer][0]);
+        CHECK(p[1] == colours[layer][1]);
+        CHECK(p[2] == colours[layer][2]);
+        CHECK(p[3] == colours[layer][3]);
     }
 }

@@ -246,3 +246,15 @@ TEST_CASE("voxel world: worker threads produce the same meshes as inline executi
     VoxelWorld threaded(std::make_shared<FlatGenerator>(37), palette(), smallWorld(), &jobs);
     CHECK(settle(threaded, {40, 40, -20}) == expected);
 }
+
+TEST_CASE("mesher: face texture layers go into vertex alpha (top / side / bottom)") {
+    VoxelChunk c;
+    c.set(3, 3, 3, 1);
+    VoxelPalette p = palette();
+    p.faceLayers = {{0, 0, 0}, {7, 8, 1009}};
+    const MeshData mesh = meshChunk(single(c), p, {});
+    for (const Vertex& v : mesh.vertices) {
+        const float expected = v.normal.y > 0.5f ? 7.0f : v.normal.y < -0.5f ? 1009.0f : 8.0f;
+        CHECK(v.color.a == expected);
+    }
+}

@@ -194,7 +194,10 @@ MeshData meshChunk(const ChunkNeighborhood& neighborhood, const VoxelPalette& pa
                     localStats.faces += static_cast<uint32_t>(w * h);
 
                     // Emit the quad: corners (u0,v0), (u1,v0), (u1,v1), (u0,v1).
-                    const glm::vec4 color = palette.color(static_cast<Voxel>(key >> 8));
+                    const auto voxelId = static_cast<Voxel>(key >> 8);
+                    const glm::vec4 color = palette.color(voxelId);
+                    const int faceKind = a != 1 ? 1 : positive ? 0 : 2;
+                    const float layerAlpha = palette.hasLayers() ? palette.layer(voxelId, faceKind) : color.a;
                     const auto base = static_cast<uint32_t>(mesh.vertices.size());
                     const int cu[4] = {i, i + w, i + w, i};
                     const int cv[4] = {j, j, j + h, j + h};
@@ -211,7 +214,7 @@ MeshData meshChunk(const ChunkNeighborhood& neighborhood, const VoxelPalette& pa
                         vert.tangent = tangent;
                         vert.uv0 = glm::vec2(p[u], p[v]) * (cellSize / options.voxelSize);
                         const float shade = options.aoCurve[ao[c]];
-                        vert.color = glm::vec4(glm::vec3(color) * shade, color.a);
+                        vert.color = glm::vec4(glm::vec3(color) * shade, layerAlpha);
                         mesh.vertices.push_back(vert);
                     }
                     // Split along the diagonal with the more similar occlusion.

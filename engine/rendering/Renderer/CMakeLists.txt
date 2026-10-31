@@ -6,6 +6,7 @@ add_library(ZodarRenderer STATIC
     GpuScene.cpp
     BindlessRegistry.cpp
     Texture.cpp
+    TextureArray.cpp
     Material.cpp
     Frustum.cpp
     SceneRenderer.cpp
