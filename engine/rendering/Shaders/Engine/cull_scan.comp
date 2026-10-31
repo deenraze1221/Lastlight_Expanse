@@ -1,0 +1,54 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "zodar/cull_common.glsl"
+
+// Pass 1: frustum test per position + exclusive prefix sum within each workgroup.
+// The test mirrors Frustum::intersects on the CPU (same planes, same world bounds) with a
+// tiny conservative margin, so the GPU never culls an object the CPU path draws.
+layout(local_size_x = ZODAR_CULL_GROUP_SIZE) in;
+
+shared uint s_scan[ZODAR_CULL_GROUP_SIZE];
+
+bool isVisible(CullData c) {
+    if ((c.info.y & 1u) == 0u) {
+        return false;
+    }
+    if ((c.info.y & 2u) != 0u) {
+        return true;
+    }
+    PlaneBuffer planes = PlaneBuffer(pc.planes);
+    for (uint p = 0u; p < pc.planeCount; ++p) {
+        vec4 plane = planes.planes[p];
+        vec3 corner = mix(c.boundsMin.xyz, c.boundsMax.xyz, greaterThanEqual(plane.xyz, vec3(0.0)));
+        float margin = 1e-5 * max(1.0, abs(plane.w));
+        if (dot(plane.xyz, corner) + plane.w < -margin) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void main() {
+    uint position = gl_GlobalInvocationID.x;
+    uint lid = gl_LocalInvocationID.x;
+    uint flag = 0u;
+    if (position < pc.count) {
+        uint slot = UintBuffer(pc.order).values[position];
+        flag = isVisible(CullBuffer(pc.cull).items[slot]) ? 1u : 0u;
+    }
+    // Inclusive Hillis-Steele scan in shared memory.
+    s_scan[lid] = flag;
+    barrier();
+    for (uint offset = 1u; offset < ZODAR_CULL_GROUP_SIZE; offset <<= 1u) {
+        uint add = lid >= offset ? s_scan[lid - offset] : 0u;
+        barrier();
+        s_scan[lid] += add;
+        barrier();
+    }
+    if (position < pc.count) {
+        UintBuffer(pc.prefix).values[position] = ((s_scan[lid] - flag) << 1u) | flag;
+    }
+    if (lid == ZODAR_CULL_GROUP_SIZE - 1u) {
+        UintBuffer(pc.blockSums).values[gl_WorkGroupID.x] = s_scan[lid];
+    }
+}

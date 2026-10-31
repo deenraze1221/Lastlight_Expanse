@@ -1,0 +1,36 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "zodar/ibl_common.glsl"
+
+// DFG LUT for the split sum with multiple-scattering energy compensation (Filament):
+//   x = mean(Gv * Fc), y = mean(Gv), Gv = V * 4 * NoL * VoH / NoH, Fc = (1 - VoH)^5
+// so the single-scattering specular albedo is E(f0) = mix(x, y, f0) and the energy
+// compensation factor is 1 + f0 * (1 / y - 1). u = NoV, v = perceptual roughness.
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D target;
+layout(push_constant) uniform Push {
+    uint size;
+    uint samples;
+} pc;
+
+void main() {
+    if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(pc.size)))) return;
+    float nDotV = max((float(gl_GlobalInvocationID.x) + 0.5) / float(pc.size), 1e-4);
+    float roughness = (float(gl_GlobalInvocationID.y) + 0.5) / float(pc.size);
+    float alpha = max(roughness * roughness, 0.002);
+    vec3 v = vec3(sqrt(1.0 - nDotV * nDotV), 0.0, nDotV);
+    vec2 r = vec2(0.0);
+    for (uint i = 0u; i < pc.samples; ++i) {
+        vec3 h = importanceSampleGgx(hammersley(i, pc.samples), alpha);
+        vec3 l = 2.0 * dot(v, h) * h - v;
+        float nDotL = clamp(l.z, 0.0, 1.0);
+        float nDotH = clamp(h.z, 0.0, 1.0);
+        float vDotH = clamp(dot(v, h), 0.0, 1.0);
+        if (nDotL > 0.0) {
+            float gv = smithVisibility(nDotV, nDotL, alpha) * 4.0 * nDotL * vDotH / max(nDotH, 1e-6);
+            float fc = pow(1.0 - vDotH, 5.0);
+            r += vec2(gv * fc, gv);
+        }
+    }
+    imageStore(target, ivec2(gl_GlobalInvocationID.xy), vec4(r / float(pc.samples), 0.0, 1.0));
+}

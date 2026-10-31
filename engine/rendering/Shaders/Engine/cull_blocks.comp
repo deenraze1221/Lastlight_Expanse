@@ -1,0 +1,38 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "zodar/cull_common.glsl"
+
+// Pass 2 (one workgroup): exclusive prefix sum of the per-workgroup visible counts.
+// Each thread sums a contiguous chunk of blocks; chunk totals are scanned in shared memory.
+layout(local_size_x = ZODAR_CULL_GROUP_SIZE) in;
+
+shared uint s_scan[ZODAR_CULL_GROUP_SIZE];
+
+void main() {
+    uint lid = gl_LocalInvocationID.x;
+    uint perThread = (pc.blockCount + ZODAR_CULL_GROUP_SIZE - 1u) / ZODAR_CULL_GROUP_SIZE;
+    uint first = lid * perThread;
+    uint last = min(first + perThread, pc.blockCount);
+    UintBuffer sums = UintBuffer(pc.blockSums);
+    uint chunk = 0u;
+    for (uint b = first; b < last; ++b) {
+        chunk += sums.values[b];
+    }
+    s_scan[lid] = chunk;
+    barrier();
+    for (uint offset = 1u; offset < ZODAR_CULL_GROUP_SIZE; offset <<= 1u) {
+        uint add = lid >= offset ? s_scan[lid - offset] : 0u;
+        barrier();
+        s_scan[lid] += add;
+        barrier();
+    }
+    UintBuffer offsets = UintBuffer(pc.blockOffsets);
+    uint running = s_scan[lid] - chunk;
+    for (uint b = first; b < last; ++b) {
+        offsets.values[b] = running;
+        running += sums.values[b];
+    }
+    if (lid == ZODAR_CULL_GROUP_SIZE - 1u) {
+        offsets.values[pc.blockCount] = s_scan[lid]; // Total visible.
+    }
+}

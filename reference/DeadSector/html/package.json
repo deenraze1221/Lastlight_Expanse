@@ -1,0 +1,41 @@
+{
+  "name": "dead-sector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build && node scripts/standalone.js",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.js",
+    "test:browser": "node tests/browser-smoke.js",
+    "test:combat:browser": "node tests/combat-browser.js",
+    "test:weapons:browser": "node tests/weapons-browser.js",
+    "test:city:browser": "node tests/city-ui-browser.js",
+    "server": "node server/index.js",
+    "test:network:browser": "node tests/network-browser.js",
+    "test:revive:browser": "node tests/revive-browser.js",
+    "test:geometry:browser": "node tests/geometry-browser.js",
+    "test:mutants:browser": "node tests/mutants-browser.js",
+    "test:economy:browser": "node tests/economy-browser.js",
+    "test:music:browser": "node tests/music-browser.js",
+    "report:economy": "node scripts/economy-report.js",
+    "test:vomiter:browser": "node tests/vomiter-browser.js",
+    "test:body:browser": "node tests/first-person-body-browser.js",
+    "test:creatures:browser": "node tests/creatures-districts-browser.js",
+    "test:graphics:browser": "node tests/graphics-browser.js",
+    "test:presentation:browser": "node tests/presentation-browser.js",
+    "test:survival:browser": "node tests/survival-ui-browser.js"
+  },
+  "dependencies": {
+    "three": "0.180.0",
+    "ws": "8.18.3"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1",
+    "vite": "7.1.12"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
