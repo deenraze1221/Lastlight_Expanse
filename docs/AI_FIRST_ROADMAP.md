@@ -5,7 +5,7 @@
 **Phase A2 done** (standard CLI + `runMain`, PNG screenshots, capture sequences, `--camera`,
 run report JSON). **Phase A3 done** (CMake presets, `tools/zodar.py`, `docs/guide/RUNNING.md`,
 ModelViewer + ZodarBench on `Application`, JSON-lines log sink): **Phase A complete**.
-**Phase B1.2 done** (`Zodar::World` components, `Name`/`Transform`, hierarchy). **Phase B1.3 done** (renderer bridge, `Zodar::WorldRender`). **Next: Phase B2** (scene/material JSON).
+**Phase B1.2 done** (`Zodar::World` components, `Name`/`Transform`, hierarchy). **Phase B1.3 done** (renderer bridge, `Zodar::WorldRender`). **Phase B2 core done** (scene/material JSON, `Zodar::SceneFile`; remaining B2 items: World capture/save, prefabs, reflection, mutable materials, light components).
 
 Goal: ZODAR is driven by Claude Code (code, CLI, files, logs, screenshots), not by a visual
 editor. Every engine capability must be reachable through documented C++ APIs, text data

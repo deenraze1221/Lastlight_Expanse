@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "materials": {
+    "red": "materials/red.material.json",
+    "blue": { "baseColor": [0.2, 0.4, 0.9, 1], "roughness": 0.35 }
+  },
+  "entities": [
+    {
+      "id": "root",
+      "name": "Pedestal",
+      "transform": { "position": [0, 0.5, -3], "rotation": [0, 0.19866933, 0, 0.98006658] },
+      "meshRenderer": { "mesh": "cube", "material": "red" }
+    },
+    { "name": "Orb 0", "parent": "root", "transform": { "position": [-2.25, 1.2, 0] }, "meshRenderer": { "mesh": "sphere", "material": "red" } },
+    { "name": "Orb 1", "parent": "root", "transform": { "position": [-0.75, 1.2, 0] }, "meshRenderer": { "mesh": "sphere", "material": "blue" } },
+    { "name": "Orb 2", "parent": "root", "transform": { "position": [0.75, 1.2, 0] }, "meshRenderer": { "mesh": "sphere", "material": "red" } },
+    { "name": "Orb 3", "parent": "root", "transform": { "position": [2.25, 1.2, 0] }, "meshRenderer": { "mesh": "sphere", "material": "blue" } }
+  ]
+}

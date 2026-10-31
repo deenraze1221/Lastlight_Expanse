@@ -17,6 +17,7 @@ Engine code never includes game headers or links game targets.
 | `engine/scene/Scene` | `Zodar::Scene` | Noise, voxel chunks, greedy mesher, LOD, chunk streaming (no GPU) |
 | `engine/world/World` | `Zodar::World` | Entities over EnTT: `zodar::World` / `zodar::Entity`, components, `Name`/`Transform`, hierarchy (B1.1-B1.2; no GPU) |
 | `engine/rendering/WorldRender` | `Zodar::WorldRender` | World -> renderer bridge: `MeshRenderer`, `collectDraws` (CPU path), `WorldRenderSync` (GpuScene) (B1.3) |
+| `engine/rendering/SceneFile` | `Zodar::SceneFile` | `*.scene.json` / `*.material.json`: parse + validate (`DataError`), serialize, `createSceneMaterials`, `instantiateScene` into a World (B2) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
 | `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON. Used by the game, ModelViewer and ZodarBench |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarUISandbox |
@@ -273,6 +274,22 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
     propagation deferred until profiling needs it.
   - Verified: GPU test renders a World hierarchy pixel-identical to hand-built `MeshDraw`s via
     both paths, before and after update/destroy.
+- Scene / material files (B2): module `Zodar::SceneFile` (depends on WorldRender; nlohmann/json
+  v3.11.3 linked privately, public headers expose engine types only). Schema:
+  `docs/guide/SCENE_FILES.md`.
+  - Two steps: `parseScene`/`loadSceneFile` -> `SceneDocument` (pure CPU data, `operator==`,
+    deterministic `serializeScene`, exact float round-trip via a float-typed ordered JSON);
+    `createSceneMaterials` (MaterialSystem) + `instantiateScene(doc, world, SceneBindings)`.
+  - Meshes are referenced by name and bound by code (`SceneBindings::meshes`) until the Phase C
+    asset manager; materials by scene-local id (inline or `*.material.json` path relative to
+    the scene). `MaterialData` = `MaterialDesc` without GPU handles (shader by name, no textures).
+  - Validation collects all issues before throwing `DataError` (file, line:column for syntax,
+    JSON pointer for schema). Unknown fields are errors. Instantiation/material creation check
+    everything first, so failures leave the World / MaterialSystem unchanged.
+  - Not yet: World -> document capture (save from a live World), prefabs, component reflection,
+    mutable materials, light/camera components in files, line numbers for schema errors.
+  - Verified: GPU test renders `examples/scene_from_json` pixel-identical to the equivalent C++
+    scene via both WorldRender paths.
 
 ## Frame flow (Milestone 1)
 

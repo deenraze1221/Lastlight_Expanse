@@ -8,10 +8,12 @@
 #include "Renderer/RenderGraph/RenderGraph.h"
 #include "Renderer/Resources/FrameAllocator.h"
 #include "Renderer/SceneRenderer.h"
+#include "SceneFile/SceneFile.h"
 #include "WorldRender/WorldRender.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <filesystem>
 #include <vector>
 
 using namespace zodar;
@@ -149,4 +151,67 @@ TEST_CASE("world render: entity rendering matches hand-built draws (CPU path and
 
     sync.clear();
     CHECK(gpuScene.instanceCount() == 0);
+}
+
+TEST_CASE("scene file: JSON scene renders identically to the equivalent C++ scene") {
+    zodar::test::ValidationGuard guard;
+    Fixture f;
+    const VkExtent2D extent{128, 96};
+
+    // C++ reference: same values as examples/scene_from_json, hand-built MeshDraws.
+    const MaterialHandle red = f.material({0.8f, 0.2f, 0.2f, 1});
+    const MaterialHandle blue = f.material({0.2f, 0.4f, 0.9f, 1});
+    const glm::mat4 rootMatrix =
+        glm::translate(glm::mat4(1), {0, 0.5f, -3}) * glm::mat4_cast(glm::quat(0.98006658f, 0, 0.19866933f, 0));
+    std::vector<MeshDraw> manual{{&f.meshes[0], 0, red, rootMatrix}};
+    for (int i = 0; i < 4; ++i) {
+        manual.push_back({&f.meshes[1], 0, i % 2 ? blue : red,
+                          rootMatrix * glm::translate(glm::mat4(1), {i * 1.5f - 2.25f, 1.2f, 0})});
+    }
+    SceneView manualView = baseView();
+    manualView.draws = manual;
+    const auto reference = f.render(manualView, extent);
+
+    // JSON: load, create its materials, bind code-provided meshes, instantiate.
+    const SceneDocument doc =
+        loadSceneFile(std::filesystem::path(ZODAR_EXAMPLES_DIR) / "scene_from_json" / "scene.scene.json");
+    SceneBindings bindings;
+    bindings.meshes = {{"cube", &f.meshes[0]}, {"sphere", &f.meshes[1]}};
+    bindings.materials = createSceneMaterials(doc, f.scene.materials());
+    REQUIRE(bindings.materials.size() == 2);
+    World world;
+    const SceneInstance instance = instantiateScene(doc, world, bindings);
+    CHECK(world.entityCount() == 5);
+    CHECK(world.children(instance.byId.at("root")).size() == 4);
+
+    std::vector<MeshDraw> draws;
+    collectDraws(world, draws);
+    SceneView cpuView = baseView();
+    cpuView.draws = draws;
+    CHECK(f.render(cpuView, extent) == reference);
+
+    GpuScene gpuScene(*gpu().context, f.scene.materials(), zodar::test::shaderDir(), 2);
+    GpuSceneSink sink(gpuScene);
+    WorldRenderSync sync(sink);
+    CHECK(sync.sync(world).added == 5);
+    SceneView gpuView = baseView();
+    gpuView.gpuScene = &gpuScene;
+    CHECK(f.render(gpuView, extent) == reference);
+    sync.clear();
+
+    // GPU-side validation: unknown shader (nothing created), out-of-range submesh.
+    SceneDocument badShader = doc;
+    badShader.materials[1].data.shader = "game/missing";
+    const uint32_t before = f.scene.materials().materialCount();
+    CHECK_THROWS_AS((void)createSceneMaterials(badShader, f.scene.materials()), DataError);
+    CHECK(f.scene.materials().materialCount() == before);
+    CHECK_THROWS_WITH_AS((void)createMaterial(f.scene.materials(), badShader.materials[1].data, "blue"),
+                         doctest::Contains("unknown shader 'game/missing'"), DataError);
+
+    SceneDocument badSubmesh = doc;
+    badSubmesh.entities[0].meshRenderer->submesh = 9;
+    World other;
+    CHECK_THROWS_WITH_AS((void)instantiateScene(badSubmesh, other, bindings),
+                         doctest::Contains("submesh 9 out of range"), DataError);
+    CHECK(other.entityCount() == 0);
 }

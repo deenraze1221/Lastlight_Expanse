@@ -20,6 +20,8 @@ struct Transform {
     glm::vec3 scale{1.0f};
 
     [[nodiscard]] glm::mat4 localMatrix() const noexcept;
+
+    bool operator==(const Transform&) const = default; // Exact comparison (scene round-trips).
 };
 
 } // namespace zodar

@@ -56,6 +56,7 @@ Vulkan **1.3 is the minimum**; the engine requests **1.4** when possible and fal
 | bcdec (BCn decode: runtime fallback, tests) | — | 80859ed3b7af |
 | bc7enc_rdo (rgbcx BC1–5 + bc7enc BC7; AssetPipeline only) | — | b9438627eef7 |
 | nanosvg (UI: SVG parse + rasterize) | — | 239e102ec2c6 |
+| nlohmann/json (scene / material files; release tarball, SHA-256 pinned) | v3.11.3 | d6c65aca6b1e (tarball SHA-256) |
 
 stb_truetype (UI fonts) comes from the existing `stb` pin. UI fonts are committed under
 `engine/ui/Resources/UI/Fonts` with their OFL licences: Michroma Regular and Rajdhani Light/Regular/Bold,

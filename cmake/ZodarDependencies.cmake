@@ -111,7 +111,16 @@ FetchContent_Declare(entt
     SOURCE_SUBDIR  _zodar_unused
     SYSTEM)
 
-FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf imgui bcdec bc7enc_rdo nanosvg entt)
+# JSON for scene/material files (Phase B2; header-only, MIT). Release tarball, hash-pinned.
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install OFF CACHE INTERNAL "")
+FetchContent_Declare(nlohmann_json
+    URL      https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM)
+
+FetchContent_MakeAvailable(VulkanHeaders volk VulkanMemoryAllocator SDL3 spdlog glm stb cgltf imgui bcdec bc7enc_rdo nanosvg entt nlohmann_json)
 if(ZODAR_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()

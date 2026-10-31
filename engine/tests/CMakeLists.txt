@@ -24,6 +24,7 @@ add_executable(ZodarTests
     World/WorldTests.cpp
     World/WorldComponentTests.cpp
     World/WorldRenderTests.cpp
+    SceneFile/SceneFileTests.cpp
     Runtime/FixedTimestepTests.cpp
     Runtime/CommandLineTests.cpp
     Runtime/RunReportTests.cpp
@@ -40,9 +41,10 @@ add_executable(ZodarTests
     UI/ProgressBarTests.cpp
     UI/SvgFilterTests.cpp
     UI/LoadingScreenTests.cpp)
-target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::World Zodar::WorldRender Zodar::UI Zodar::stb doctest::doctest)
+target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::World Zodar::WorldRender Zodar::SceneFile Zodar::UI Zodar::stb doctest::doctest)
 # UI tests read the committed resources directly (fonts, original logos, manifest).
-target_compile_definitions(ZodarTests PRIVATE ZODAR_TEST_UI_DIR="${ZODAR_ENGINE_DIR}/ui/Resources/UI")
+target_compile_definitions(ZodarTests PRIVATE ZODAR_TEST_UI_DIR="${ZODAR_ENGINE_DIR}/ui/Resources/UI"
+    ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples")
 zodar_set_warnings(ZodarTests)
 
 add_test(NAME unit COMMAND ZodarTests)
@@ -101,9 +103,10 @@ if(ZODAR_GPU_TESTS)
         Gpu/LightingTests.cpp
         Gpu/IblTests.cpp
         Gpu/WorldRenderTests.cpp)
-    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::WorldRender Zodar::Debug Zodar::AssetPipeline doctest::doctest)
+    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::WorldRender Zodar::SceneFile Zodar::Debug Zodar::AssetPipeline doctest::doctest)
     zodar_set_warnings(ZodarGpuTests)
-    target_compile_definitions(ZodarGpuTests PRIVATE ZODAR_TEST_SHADER_DIR="${ZODAR_OUTPUT_DIR}/shaders")
+    target_compile_definitions(ZodarGpuTests PRIVATE ZODAR_TEST_SHADER_DIR="${ZODAR_OUTPUT_DIR}/shaders"
+        ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples")
     zodar_compile_shaders(ZodarGpuTests SOURCES
         Gpu/Shaders/test_sample.vert
         Gpu/Shaders/test_sample.frag

@@ -107,20 +107,30 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase B1.3 committed and pushed (World -> renderer bridge, `Zodar::WorldRender`).
-  Phases A, B1.1, B1.2 unchanged.
+- `main`: Phase B2 core committed and pushed (scene/material JSON, `Zodar::SceneFile`).
+  Phases A, B1.x unchanged.
 
 ## Current task
-- **Phase B1.3 done**: `World::each`; module `Zodar::WorldRender` (`MeshRenderer`,
-  `collectDraws`, `WorldRenderSync` + `GpuSceneSink`). Tests: `world render:*` in ZodarTests
-  (fake sink: add/update/re-create/remove/recycled ids) and ZodarGpuTests (pixel-identical to
-  hand-built draws, CPU + GpuScene, after update/destroy). Full ctest 19/19, 0 validation msgs.
-- Not done (deliberate): game/ModelViewer still use hand-built draws (no migration); cached
-  world matrices/dirty flags (recomputed per sync); scene JSON (B2).
-- **Next: Phase B2** (scene/material JSON) when requested.
+- **Phase B2 core done**: module `Zodar::SceneFile` (`engine/rendering/SceneFile`, nlohmann/json
+  v3.11.3 private, hash-pinned tarball). `*.material.json` (`MaterialData`, parse/serialize,
+  `toMaterialDesc`, `createMaterial`), `*.scene.json` (`SceneDocument`: materials inline or by
+  path, entities with id/parent/name/transform/meshRenderer), `createSceneMaterials`,
+  `instantiateScene` (validated first, World unchanged on error). `DataError` with all issues
+  (file:line:column for syntax, JSON pointer for schema). `Transform::operator==` added.
+  Docs `docs/guide/SCENE_FILES.md`, example `examples/scene_from_json`.
+- Tests: 7 `scene file:*` unit cases (`engine/tests/SceneFile/SceneFileTests.cpp`: defaults,
+  validation messages, syntax line/column, example load, exact round-trip, transform forms,
+  hierarchy/reference errors, instantiate rollback) + GPU case (JSON scene pixel-identical to
+  C++ scene, CPU + GpuScene; unknown shader / bad submesh). Verified GCC 13 Debug, 0 warnings,
+  162/162 unit, 47/47 GPU cases, 19/19 ctest, 0 validation messages. Not run: Release, Clang,
+  MinGW, MSVC.
+- Not done (remaining B2): World -> SceneDocument capture (save live World), prefabs with
+  overrides, component reflection tables, mutable materials (deferred GPU update), light /
+  camera / environment components in scene files, schema-error line numbers, game migration.
 
 ## Next steps
-1. Phase B2 scene/material JSON (optionally migrate game draws to World entities).
+1. B2 remainder (World capture/save, prefabs, reflection, mutable materials, light components)
+   or next roadmap phase when requested; optionally migrate game draws to scene files.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.
