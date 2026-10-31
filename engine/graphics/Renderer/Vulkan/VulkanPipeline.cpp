@@ -173,6 +173,14 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context, const GraphicsP
     context.setDebugName(m_pipeline, VK_OBJECT_TYPE_PIPELINE, desc.debugName);
 }
 
+void GraphicsPipeline::swap(GraphicsPipeline& other) noexcept {
+    std::swap(m_device, other.m_device);
+    std::swap(m_layout, other.m_layout);
+    std::swap(m_ownsLayout, other.m_ownsLayout);
+    std::swap(m_pipeline, other.m_pipeline);
+    std::swap(m_pushConstantStages, other.m_pushConstantStages);
+}
+
 GraphicsPipeline::~GraphicsPipeline() {
     vkDestroyPipeline(m_device, m_pipeline, nullptr);
     if (m_ownsLayout) {

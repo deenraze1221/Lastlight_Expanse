@@ -75,6 +75,10 @@ public:
     VkPipelineLayout layout() const { return m_layout; }
     VkShaderStageFlags pushConstantStages() const { return m_pushConstantStages; }
 
+    // Exchanges the Vulkan objects of two pipelines (shader hot reload rebuilds a pipeline in
+    // place, so pointers to the GraphicsPipeline stay valid).
+    void swap(GraphicsPipeline& other) noexcept;
+
 private:
     VkDevice m_device;
     VkPipelineLayout m_layout = VK_NULL_HANDLE;

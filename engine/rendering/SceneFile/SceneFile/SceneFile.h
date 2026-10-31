@@ -99,7 +99,10 @@ struct SceneDocument {
                                        const std::filesystem::path& baseDirectory = {});
 
 // Reads and parses a scene (or prefab) file; material and prefab references resolve next to it.
-[[nodiscard]] SceneDocument loadSceneFile(const std::filesystem::path& path);
+// `files` (optional, hot reload): receives the scene file and every prefab file it read
+// (normalised, absolute, read order), also when parsing throws.
+[[nodiscard]] SceneDocument loadSceneFile(const std::filesystem::path& path,
+                                          std::vector<std::filesystem::path>* files = nullptr);
 
 // Directory that relative paths inside `material` (texture slots of inline materials) resolve
 // against: the scene's directory, or the defining prefab's directory for prefab materials

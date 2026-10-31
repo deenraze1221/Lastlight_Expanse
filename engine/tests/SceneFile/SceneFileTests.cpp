@@ -477,3 +477,22 @@ TEST_CASE("scene file: captureScene writes a live World back to a document") {
     CHECK(issues[0].path == "/entities/3/meshRenderer/material");
     CHECK(issues[0].message.find("material handle 5 has no id") != std::string::npos);
 }
+
+TEST_CASE("scene file: loadSceneFile lists the scene and prefab files it read (hot reload)") {
+    std::vector<std::filesystem::path> files;
+    (void)loadSceneFile(kExample / "scene.scene.json", &files);
+    REQUIRE(files.size() == 2);
+    CHECK(files[0] == std::filesystem::weakly_canonical(kExample / "scene.scene.json"));
+    CHECK(files[1] == std::filesystem::weakly_canonical(kExample / "prefabs" / "lamp.prefab.json"));
+    CHECK(files[0].is_absolute());
+
+    // Filled even when parsing fails (a broken prefab stays watched).
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "zodar_scene_files_list";
+    std::filesystem::create_directories(dir);
+    std::ofstream(dir / "s.scene.json") << R"({"version": 1, "entities": [{"id": "p", "prefab": "p.prefab.json"}]})";
+    std::ofstream(dir / "p.prefab.json") << "{";
+    CHECK_THROWS_AS((void)loadSceneFile(dir / "s.scene.json", &files), DataError);
+    CHECK(files.size() == 2);
+    CHECK(files[1].filename() == "p.prefab.json");
+    std::filesystem::remove_all(dir);
+}

@@ -109,7 +109,10 @@ Make every app start, run, capture and report the same way.
 - **C5 done:** asset hot reload (textures, models, material files; in-place swap keeps
   handles/addresses, dependent materials refreshed, old GPU objects retired, failures keep the
   previous version; opt-in `Core/FileWatcher` watching in Debug builds).
-  Remaining Phase C: C6 shader + scene hot reload. Streaming budgets, FBX/audio import and skins move to
+- **C6 done:** shader hot reload (SPIR-V reload, pipelines rebuilt in place, checks before
+  any change) and scene hot reload (`LiveScene`: scene + prefab files, atomic reload).
+  Phase C complete except items moved to later phases: streaming budgets, FBX/audio import,
+  skins/animations. Streaming budgets, FBX/audio import and skins move to
   later phases (audit: PROGRESS.md).
 - `AssetManager` with typed handles (`Handle<Mesh>`, `Handle<Texture>`, `Handle<Material>`,
   `Handle<AudioClip>`...), ref counting, async load on `JobSystem` + `UploadQueue`, unload via
@@ -119,7 +122,7 @@ Make every app start, run, capture and report the same way.
 - Implement `docs/ASSET_STREAMING.md` (priorities, budgets, residency).
 - Importers: glTF (existing, plus skins/animations), FBX via ufbx -> glTF-equivalent data,
   textures (existing), audio (WAV/OGG/MP3 via miniaudio decoders).
-- Hot reload of textures, materials, shaders and scene files (file watcher, debug builds).
+- Hot reload of textures, materials, shaders and scene files (file watcher, debug builds). (done: C5/C6)
 
 ### Phase D — Gameplay foundation (3 sessions)
 - Input: action maps (`input.json`), keyboard/mouse/gamepad (SDL3), recorded input files that

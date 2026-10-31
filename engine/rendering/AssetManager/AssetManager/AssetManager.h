@@ -21,6 +21,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -115,8 +116,9 @@ struct AssetManagerDesc {
     // Async uploads started per update(): stops once this many bytes were staged (at least
     // one asset per update, so large assets still progress).
     uint64_t uploadBudgetBytes = 32ull << 20;
-    // Hot reload (C5): watch the files of every live asset (textures, material files,
-    // models and their buffers/images) and reload changed ones
+    // Hot reload (C5/C6): watch the files of every live asset (textures, material files,
+    // models and their buffers/images, SPIR-V of registered material shaders (C6)) and
+    // reload changed ones
     // in update(). Ignored unless kHotReloadAvailable (Debug builds with ZODAR_HOT_RELOAD).
     bool watchFiles = false;
     std::chrono::milliseconds watchInterval{250};
@@ -124,7 +126,7 @@ struct AssetManagerDesc {
 
 // Outcome of a hot reload (Phase C5): what was reloaded and what failed (old content kept).
 struct AssetReloadResult {
-    std::vector<std::string> reloaded; // asset keys
+    std::vector<std::string> reloaded; // asset keys; shaders as "shader:<name>" (C6)
     std::vector<std::string> failed;   // "<key>: <error>"
     size_t materialsRefreshed = 0;     // materials updated because a texture changed
     bool ok() const { return failed.empty(); }
@@ -244,12 +246,15 @@ public:
     AssetReloadResult reload(const ModelHandle& model);
     AssetReloadResult reload(const MaterialAssetHandle& material);
     // Reloads every live asset that depends on one of `changedFiles` (textures, material
-    // files, models with their .bin/image files), textures
+    // files, models with their .bin/image files, material shaders' SPIR-V files), textures
     // first. Failed file materials are retried too (their texture may have been fixed).
     AssetReloadResult reloadFiles(const std::vector<std::filesystem::path>& changedFiles);
     // Replaces the data of materials (all or nothing: every texture is loaded and every
     // pipeline-state check passes before any material changes).
     AssetReloadResult updateMaterialData(const std::vector<MaterialDataUpdate>& updates);
+    // Shader hot reload (C6): reloads a registered material shader's SPIR-V and rebuilds its
+    // pipelines in place (MaterialSystem::reloadShader; old ones retired on the deletion queue).
+    AssetReloadResult reloadShader(const std::string& name);
     // Files the live assets depend on (absolute, sorted), as watched by watchFiles.
     std::vector<std::filesystem::path> watchedFiles();
     // True when file watching is active (desc.watchFiles and kHotReloadAvailable).
@@ -331,6 +336,7 @@ private:
     void reloadTexture(const TextureHandle& texture, AssetReloadResult& result);
     void reloadModel(const ModelHandle& model, AssetReloadResult& result);
     void reloadMaterialFile(const MaterialAssetHandle& material, AssetReloadResult& result, bool reportFailure);
+    void reloadShaders(const std::set<std::filesystem::path>& changed, AssetReloadResult& result);
     void finishReload(const AssetReloadResult& result);
     void submitDecode(uint64_t id, std::function<Decoded()> work);
     void processDecoded(uint64_t budget);

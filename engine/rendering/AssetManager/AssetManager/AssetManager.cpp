@@ -848,6 +848,35 @@ void AssetManager::reloadMaterialFile(const MaterialAssetHandle& material, Asset
     result.reloaded.push_back(key);
 }
 
+void AssetManager::reloadShaders(const std::set<std::filesystem::path>& changed, AssetReloadResult& result) {
+    gfx::MaterialSystem& materials = m_scene.materials();
+    for (gfx::ShaderHandle h = 0; h < materials.shaderCount(); ++h) {
+        if (!changed.contains(materials.vertexFile(h)) && !changed.contains(materials.fragmentFile(h))) {
+            continue;
+        }
+        const gfx::ShaderReloadResult r = materials.reloadShader(h, m_context.deletionQueue());
+        const std::string key = "shader:" + materials.shaderName(h);
+        if (r.ok) {
+            result.reloaded.push_back(key);
+        } else {
+            result.failed.push_back(key + ": " + r.error);
+        }
+    }
+}
+
+AssetReloadResult AssetManager::reloadShader(const std::string& name) {
+    AssetReloadResult result;
+    gfx::MaterialSystem& materials = m_scene.materials();
+    try {
+        const gfx::ShaderHandle h = materials.findShader(name);
+        reloadShaders({materials.vertexFile(h), materials.fragmentFile(h)}, result);
+    } catch (const std::exception& e) {
+        result.failed.push_back("shader:" + name + ": " + e.what());
+    }
+    finishReload(result);
+    return result;
+}
+
 void AssetManager::finishReload(const AssetReloadResult& result) {
     m_reloads += result.reloaded.size();
     m_reloadFailures += result.failed.size();
@@ -933,6 +962,11 @@ std::vector<std::filesystem::path> AssetManager::watchedFiles() {
             files.insert(std::filesystem::path(key));
         }
     }
+    const gfx::MaterialSystem& materials = m_scene.materials();
+    for (gfx::ShaderHandle h = 0; h < materials.shaderCount(); ++h) {
+        files.insert(materials.vertexFile(h));
+        files.insert(materials.fragmentFile(h));
+    }
     return {files.begin(), files.end()};
 }
 
@@ -967,6 +1001,7 @@ AssetReloadResult AssetManager::reloadFiles(const std::vector<std::filesystem::p
             reloadModel(m_models.find(key), result);
         }
     }
+    reloadShaders(changed, result);
     finishReload(result);
     return result;
 }

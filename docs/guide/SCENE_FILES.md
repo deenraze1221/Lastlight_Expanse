@@ -122,6 +122,12 @@ with linear mip blending. Textures are loaded and bound only through the AssetMa
 `zodar::createMaterial` / `createSceneMaterials` keep neutral textures. Serialization writes
 texture slots only when set (untextured materials serialize as before).
 
+## Hot reload
+
+`AssetManager/LiveScene.h` keeps a scene file in sync with a World (reload on change, failures
+keep the previous scene): see `docs/guide/ASSETS.md` ("Scene hot reload").
+`loadSceneFile(path, &files)` lists the scene and prefab files it read.
+
 ## Errors
 
 Every function throws `zodar::DataError`; `issues()` lists every problem found, `what()` prints

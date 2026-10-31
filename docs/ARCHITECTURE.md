@@ -308,7 +308,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
     equivalent C++ scene via both WorldRender paths and after capture/reload; mutable material
     updates match freshly created materials (CPU path and GpuScene, sync validation clean).
 
-## Asset manager (Phases C1-C5, C7)
+## Asset manager (Phases C1-C7)
 
 - Module `Zodar::AssetManager` (`engine/rendering/AssetManager`, depends on Renderer + SceneFile).
   Guide: `docs/guide/ASSETS.md`; example `examples/asset_loading` + sample `ZodarAssetLoading`.
@@ -380,6 +380,23 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   `Core/FileWatcher` (size + mtime polling, portable, no threads) drives opt-in watching
   (`AssetManagerDesc::watchFiles`), compiled only into Debug builds (`ZODAR_HOT_RELOAD`,
   `kHotReloadAvailable`). Model dependencies come from `fingerprintAsset` (C3).
+- Shader hot reload (C6): `MaterialSystem::reloadShader` re-reads the registered SPIR-V
+  (paths stored normalised), checks header + entry-point stage + instruction bounds (so the
+  usual broken files never reach `vkCreateShaderModule`), builds every cached colour/depth
+  pipeline of the shader first, then swaps the Vulkan objects into the existing
+  `GraphicsPipeline` objects (`GraphicsPipeline::swap`): `GpuScene` groups and other holders of
+  `const GraphicsPipeline*` stay valid. Old pipelines + modules are retired on the deletion
+  queue; any failure destroys only the unused new objects. Only material shaders reload
+  (compute, resolve, sky and IBL pipelines do not). The AssetManager watches the SPIR-V files
+  (`reloadFiles`, `reloadShader(name)`); SPIR-V is produced by the normal build.
+- Scene hot reload (C6, `AssetManager/LiveScene.h`): a LiveScene owns the entities it
+  instantiated. Reload = parse (prefab file list from `loadSceneFile(path, &files)`) ->
+  models -> materials -> `instantiateScene` (validated, world untouched on error) ->
+  changed inline materials via atomic `updateMaterialData` (failure destroys the new entities)
+  -> destroy old entities. So every failure leaves the previous entities and handles alive.
+  Entities are recreated rather than patched (simple, matches file order/ids); material handles
+  are stable. Its own `FileWatcher` covers scene + prefab files; asset files are the
+  AssetManager's.
 - Not yet (later phases):
   streaming budgets (`docs/ASSET_STREAMING.md`), audio/FBX importers,
   scene-file `model` references (meshes still bound by name in `SceneBindings`).
@@ -451,7 +468,8 @@ registered with `MaterialSystem::registerShader`; games implement their own look
 
 ## Known architectural debts (tracked)
 
-- Materials are immutable after creation; textures must outlive materials referencing them.
+- Textures must outlive materials referencing them (material pipeline state is immutable;
+  factors and textures change through `updateMaterial`).
 - `BindlessRegistry::releaseTexture` assumes the GPU no longer uses the slot (callers defer).
 - Uploads (S3): `UploadQueue` is single-threaded (main thread); no streaming yet (design:
   `ASSET_STREAMING.md`); staging buffers are allocated per batch (streaming staging ring

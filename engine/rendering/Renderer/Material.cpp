@@ -3,12 +3,54 @@
 #include "Core/Error.h"
 #include "Core/Log.h"
 #include "Renderer/BindlessRegistry.h"
+#include "Renderer/Resources/DeletionQueue.h"
 #include "Renderer/Texture.h"
 #include "Renderer/Vulkan/VulkanContext.h"
 
 #include <algorithm>
+#include <system_error>
 
 namespace zodar::gfx {
+namespace {
+
+// Pipeline cache keys: colour = shader << 8 | alphaMode << 1 | doubleSided,
+// depth = shader << 8 | masked << 1 | doubleSided.
+uint64_t colorKey(ShaderHandle shader, AlphaMode alpha, bool doubleSided) {
+    return (static_cast<uint64_t>(shader) << 8) | (static_cast<uint64_t>(alpha) << 1) | (doubleSided ? 1u : 0u);
+}
+uint64_t depthKey(ShaderHandle shader, bool masked, bool doubleSided) {
+    return (static_cast<uint64_t>(shader) << 8) | (masked ? 2u : 0u) | (doubleSided ? 1u : 0u);
+}
+
+std::filesystem::path normalised(const std::filesystem::path& p) {
+    std::error_code ec;
+    std::filesystem::path full = std::filesystem::weakly_canonical(std::filesystem::absolute(p, ec), ec);
+    return ec ? p.lexically_normal() : full;
+}
+
+// Fails unless `words` (already header-checked by loadSpirv) declares an entry point of the
+// given execution model (SPIR-V: 0 = Vertex, 4 = Fragment) and every instruction is in range.
+void checkSpirvStage(const std::vector<uint32_t>& words, uint32_t executionModel, const std::filesystem::path& file) {
+    constexpr uint32_t kOpEntryPoint = 15;
+    bool found = false;
+    for (size_t i = 5; i < words.size();) {
+        const uint32_t count = words[i] >> 16;
+        const uint32_t opcode = words[i] & 0xffffu;
+        if (count == 0 || i + count > words.size()) {
+            fail("Shader '" + file.string() + "' is truncated or malformed (instruction at word " + std::to_string(i) + ")");
+        }
+        if (opcode == kOpEntryPoint && count >= 2 && words[i + 1] == executionModel) {
+            found = true;
+        }
+        i += count;
+    }
+    if (!found) {
+        fail("Shader '" + file.string() + "' has no " + (executionModel == 0 ? "vertex" : "fragment") +
+             " entry point");
+    }
+}
+
+} // namespace
 
 MaterialSystem::MaterialSystem(const VulkanContext& context, BindlessRegistry& bindless, VkPipelineLayout layout,
                                TargetFormats formats, DefaultTextureSlots defaults,
@@ -34,11 +76,15 @@ ShaderHandle MaterialSystem::registerShader(const std::string& name, const std::
             fail("Shader '" + name + "' is already registered");
         }
     }
-    const auto resolve = [&](const std::filesystem::path& p) { return p.is_absolute() ? p : m_shaderDirectory / p; };
+    const auto resolve = [&](const std::filesystem::path& p) {
+        return normalised(p.is_absolute() ? p : m_shaderDirectory / p);
+    };
     Shader shader;
     shader.name = name;
-    shader.vertex = std::make_unique<ShaderModule>(m_context.device(), loadSpirv(resolve(vertexSpv)));
-    shader.fragment = std::make_unique<ShaderModule>(m_context.device(), loadSpirv(resolve(fragmentSpv)));
+    shader.vertexFile = resolve(vertexSpv);
+    shader.fragmentFile = resolve(fragmentSpv);
+    shader.vertex = std::make_unique<ShaderModule>(m_context.device(), loadSpirv(shader.vertexFile));
+    shader.fragment = std::make_unique<ShaderModule>(m_context.device(), loadSpirv(shader.fragmentFile));
     m_shaders.push_back(std::move(shader));
     return static_cast<ShaderHandle>(m_shaders.size() - 1);
 }
@@ -160,12 +206,18 @@ void MaterialSystem::recordPendingUpdates(VkCommandBuffer cmd) {
 
 const GraphicsPipeline& MaterialSystem::pipeline(MaterialHandle handle) {
     const MaterialDesc& m = m_materials.at(handle);
-    const uint64_t key = (static_cast<uint64_t>(m.shader) << 8) | (static_cast<uint64_t>(m.alphaMode) << 1) |
-                         (m.doubleSided ? 1u : 0u);
+    const uint64_t key = colorKey(m.shader, m.alphaMode, m.doubleSided);
     if (auto it = m_pipelines.find(key); it != m_pipelines.end()) {
         return *it->second;
     }
-    const Shader& shader = m_shaders[m.shader];
+    return *m_pipelines.emplace(key, buildPipeline(m_shaders[m.shader], key)).first->second;
+}
+
+std::unique_ptr<GraphicsPipeline> MaterialSystem::buildPipeline(const Shader& shader, uint64_t key) const {
+    struct {
+        AlphaMode alphaMode;
+        bool doubleSided;
+    } m{static_cast<AlphaMode>((key >> 1) & 0x7fu), (key & 1u) != 0};
     GraphicsPipelineDesc desc;
     desc.vertexShader = shader.vertex->handle();
     desc.fragmentShader = shader.fragment->handle();
@@ -182,18 +234,24 @@ const GraphicsPipeline& MaterialSystem::pipeline(MaterialHandle handle) {
     desc.debugName = debugName.c_str();
     auto pipeline = std::make_unique<GraphicsPipeline>(m_context, desc);
     ZODAR_LOG_DEBUG("Created pipeline {}", debugName);
-    return *m_pipelines.emplace(key, std::move(pipeline)).first->second;
+    return pipeline;
 }
 
 const GraphicsPipeline& MaterialSystem::depthPipeline(MaterialHandle handle) {
     const MaterialDesc& m = m_materials.at(handle);
     ZODAR_ENSURE(m.alphaMode != AlphaMode::Blend, "blended materials have no depth prepass");
-    const bool masked = m.alphaMode == AlphaMode::Mask;
-    const uint64_t key = (static_cast<uint64_t>(m.shader) << 8) | (masked ? 2u : 0u) | (m.doubleSided ? 1u : 0u);
+    const uint64_t key = depthKey(m.shader, m.alphaMode == AlphaMode::Mask, m.doubleSided);
     if (auto it = m_depthPipelines.find(key); it != m_depthPipelines.end()) {
         return *it->second;
     }
-    const Shader& shader = m_shaders[m.shader];
+    return *m_depthPipelines.emplace(key, buildDepthPipeline(m_shaders[m.shader], key)).first->second;
+}
+
+std::unique_ptr<GraphicsPipeline> MaterialSystem::buildDepthPipeline(const Shader& shader, uint64_t key) const {
+    const bool masked = (key & 2u) != 0;
+    struct {
+        bool doubleSided;
+    } m{(key & 1u) != 0};
     GraphicsPipelineDesc desc;
     desc.vertexShader = shader.vertex->handle();
     desc.fragmentShader = masked ? m_depthMask->handle() : VK_NULL_HANDLE;
@@ -206,7 +264,60 @@ const GraphicsPipeline& MaterialSystem::depthPipeline(MaterialHandle handle) {
     desc.sharedLayout = m_layout;
     const std::string debugName = shader.name + "/depth" + (masked ? "/mask" : "") + (m.doubleSided ? "/2s" : "");
     desc.debugName = debugName.c_str();
-    return *m_depthPipelines.emplace(key, std::make_unique<GraphicsPipeline>(m_context, desc)).first->second;
+    return std::make_unique<GraphicsPipeline>(m_context, desc);
+}
+
+ShaderReloadResult MaterialSystem::reloadShader(ShaderHandle handle, DeletionQueue& retire) {
+    ShaderReloadResult result;
+    if (handle >= m_shaders.size()) {
+        result.error = "unknown shader handle " + std::to_string(handle);
+        return result;
+    }
+    Shader& shader = m_shaders[handle];
+    // Everything new is built first; on any exception it is destroyed unused.
+    struct Retired {
+        std::vector<std::unique_ptr<GraphicsPipeline>> pipelines;
+        std::unique_ptr<ShaderModule> vertex;
+        std::unique_ptr<ShaderModule> fragment;
+    };
+    auto retired = std::make_shared<Retired>();
+    std::vector<GraphicsPipeline*> targets;
+    try {
+        Shader fresh;
+        fresh.name = shader.name;
+        const std::vector<uint32_t> vertex = loadSpirv(shader.vertexFile);
+        checkSpirvStage(vertex, 0, shader.vertexFile);
+        const std::vector<uint32_t> fragment = loadSpirv(shader.fragmentFile);
+        checkSpirvStage(fragment, 4, shader.fragmentFile);
+        fresh.vertex = std::make_unique<ShaderModule>(m_context.device(), vertex);
+        fresh.fragment = std::make_unique<ShaderModule>(m_context.device(), fragment);
+        for (auto& [key, pipeline] : m_pipelines) {
+            if ((key >> 8) == handle) {
+                retired->pipelines.push_back(buildPipeline(fresh, key));
+                targets.push_back(pipeline.get());
+            }
+        }
+        for (auto& [key, pipeline] : m_depthPipelines) {
+            if ((key >> 8) == handle) {
+                retired->pipelines.push_back(buildDepthPipeline(fresh, key));
+                targets.push_back(pipeline.get());
+            }
+        }
+        // Commit: new objects into the existing pipelines/shader, old ones to `retire`.
+        for (size_t i = 0; i < targets.size(); ++i) {
+            targets[i]->swap(*retired->pipelines[i]);
+        }
+        retired->vertex = std::exchange(shader.vertex, std::move(fresh.vertex));
+        retired->fragment = std::exchange(shader.fragment, std::move(fresh.fragment));
+    } catch (const std::exception& e) {
+        result.error = e.what();
+        return result;
+    }
+    retire.retire([retired]() mutable { retired.reset(); });
+    result.ok = true;
+    result.pipelinesRebuilt = static_cast<uint32_t>(targets.size());
+    ZODAR_LOG_INFO("Shader '{}' reloaded ({} pipelines rebuilt)", shader.name, result.pipelinesRebuilt);
+    return result;
 }
 
 } // namespace zodar::gfx

@@ -107,7 +107,26 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase C5 complete (asset hot reload). Phases A, B, C1-C4, C7 unchanged.
+- `main`: Phase C complete (C1-C7; C6 shader + scene hot reload last). Phase D not started.
+
+## Phase C6 — shader + scene hot reload (done)
+- `MaterialSystem::reloadShader(handle, DeletionQueue&)` -> `ShaderReloadResult`: SPIR-V
+  checks (header, entry-point stage, instruction bounds), every cached colour/depth pipeline
+  of the shader rebuilt first, then swapped into the existing objects
+  (`GraphicsPipeline::swap`), old pipelines/modules retired; failure changes nothing.
+  `shaderCount/shaderName/vertexFile/fragmentFile`; pipeline build code factored
+  (`buildPipeline`, `buildDepthPipeline`), keys unchanged.
+- AssetManager: watches material shader SPIR-V files, `reloadFiles` reloads them
+  (`"shader:<name>"`), `reloadShader(name)`.
+- `LiveScene` (`AssetManager/LiveScene.h`): load/reload/update (own watcher over scene +
+  prefab files, opt-in, Debug only), atomic reload (old entities destroyed only after
+  success; changed inline materials via `updateMaterialData`, same gfx handles).
+  `loadSceneFile(path, &files)` (optional, default keeps old signature behaviour).
+- Tests: unit `scene file: loadSceneFile lists ...`; GPU `hot reload: material shaders ...`
+  (pbr <-> unlit SPIR-V swap, garbage, wrong stage, truncated, missing, unknown) and
+  `hot reload: live scenes ...` (transform + inline material, 4 failure kinds, prefab via
+  watching, broken prefab, destructor). Verified GCC 13 Debug, 0 warnings, 196/196 unit,
+  63/63 GPU cases, 23/23 ctest, 0 validation messages; hot-reload GPU cases 5x stable.
 
 ## Phase C5 — asset hot reload (done)
 - `AssetCache::replace` (in-place swap of the asset struct, previous content returned,
@@ -267,8 +286,8 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Remaining Phase C (when requested): C6 shader + scene-file hot reload. Then close Phase C (move streaming budgets,
-   FBX/audio import, skins to later phases). Game: re-author terrain textures to 32×32. Optionally migrate game draws/terrain textures to assets.
+1. Phase D (gameplay foundation) when requested. Streaming budgets, FBX/audio import and skins
+   are moved to later phases. Game: re-author terrain textures to 32×32. Optionally migrate game draws/terrain textures to assets.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.

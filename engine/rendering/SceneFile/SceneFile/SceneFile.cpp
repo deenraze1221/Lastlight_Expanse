@@ -233,6 +233,7 @@ void readEntityComponents(const Json& object, const std::string& path, SceneEnti
 
 struct ParseState {
     std::vector<std::string> prefabStack; // Normalised prefab paths being expanded (cycle check).
+    std::vector<std::filesystem::path>* files = nullptr; // Every scene/prefab file read (hot reload).
 };
 
 SceneDocument parseSceneImpl(std::string_view json, const std::string& file, const std::filesystem::path& baseDir,
@@ -265,6 +266,9 @@ void expandPrefab(std::size_t instance, const std::string& prefabPath, const Jso
     }
     SceneDocument prefab;
     state.prefabStack.push_back(key);
+    if (state.files && std::ranges::find(*state.files, std::filesystem::path(key)) == state.files->end()) {
+        state.files->emplace_back(key);
+    }
     try {
         prefab = parseSceneImpl(detail::readTextFile(full), full.generic_string(), full.parent_path(), state);
     } catch (const DataError& e) {
@@ -493,9 +497,14 @@ std::filesystem::path sceneMaterialDirectory(const SceneMaterial& material, cons
     return directory.lexically_normal();
 }
 
-SceneDocument loadSceneFile(const std::filesystem::path& path) {
+SceneDocument loadSceneFile(const std::filesystem::path& path, std::vector<std::filesystem::path>* files) {
     ParseState state;
     state.prefabStack.push_back(normalisedKey(path));
+    if (files) {
+        files->clear();
+        files->emplace_back(state.prefabStack.back());
+        state.files = files;
+    }
     return parseSceneImpl(detail::readTextFile(path), path.generic_string(), path.parent_path(), state);
 }
 

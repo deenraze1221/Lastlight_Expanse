@@ -17,6 +17,7 @@
 namespace zodar::gfx {
 
 class BindlessRegistry;
+class DeletionQueue;
 class Texture;
 class VulkanContext;
 
@@ -78,6 +79,13 @@ enum MaterialFlags : uint32_t {
     kMaterialDoubleSided = 4u,
 };
 
+// Outcome of MaterialSystem::reloadShader (Phase C6).
+struct ShaderReloadResult {
+    bool ok = false;
+    std::string error;             // why nothing changed
+    uint32_t pipelinesRebuilt = 0; // colour + depth pipelines swapped in place
+};
+
 struct DefaultTextureSlots {
     uint32_t white = 0;
     uint32_t flatNormal = 0;
@@ -108,10 +116,24 @@ public:
     ShaderHandle registerShader(const std::string& name, const std::filesystem::path& vertexSpv,
                                 const std::filesystem::path& fragmentSpv);
     ShaderHandle findShader(const std::string& name) const;
+    uint32_t shaderCount() const { return static_cast<uint32_t>(m_shaders.size()); }
+    const std::string& shaderName(ShaderHandle shader) const { return m_shaders.at(shader).name; }
+    // SPIR-V files of a registered shader (absolute, normalised), as read by reloadShader.
+    const std::filesystem::path& vertexFile(ShaderHandle shader) const { return m_shaders.at(shader).vertexFile; }
+    const std::filesystem::path& fragmentFile(ShaderHandle shader) const { return m_shaders.at(shader).fragmentFile; }
+
+    // Shader hot reload (Phase C6): reads the shader's SPIR-V files again, checks them
+    // (SPIR-V header, an entry point of the right stage), rebuilds every cached colour and
+    // depth pipeline that uses the shader and swaps the new Vulkan pipelines into the existing
+    // GraphicsPipeline objects (references from pipeline()/depthPipeline() stay valid). The old
+    // pipelines and modules go to `retire` (frames in flight keep using them). Any failure
+    // (missing or invalid file, pipeline creation error) changes nothing. The SPIR-V must keep
+    // the engine interface (vertex inputs, shared layout); validation reports mismatches.
+    ShaderReloadResult reloadShader(ShaderHandle shader, DeletionQueue& retire);
     ShaderHandle pbrShader() const { return m_pbr; }
     ShaderHandle unlitShader() const { return m_unlit; }
 
-    // Materials are immutable once created (updating in-flight data safely is planned).
+    // Creates a material (change it later with updateMaterial).
     // Reuses a released handle when one is free.
     MaterialHandle createMaterial(const MaterialDesc& desc);
 
@@ -149,10 +171,14 @@ public:
 private:
     struct Shader {
         std::string name;
+        std::filesystem::path vertexFile;
+        std::filesystem::path fragmentFile;
         std::unique_ptr<ShaderModule> vertex;
         std::unique_ptr<ShaderModule> fragment;
     };
 
+    std::unique_ptr<GraphicsPipeline> buildPipeline(const Shader& shader, uint64_t key) const;
+    std::unique_ptr<GraphicsPipeline> buildDepthPipeline(const Shader& shader, uint64_t key) const;
     uint32_t textureSlot(const TextureBinding& binding, uint32_t fallback) const;
 
     const VulkanContext& m_context;

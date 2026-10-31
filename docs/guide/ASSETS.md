@@ -1,4 +1,4 @@
-# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3, scene models C4, hot reload C5, palettes C7)
+# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3, scene models C4, hot reload C5/C6, palettes C7)
 
 Module `Zodar::AssetManager` (`engine/rendering/AssetManager/AssetManager/AssetManager.h`).
 Working example: `examples/asset_loading` rendered by the sample `ZodarAssetLoading`
@@ -237,3 +237,42 @@ desc.watchInterval = std::chrono::milliseconds(250);
 - `Core/FileWatcher` polls size + modification time (no OS notification API, no threads).
   `assets.watchedFiles()` lists what is watched; `assets.pollFileChanges()` checks now.
 - A half-written file fails to reload and is picked up again by the next change.
+
+### Shader hot reload (Phase C6)
+
+```cpp
+assets.reloadShader("zodar/pbr");          // or reloadFiles({".../pbr.frag.spv"}), or watching
+materials.reloadShader(handle, context.deletionQueue()); // MaterialSystem level
+```
+
+- Material shaders (`MaterialSystem::registerShader`, engine `zodar/pbr`, `zodar/unlit` and
+  game shaders) reload from their SPIR-V files; rebuild them with the normal build
+  (`cmake --build`, GLSL -> `bin/shaders/*.spv`) while the app runs with `watchFiles`.
+- Every cached colour and depth pipeline of the shader is rebuilt and swapped into the existing
+  `GraphicsPipeline` object (references stay valid); old pipelines/modules are retired.
+- Rejected without changes: missing file, not SPIR-V, truncated, no entry point of the right
+  stage, pipeline creation error. The shader must keep the engine interface (vertex inputs,
+  shared layout); mismatches are reported by validation. Compute/post shaders do not reload.
+
+### Scene hot reload (Phase C6)
+
+```cpp
+#include "AssetManager/LiveScene.h"
+LiveSceneDesc desc;
+desc.meshes["cube"] = &cubeMesh; // meshRenderer meshes from code
+desc.registry = &registry;       // optional: modelRenderer ids
+desc.watch = true;               // Debug builds: update() reloads after a file change
+LiveScene level(assets, world, "levels/a.scene.json", desc);
+if (!level.load()) log(level.error());
+level.update();                  // every frame
+Entity door = level.instance().byId.at("door"); // re-read after a reload (generation())
+```
+
+- Watches the scene file and every prefab it uses (`files()`); `reload()` works in every build.
+- Success: new entities are created, then the old ones (with their subtrees) destroyed; changed
+  inline materials keep their gfx handle (`updateMaterialData`). Material files, textures and
+  models are reloaded by the AssetManager (`watchFiles`).
+- Failure (syntax/schema, missing prefab/material/texture/model/mesh binding, inline-material
+  pipeline-state change): the previous entities, bindings and assets stay; `error()` says why.
+- Components or children that code added to scene entities are lost on reload; the
+  destructor destroys the scene's entities.

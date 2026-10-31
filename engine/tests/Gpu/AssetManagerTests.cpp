@@ -4,6 +4,7 @@
 
 #include "AssetManager/AssetManager.h"
 #include "AssetManager/AssetRegistry.h"
+#include "AssetManager/LiveScene.h"
 #include "AssetPipeline/ModelCompiler.h"
 #include "Assets/Primitives.h"
 #include "Core/ImageIO.h"
@@ -854,5 +855,196 @@ TEST_CASE("hot reload: opt-in file watching reloads changed files in update()") 
     CHECK(tex.generation() == 1);
     assets.update(); // no further change
     CHECK(tex.generation() == 1);
+    gpu().context->waitIdle();
+}
+
+// --- Shader and scene hot reload (Phase C6) -------------------------------------------------
+
+TEST_CASE("hot reload: material shaders reload from SPIR-V and rebuild their pipelines in place") {
+    zodar::test::ValidationGuard guard;
+    const ReloadDir files;
+    const std::filesystem::path shaders = zodar::test::shaderDir();
+    std::filesystem::copy(shaders / "mesh.vert.spv", files.dir / "reload.vert.spv");
+    std::filesystem::copy(shaders / "unlit.frag.spv", files.dir / "reload.frag.spv");
+    const std::filesystem::path frag = files.dir / "reload.frag.spv";
+    const auto replaceFrag = [&](const std::filesystem::path& from) {
+        std::filesystem::copy_file(from, frag, std::filesystem::copy_options::overwrite_existing);
+    };
+    Fixture f;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, {});
+    MaterialSystem& materials = f.scene.materials();
+    const ShaderHandle shader =
+        materials.registerShader("test/reload", files.dir / "reload.vert.spv", files.dir / "reload.frag.spv");
+    CHECK(materials.fragmentFile(shader) == frag);
+    MaterialDesc desc;
+    desc.name = "reloadable";
+    desc.shader = shader;
+    desc.baseColorFactor = {1, 0, 0, 1};
+    const MaterialHandle material = materials.createMaterial(desc);
+    const GpuMesh plane = makePlane();
+    const VkExtent2D extent{64, 48};
+    std::vector<MeshDraw> draws;
+    const auto unlitImage = f.render(planeView(plane, material, draws), extent);
+    CHECK(dominantChannel(unlitImage, extent) == 0);
+    const GraphicsPipeline* pipeline = &materials.pipeline(material);
+    const VkPipeline oldHandle = pipeline->handle();
+    const auto watched = assets.watchedFiles();
+    CHECK(std::ranges::find(watched, frag) != watched.end());
+
+    // New SPIR-V (lit shader instead of unlit): same GraphicsPipeline object, new VkPipeline.
+    replaceFrag(shaders / "pbr.frag.spv");
+    AssetReloadResult r = assets.reloadFiles({frag});
+    REQUIRE(r.ok());
+    CHECK(r.reloaded == std::vector<std::string>{"shader:test/reload"});
+    CHECK(&materials.pipeline(material) == pipeline);
+    const VkPipeline newHandle = pipeline->handle();
+    CHECK(newHandle != oldHandle);
+    const auto litImage = f.render(planeView(plane, material, draws), extent);
+    CHECK(litImage != unlitImage);
+
+    // Invalid files: nothing changes.
+    files.write("reload.frag.spv", "garbage that is not SPIR-V");
+    r = assets.reloadShader("test/reload");
+    REQUIRE(r.failed.size() == 1);
+    CHECK(r.failed[0].find("SPIR-V") != std::string::npos);
+    replaceFrag(shaders / "mesh.vert.spv"); // valid SPIR-V, wrong stage
+    r = assets.reloadShader("test/reload");
+    REQUIRE(r.failed.size() == 1);
+    CHECK(r.failed[0].find("fragment entry point") != std::string::npos);
+    {
+        std::string bytes;
+        {
+            std::ifstream in(shaders / "pbr.frag.spv", std::ios::binary);
+            bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        }
+        files.write("reload.frag.spv", bytes.substr(0, (bytes.size() / 2) & ~size_t(3))); // truncated
+    }
+    r = assets.reloadShader("test/reload");
+    REQUIRE(r.failed.size() == 1);
+    CHECK(r.failed[0].find("truncated") != std::string::npos);
+    std::filesystem::remove(frag);
+    CHECK(materials.reloadShader(shader, gpu().context->deletionQueue()).error.find("Cannot open") != std::string::npos);
+    CHECK_FALSE(materials.reloadShader(999, gpu().context->deletionQueue()).ok);
+    CHECK(assets.reloadShader("test/unknown").failed.size() == 1);
+    CHECK(pipeline->handle() == newHandle);
+    CHECK(f.render(planeView(plane, material, draws), extent) == litImage);
+
+    // Back to unlit: the retired pipelines were destroyed after the GPU finished (validation
+    // would report a destroyed pipeline still in use).
+    replaceFrag(shaders / "unlit.frag.spv");
+    CHECK(assets.reloadShader("test/reload").ok());
+    CHECK(f.render(planeView(plane, material, draws), extent) == unlitImage);
+    Fixture::collect();
+    CHECK(assets.stats().reloads == 2); // the two successful shader reloads
+    gpu().context->waitIdle();
+}
+
+namespace {
+
+std::string sceneJson(const std::string& position, const std::string& material, const std::string& mesh = "plane",
+                      const std::string& materialRef = "m") {
+    return R"({"version": 1, "materials": {"m": )" + material + R"(}, "entities": [
+        {"id": "a", "name": "A", "transform": {"position": )" + position +
+           R"(}, "meshRenderer": {"mesh": ")" + mesh + R"(", "material": ")" + materialRef + R"("}},
+        {"id": "lamp", "prefab": "lamp.prefab.json"}]})";
+}
+const std::string kRed = R"({"shader": "zodar/unlit", "baseColor": [1, 0, 0, 1]})";
+const std::string kGreen = R"({"shader": "zodar/unlit", "baseColor": [0, 1, 0, 1]})";
+
+std::string lampJson(int intensity) {
+    return R"({"version": 1, "entities": [{"id": "bulb", "pointLight": {"intensity": )" + std::to_string(intensity) +
+           "}}]}";
+}
+
+} // namespace
+
+TEST_CASE("hot reload: live scenes reload changed scene and prefab files; failures keep the scene") {
+    zodar::test::ValidationGuard guard;
+    const ReloadDir files;
+    files.write("level.scene.json", sceneJson("[1, 0, 0]", kRed));
+    files.write("lamp.prefab.json", lampJson(10));
+    Fixture f;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, {});
+    MaterialSystem& materials = f.scene.materials();
+    const GpuMesh plane = makePlane();
+    World world;
+    {
+        LiveSceneDesc desc;
+        desc.meshes["plane"] = &plane;
+        desc.watch = true;
+        desc.watchInterval = std::chrono::milliseconds(0);
+        LiveScene scene(assets, world, files.dir / "level.scene.json", desc);
+        CHECK_FALSE(scene.loaded());
+        REQUIRE_MESSAGE(scene.load(), scene.error());
+        CHECK(scene.generation() == 1);
+        CHECK(scene.files() == std::vector<std::filesystem::path>{files.dir / "level.scene.json",
+                                                                  files.dir / "lamp.prefab.json"});
+        const size_t entityCount = world.entityCount();
+        const Entity first = scene.instance().byId.at("a");
+        CHECK(world.get<Transform>(first).position.x == 1.0f);
+        const MaterialHandle mh = scene.bindings().materials.at("m");
+
+        // Transform + inline material change: new entities, same gfx material, new data.
+        files.write("level.scene.json", sceneJson("[2, 0, 0]", kGreen));
+        REQUIRE_MESSAGE(scene.reload(), scene.error());
+        CHECK(scene.generation() == 2);
+        CHECK_FALSE(world.isAlive(first));
+        CHECK(world.entityCount() == entityCount);
+        const Entity second = scene.instance().byId.at("a");
+        CHECK(world.get<Transform>(second).position.x == 2.0f);
+        CHECK(world.get<MeshRenderer>(second).material == mh);
+        CHECK(scene.bindings().materials.at("m") == mh);
+        CHECK(materials.material(mh).baseColorFactor == glm::vec4(0, 1, 0, 1));
+
+        // Failures: syntax, unknown material id, unknown mesh, pipeline-state change, missing
+        // prefab. The scene, its entities and the material stay as they were.
+        const std::vector<std::string> broken = {
+            R"({"version": 1, "entities": [)",
+            sceneJson("[3, 0, 0]", kGreen, "plane", "nope"),
+            sceneJson("[3, 0, 0]", kGreen, "nothing"),
+            sceneJson("[3, 0, 0]", R"({"shader": "zodar/pbr", "baseColor": [0, 0, 1, 1]})"),
+        };
+        for (const std::string& text : broken) {
+            files.write("level.scene.json", text);
+            CHECK_FALSE(scene.reload());
+            CHECK_FALSE(scene.error().empty());
+            CHECK(scene.generation() == 2);
+            CHECK(world.isAlive(second));
+            CHECK(world.entityCount() == entityCount);
+            CHECK(world.get<Transform>(second).position.x == 2.0f);
+            CHECK(materials.material(mh).baseColorFactor == glm::vec4(0, 1, 0, 1));
+        }
+        CHECK(scene.error().find("pipeline state") != std::string::npos);
+
+        // Prefab changes reload the scene through watching (Debug builds) or reload().
+        files.write("level.scene.json", sceneJson("[2, 0, 0]", kGreen));
+        REQUIRE(scene.reload());
+        scene.update(); // records the watched files' state
+        files.write("lamp.prefab.json", lampJson(20));
+        std::filesystem::last_write_time(files.dir / "lamp.prefab.json",
+                                         std::filesystem::last_write_time(files.dir / "lamp.prefab.json") +
+                                             std::chrono::seconds(2));
+        if (kHotReloadAvailable) {
+            CHECK(scene.update());
+            CHECK_FALSE(scene.update()); // nothing new
+        } else {
+            CHECK_FALSE(scene.update());
+            CHECK(scene.reload());
+        }
+        CHECK(scene.generation() == 4);
+        CHECK(world.get<PointLightComponent>(scene.instance().byId.at("lamp/bulb")).intensity == 20.0f);
+
+        files.write("lamp.prefab.json", "{");
+        CHECK_FALSE(scene.reload());
+        CHECK(scene.error().find("lamp.prefab.json") != std::string::npos);
+        CHECK(scene.files().size() == 2); // the broken prefab stays watched
+        CHECK(world.get<PointLightComponent>(scene.instance().byId.at("lamp/bulb")).intensity == 20.0f);
+
+        std::vector<MeshDraw> draws;
+        SceneView view = planeView(plane, mh, draws);
+        CHECK(dominantChannel(f.render(view, {64, 48}), {64, 48}) == 1);
+    }
+    CHECK(world.entityCount() == 0); // the LiveScene destroyed its entities
+    Fixture::collect();
     gpu().context->waitIdle();
 }
