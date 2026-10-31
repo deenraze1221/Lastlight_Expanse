@@ -13,6 +13,6 @@ zodar_compile_shaders(LastlightExpanse SOURCES shaders/voxel.frag)
 if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS)
     add_test(NAME gpu.lastlight_smoke
         COMMAND LastlightExpanse --headless --deterministic --frames 90 --width 640 --height 360 --view-radius 5 --threads 2
-                --screenshot ${CMAKE_BINARY_DIR}/lastlight_smoke.ppm)
+                --screenshot ${CMAKE_BINARY_DIR}/lastlight_smoke.png --report ${CMAKE_BINARY_DIR}/lastlight_smoke.json)
     set_tests_properties(gpu.lastlight_smoke PROPERTIES TIMEOUT 300)
 endif()

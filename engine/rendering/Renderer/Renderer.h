@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace zodar {
 class Window;
@@ -69,9 +70,12 @@ public:
     std::optional<FrameContext> beginFrame();
     void endFrame(const FrameContext& frame);
 
-    // Saves the next completed frame as a PPM file. The capture blocks until that
+    // Saves the next completed frame as a PNG (".png") or PPM file (any other extension). The capture blocks until that
     // frame finishes on the GPU, so it is meant for tests and debugging only.
     void requestScreenshot(std::filesystem::path path);
+    // Same, writing the one captured frame to every path (format per extension).
+    // lastScreenshotSucceeded() is true only if all of them were written.
+    void requestScreenshot(std::vector<std::filesystem::path> paths);
     bool lastScreenshotSucceeded() const { return m_lastScreenshotOk; }
 
     void waitIdle() const;
@@ -114,7 +118,7 @@ private:
     uint64_t m_frameNumber = 0;
     bool m_swapchainDirty = false;
 
-    std::optional<std::filesystem::path> m_screenshotRequest;
+    std::vector<std::filesystem::path> m_screenshotRequest; // empty: none pending
     std::unique_ptr<PendingCapture> m_capture;
     bool m_lastScreenshotOk = false;
 };

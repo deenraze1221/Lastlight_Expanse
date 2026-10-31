@@ -41,6 +41,26 @@
   no validation, interleaved medians) 7.10 -> 7.27: within noise. Not verified this session:
   MinGW/Windows, MSVC.
 
+- Phase A2: standard command line for `Application` apps (`Runtime/CommandLine`:
+  `parseStandardOptions`, `runMain`, `--help`; --frames --headless --deterministic --fixed-dt
+  --width/--height --screenshot --capture-frames --capture-dir --report --log-file --seed --camera
+  --threads --no-validation --overlay); PNG screenshots (`Core/ImageIO` `writePng`/`writeImage`,
+  stb_image_write static); capture sequences (one readback written to several paths:
+  `Renderer::requestScreenshot(std::vector<path>)`); run report JSON (`Runtime/RunReport`,
+  schema `zodar.run_report` v1: FPS p50/p95/p99, frame/CPU/GPU summaries, CPU scopes, GPU passes,
+  render stats, memory last/peak, validation + log counts, captures); log warning/error counters
+  (`Core/Log`). Game on `runMain` (seed default 1337, `--camera` applied in onStart; numeric
+  options now strict: `--seed -1` or `10abc` are rejected). Exit 3 when a screenshot or capture
+  is missing, 1 when the report cannot be written. Tests: CommandLine (4), RunReport (3), PNG and
+  log-count unit cases; `gpu.runtime_capture_report` (PNG screenshot, captures incl. last frame,
+  report content); `gpu.lastlight_smoke` writes PNG + report. Verified: GCC 13 Debug + Release,
+  Clang 18 Debug, 0 warnings, 18/18 ctest each (137 unit cases), validation 0 errors; game
+  screenshot byte-identical to pre-A1; lavapipe game FPS (Release, no validation, interleaved
+  medians, pre-A1 vs A2) 7.50 vs 7.47: within noise. Not verified: MinGW/Windows, MSVC.
+- Art direction documented: `docs/ART_DIRECTION.md` (voxel/pixel-art style, 256/512/1024 texture
+  standards, palette/texel density, sampling + mips, Blockbench → glTF workflow, engine/game asset
+  split, future technical requirements). Documentation only; no rendering or pipeline change.
+
 ## Engine audit: open items (from SECTOR-ENGINE docs)
 - Renderer S4 awaiting RTX benchmarks; S5 shadows, S6 post (tonemap, TAA), S7 AO/GI, S8 volumetrics/fog, S9 HZB/meshlets planned.
 - Asset streaming designed (docs/ASSET_STREAMING.md), not implemented. MSVC/Windows build unverified here.
@@ -51,18 +71,18 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- Branch `claude/youthful-ride-bzkozz` (based on `claude/peaceful-thompson-v8a01e` f64a190 +
-  docs 2a735eb), Phase A1 committed and pushed.
-- All checks green (see Phase A1 entry).
+- Branch `claude/youthful-ride-bzkozz`: Phase A1 (9cc73eb) and Phase A2 committed and pushed.
 
 ## Current task
-- **Next: Phase A2** (docs/AI_FIRST_ROADMAP.md §2 Phase A): standard command line for
-  `Application` apps, PNG screenshots + capture sequences, run report JSON. Not started.
+- **Next: Phase A3** (docs/AI_FIRST_ROADMAP.md §2 Phase A): `CMakePresets.json`,
+  `tools/zodar.py` (build|test|run|shot|bench|report, short summaries), `docs/guide/RUNNING.md`,
+  migrate ModelViewer and ZodarBench to `Application`, opt-in JSON-lines log sink. Not started.
 
 ## Next steps
-1. Phase A2 (above).
-2. Phase A3: CMakePresets + `tools/zodar.py`, RUNNING guide; migrate ModelViewer/ZodarBench.
-3. Phase B1/B2: EnTT world + transforms + renderer bridge; scene/material JSON.
+1. Phase A3 (above).
+2. Phase B1/B2: EnTT world + transforms + renderer bridge; scene/material JSON.
+3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
+   import checks, pixel-art texture rules, asset validation report; S5 shadows.
 
 ## Backlog (rendering / game visuals, interleave when needed)
 - S5 shadows (CSM sun) in pbr.frag and voxel.frag.

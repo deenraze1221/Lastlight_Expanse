@@ -25,8 +25,9 @@
 // before the engine subsystems; run() waits for the GPU before returning. A derived class that
 // creates GPU objects without calling run() must call renderer().waitIdle() in its destructor.
 //
-// Exit codes from run(): 0 ok, 1 fatal error (exception), 2 Vulkan validation errors,
-// 3 screenshot requested but not written.
+// Exit codes from run(): 0 ok, 1 fatal error (exception, or the run report could not be
+// written), 2 Vulkan validation errors, 3 screenshot or capture requested but not written.
+// Captures (--capture-frames) and the run report (--report) are handled by the runtime.
 
 #include "Core/JobSystem.h"
 #include "Core/Profiler.h"
@@ -35,12 +36,16 @@
 #include "Renderer/RenderGraph/RenderGraph.h"
 #include "Renderer/SceneRenderer.h"
 #include "Runtime/FixedTimestep.h"
+#include "Runtime/RunReport.h"
+
+#include <glm/vec3.hpp>
 
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 union SDL_Event;
 
@@ -56,6 +61,16 @@ namespace debug {
 class DebugOverlay;
 }
 
+// Start camera requested on the command line (--camera). The runtime owns no camera: apps
+// that have one apply it in onStart.
+struct CameraOverride {
+    glm::vec3 position{0.0f};
+    float yawDegrees = 0.0f;
+    float pitchDegrees = 0.0f;
+};
+
+// Settings of an Application. The standard command line (Runtime/CommandLine.h) sets most
+// fields; `--help` lists the options.
 struct ApplicationDesc {
     std::string name = "ZODAR Application";  // window title, Vulkan application name
     // Per-user data directory <organization>/<identifier> (pipeline cache). No spaces needed.
@@ -78,6 +93,16 @@ struct ApplicationDesc {
     bool deterministic = false;
     float maxFrameDt = 0.1f;                 // clamp for FrameTime::dt and the fixed-step input
     uint32_t threads = JobSystem::kAutomatic; // JobSystem workers (0 = inline)
+    // Extra captures: 1-based frame numbers, written as <captureDir>/frame_NNNNNN.png.
+    std::vector<uint64_t> captureFrames;
+    std::filesystem::path captureDir = "captures";
+    // Run report JSON written when run() ends (frame times, scopes, stats, validation, captures).
+    std::optional<std::filesystem::path> reportPath;
+    // Log file opened by runMain() before the app is constructed (empty: console only).
+    std::filesystem::path logFile;
+    // App-defined meaning; reported in the run report. Empty: the app's default seed.
+    std::optional<uint64_t> seed;
+    std::optional<CameraOverride> camera;
 };
 
 // Per-frame timing passed to onUpdate.
@@ -140,8 +165,10 @@ protected:
     virtual void onShutdown() {}
 
 private:
-    int loop();
+    void loop();
     void renderFrame(const FrameTime& time, bool lastFrame);
+    int verifyOutputs() const;
+    bool writeReport(int exitCode);
 
     ApplicationDesc m_desc;
     std::filesystem::path m_shaderDirectory;
@@ -159,6 +186,11 @@ private:
     FixedTimestep m_timestep;
     gfx::RenderStats m_renderStats;
     bool m_quit = false;
+    // Captures attempted (--screenshot, --capture-frames) and run-report samples.
+    std::vector<RunReport::Capture> m_captures;
+    bool m_collectReport = false;
+    RunReport m_report;
+    double m_loopSeconds = 0.0;
 };
 
 } // namespace zodar

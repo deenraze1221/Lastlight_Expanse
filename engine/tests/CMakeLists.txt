@@ -22,6 +22,8 @@ add_executable(ZodarTests
     Renderer/ApiVersionTests.cpp
     Scene/VoxelTests.cpp
     Runtime/FixedTimestepTests.cpp
+    Runtime/CommandLineTests.cpp
+    Runtime/RunReportTests.cpp
     UI/ThemeTests.cpp
     UI/DrawListTests.cpp
     UI/LayoutTests.cpp
@@ -108,11 +110,16 @@ if(ZODAR_GPU_TESTS)
     # zodar::Application end to end: headless (no SDL_VIDEO_DRIVER needed), deterministic
     # fixed steps, hook order, scene render + screenshot, validation exit code.
     add_executable(ZodarRuntimeSmoke Runtime/RuntimeSmoke.cpp)
-    target_link_libraries(ZodarRuntimeSmoke PRIVATE Zodar::Runtime SDL3::SDL3)
+    target_link_libraries(ZodarRuntimeSmoke PRIVATE Zodar::Runtime Zodar::stb SDL3::SDL3)
     zodar_set_warnings(ZodarRuntimeSmoke)
     add_test(NAME gpu.runtime_headless
         COMMAND ZodarRuntimeSmoke --screenshot ${CMAKE_BINARY_DIR}/runtime_headless.ppm)
-    set_tests_properties(gpu.runtime_headless PROPERTIES TIMEOUT 120)
+    # Standard CLI: PNG screenshot, capture sequence (incl. the last frame) and run report.
+    add_test(NAME gpu.runtime_capture_report
+        COMMAND ZodarRuntimeSmoke --frames 8 --screenshot ${CMAKE_BINARY_DIR}/runtime_capture/last.png
+                --capture-frames 2,5,8 --capture-dir ${CMAKE_BINARY_DIR}/runtime_capture
+                --report ${CMAKE_BINARY_DIR}/runtime_capture/report.json)
+    set_tests_properties(gpu.runtime_headless gpu.runtime_capture_report PROPERTIES TIMEOUT 120)
 
     add_test(NAME gpu.hello_triangle
         COMMAND HelloTriangle --frames 120 --screenshot ${CMAKE_BINARY_DIR}/hello_triangle.ppm)

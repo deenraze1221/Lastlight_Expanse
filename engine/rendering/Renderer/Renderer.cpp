@@ -51,7 +51,7 @@ struct Renderer::PendingCapture {
     VmaAllocator allocator = VK_NULL_HANDLE;
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
-    std::filesystem::path path;
+    std::vector<std::filesystem::path> paths;
 
     ~PendingCapture() {
         if (buffer) {
@@ -197,7 +197,7 @@ void Renderer::endFrame(const FrameContext& ctx) {
     const VkCommandBuffer cmd = ctx.commandBuffer;
     m_profiler->endScope(cmd, ctx.frameScope);
 
-    if (m_screenshotRequest) {
+    if (!m_screenshotRequest.empty()) {
         recordCapture(ctx);
     } else {
         imageBarrier(cmd, ctx.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -246,7 +246,11 @@ void Renderer::endFrame(const FrameContext& ctx) {
 }
 
 void Renderer::requestScreenshot(std::filesystem::path path) {
-    m_screenshotRequest = std::move(path);
+    m_screenshotRequest = {std::move(path)};
+}
+
+void Renderer::requestScreenshot(std::vector<std::filesystem::path> paths) {
+    m_screenshotRequest = std::move(paths);
 }
 
 void Renderer::waitIdle() const {
@@ -255,11 +259,12 @@ void Renderer::waitIdle() const {
 
 void Renderer::recordCapture(const FrameContext& ctx) {
     const VkCommandBuffer cmd = ctx.commandBuffer;
-    auto request = std::move(*m_screenshotRequest);
-    m_screenshotRequest.reset();
+    auto request = std::move(m_screenshotRequest);
+    m_screenshotRequest.clear();
 
     if (!m_swapchain->supportsReadback()) {
-        ZODAR_LOG_ERROR("Screenshot '{}' skipped: swapchain images do not support transfer reads", request.string());
+        ZODAR_LOG_ERROR("Screenshot '{}' skipped: swapchain images do not support transfer reads",
+                        request.front().string());
         m_lastScreenshotOk = false;
         imageBarrier(cmd, ctx.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
@@ -269,7 +274,7 @@ void Renderer::recordCapture(const FrameContext& ctx) {
 
     auto capture = std::make_unique<PendingCapture>();
     capture->allocator = m_context->allocator();
-    capture->path = std::move(request);
+    capture->paths = std::move(request);
 
     VkBufferCreateInfo bufferInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     bufferInfo.size = static_cast<VkDeviceSize>(ctx.extent.width) * ctx.extent.height * 4;
@@ -340,12 +345,15 @@ void Renderer::finishCapture(const FrameContext& ctx, uint64_t submittedValue) {
         }
     }
 
-    m_lastScreenshotOk = writePpm(capture->path, ctx.extent.width, ctx.extent.height, rgba);
-    if (m_lastScreenshotOk) {
-        ZODAR_LOG_INFO("Screenshot saved: {} ({}x{}, frame {})", capture->path.string(), ctx.extent.width,
-                       ctx.extent.height, ctx.frameNumber);
-    } else {
-        ZODAR_LOG_ERROR("Failed to write screenshot '{}'", capture->path.string());
+    m_lastScreenshotOk = true;
+    for (const std::filesystem::path& path : capture->paths) {
+        if (writeImage(path, ctx.extent.width, ctx.extent.height, rgba)) {
+            ZODAR_LOG_INFO("Screenshot saved: {} ({}x{}, frame {})", path.string(), ctx.extent.width,
+                           ctx.extent.height, ctx.frameNumber);
+        } else {
+            ZODAR_LOG_ERROR("Failed to write screenshot '{}'", path.string());
+            m_lastScreenshotOk = false;
+        }
     }
 }
 

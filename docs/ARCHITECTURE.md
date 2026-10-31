@@ -16,7 +16,7 @@ Engine code never includes game headers or links game targets.
 | `engine/assets/AssetPipeline` | `Zodar::AssetPipeline` | Offline BCn encoding, mip baking |
 | `engine/scene/Scene` | `Zodar::Scene` | Noise, voxel chunks, greedy mesher, LOD, chunk streaming (no GPU) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
-| `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep` |
+| `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarUISandbox |
 | `engine/ui` | `Zodar::UI` | Engine/tooling UI, UI resources |
 | `engine/samples`, `engine/tests` | — | HelloTriangle, ModelViewer; doctest unit + GPU tests |
@@ -144,6 +144,9 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 
 ## Lastlight Expanse visual style (game-side)
 
+Official art direction, texture standards and the Blockbench → glTF asset workflow:
+[ART_DIRECTION.md](ART_DIRECTION.md). The notes below describe what is implemented today.
+
 Minecraft-inspired voxel look built only from engine capabilities (`game/`):
 - Procedural pixel-art block textures (`game/src/Rendering/BlockTextures`): palette-quantised,
   tileable, 2×2-texel art pixels; 256² standard layers and 512² hero layers in two
@@ -191,6 +194,19 @@ Minecraft-inspired voxel look built only from engine capabilities (`game/`):
 | `FixedTimestep`: accumulator, `maxSteps` per frame, `maxFrameTime` clamp, dropped-time counter | Deterministic simulation independent of frame rate; no spiral of death |
 | `deterministic`: one fixed step per frame, frame dt = fixedDt | Same input -> same frames for agent tests and screenshots |
 | Escape requests quit in the runtime; overlay gets events first | Same behaviour as the hand-written loops it replaces |
+
+### Standard command line, captures and run report (Phase A2)
+
+| Decision | Reason |
+| --- | --- |
+| One parser (`parseStandardOptions`) fills `ApplicationDesc`; unknown arguments go back to the app | Every app accepts the same flags; apps keep their own options without a second framework |
+| `runMain()` owns `main()` duties: parse, `--help`, log file, construct, run, exception -> exit 1 | One obvious entry point; the log file opens before any subsystem logs |
+| Screenshots by extension: `.png` (stb_image_write, compiled `STB_IMAGE_WRITE_STATIC` in Core) or PPM | Agents read PNG; PPM tests keep working; static stb avoids clashes with tools that define it too |
+| Captures use the renderer's screenshot request; one readback can be written to several paths (`requestScreenshot(std::vector<path>)`), so the last frame can be both `--screenshot` and a capture | Additive renderer change; the readback is already synchronous in `endFrame`; each file is encoded in its own format |
+| Missing screenshot or capture -> exit 3; unwritable report -> exit 1 | A run that asked for evidence and produced none must fail loudly |
+| Run report JSON written by hand (`RunReport.cpp`, fmt) with a versioned schema | No JSON dependency for one writer; agents parse a stable layout |
+| Samples are collected only with `--report` | Interactive runs do not grow memory |
+| Log warning/error counts via a counting spdlog sink in `Core/Log` | The report shows log health without parsing logs |
 
 Frame order: events -> `onFixedUpdate` x N -> `onUpdate` -> `beginFrame` -> `onRender` (records
 into the frame's render graph, swapchain image imported as `output`) -> debug overlay pass ->

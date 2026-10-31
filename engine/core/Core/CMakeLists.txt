@@ -8,7 +8,7 @@ add_library(Zodar::Core ALIAS ZodarCore)
 
 # engine/core holds both Core/ and Platform/; headers are included as "Core/<File>.h".
 target_include_directories(ZodarCore PUBLIC ${ZODAR_ENGINE_DIR}/core)
-target_link_libraries(ZodarCore PUBLIC spdlog::spdlog glm::glm)
+target_link_libraries(ZodarCore PUBLIC spdlog::spdlog glm::glm PRIVATE Zodar::stb)
 target_compile_definitions(ZodarCore PUBLIC
     GLM_FORCE_DEPTH_ZERO_TO_ONE GLM_FORCE_RADIANS GLM_ENABLE_EXPERIMENTAL
     ZODAR_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}

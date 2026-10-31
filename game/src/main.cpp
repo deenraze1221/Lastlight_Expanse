@@ -1,14 +1,15 @@
 // Lastlight Expanse - streamed voxel highlands at dusk, built on the ZODAR engine.
 //
-//   LastlightExpanse [--seed N] [--view-radius CHUNKS] [--threads N] [--frames N] [--screenshot out.ppm]
-//                    [--width W] [--height H] [--no-validation] [--no-overlay]
-//                    [--lighting-quality low|medium|high|ultra] [--untextured] [--no-fog]
-//                    [--spawn-height H] [--pitch DEG] [--headless] [--deterministic]
+//   LastlightExpanse [standard options] [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]
+//                    [--untextured] [--no-fog] [--spawn-height H] [--pitch DEG]
+//
+// Standard options (--frames, --headless, --deterministic, --screenshot, --capture-frames,
+// --report, --seed, --camera, ...) come from the engine runtime: run with --help.
+// Default seed 1337, window 1600x900.
 //
 // Controls: hold right mouse to look, WASD move, Space/Ctrl up/down, Shift fast,
 // left click digs the targeted voxel, F places stone on it, F1 profiler, Esc quits.
-// --headless: no visible window (needs --frames). --deterministic: fixed 1/60 s per frame.
-// Exit codes: 0 ok, 1 fatal error, 2 validation errors, 3 screenshot failed.
+// Exit codes: 0 ok, 1 fatal error, 2 validation errors, 3 screenshot/capture failed.
 // Runs on zodar::Application (engine/runtime): it owns the window, renderer and frame loop.
 
 #include "Rendering/BlockTextures.h"
@@ -21,6 +22,7 @@
 #include "Renderer/StreamedMeshSet.h"
 #include "Renderer/TextureArray.h"
 #include "Runtime/Application.h"
+#include "Runtime/CommandLine.h"
 #include "Scene/Voxel/VoxelWorld.h"
 
 #include <SDL3/SDL.h>
@@ -34,7 +36,9 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -44,53 +48,48 @@ using namespace zodar;
 using namespace zodar::gfx;
 using namespace zodar::voxel;
 
+constexpr std::string_view kUsage =
+    "LastlightExpanse [standard options] [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]\n"
+    "                 [--untextured] [--no-fog] [--spawn-height H] [--pitch DEG]";
+
+// Game-only options; window, frames, seed, captures etc. are in ApplicationDesc.
 struct Options {
-    uint64_t seed = 1337;
     int viewRadius = 10;
-    uint32_t threads = JobSystem::kAutomatic;
-    uint64_t maxFrames = 0;
-    std::optional<std::filesystem::path> screenshot;
-    uint32_t width = 1600;
-    uint32_t height = 900;
-    bool validation = true;
-    bool overlay = false;
     LightingQuality quality = LightingQuality::High;
     bool textured = true; // pixel-art texture arrays (false: flat palette colours, A/B tests)
     bool fog = true;
     float spawnHeight = 14.0f; // above the terrain surface
     float pitch = -12.0f;      // degrees
-    bool headless = false;
-    bool deterministic = false;
 };
 
-Options parseOptions(int argc, char** argv) {
+Options parseOptions(std::span<const std::string> args) {
     Options o;
-    for (int i = 1; i < argc; ++i) {
-        const std::string_view arg = argv[i];
+    for (size_t i = 0; i < args.size(); ++i) {
+        const std::string_view arg = args[i];
         const auto next = [&]() -> std::string {
-            if (i + 1 >= argc) fail("Missing value for " + std::string(arg));
-            return argv[++i];
+            if (i + 1 >= args.size()) fail("Missing value for " + std::string(arg));
+            return args[++i];
         };
-        if (arg == "--seed") o.seed = std::stoull(next());
-        else if (arg == "--view-radius") o.viewRadius = std::stoi(next());
-        else if (arg == "--threads") o.threads = static_cast<uint32_t>(std::stoul(next()));
-        else if (arg == "--frames") o.maxFrames = std::stoull(next());
-        else if (arg == "--screenshot") o.screenshot = next();
-        else if (arg == "--width") o.width = static_cast<uint32_t>(std::stoul(next()));
-        else if (arg == "--height") o.height = static_cast<uint32_t>(std::stoul(next()));
-        else if (arg == "--no-validation") o.validation = false;
-        else if (arg == "--no-overlay") o.overlay = false;
-        else if (arg == "--overlay") o.overlay = true;
+        if (arg == "--view-radius") o.viewRadius = static_cast<int>(parseIntArgument(arg, next()));
         else if (arg == "--lighting-quality") o.quality = parseLightingQuality(next());
         else if (arg == "--untextured") o.textured = false;
         else if (arg == "--no-fog") o.fog = false;
-        else if (arg == "--spawn-height") o.spawnHeight = std::stof(next());
-        else if (arg == "--pitch") o.pitch = std::stof(next());
-        else if (arg == "--headless") o.headless = true;
-        else if (arg == "--deterministic") o.deterministic = true;
-        else fail("Unknown argument '" + std::string(arg) + "'");
+        else if (arg == "--spawn-height") o.spawnHeight = static_cast<float>(parseFloatArgument(arg, next()));
+        else if (arg == "--pitch") o.pitch = static_cast<float>(parseFloatArgument(arg, next()));
+        else fail("Unknown argument '" + std::string(arg) + "' (see --help)");
     }
     return o;
+}
+
+ApplicationDesc defaultDesc() {
+    ApplicationDesc desc;
+    desc.name = "Lastlight Expanse";
+    desc.organization = "Lastlight";
+    desc.identifier = "LastlightExpanse";
+    desc.width = 1600;
+    desc.height = 900;
+    desc.seed = 1337;
+    return desc;
 }
 
 uint64_t chunkKey(const ChunkCoord& c) {
@@ -98,26 +97,10 @@ uint64_t chunkKey(const ChunkCoord& c) {
     return (uint64_t(uint32_t(c.x)) & m) | ((uint64_t(uint32_t(c.y)) & m) << 21) | ((uint64_t(uint32_t(c.z)) & m) << 42);
 }
 
-ApplicationDesc makeDesc(const Options& options) {
-    ApplicationDesc desc;
-    desc.name = "Lastlight Expanse";
-    desc.organization = "Lastlight";
-    desc.identifier = "LastlightExpanse";
-    desc.width = options.width;
-    desc.height = options.height;
-    desc.headless = options.headless;
-    desc.validation = options.validation;
-    desc.overlay = options.overlay;
-    desc.maxFrames = options.maxFrames;
-    desc.screenshot = options.screenshot;
-    desc.deterministic = options.deterministic;
-    desc.threads = options.threads;
-    return desc;
-}
-
 class LastlightApp final : public Application {
 public:
-    explicit LastlightApp(const Options& options) : Application(makeDesc(options)), m_options(options) {}
+    LastlightApp(const ApplicationDesc& desc, const Options& options)
+        : Application(desc), m_options(options), m_seed(desc.seed.value_or(1337)) {}
 
 protected:
     void onStart() override;
@@ -130,6 +113,7 @@ private:
     void logStats(double fps);
 
     Options m_options;
+    uint64_t m_seed;
     std::shared_ptr<lastlight::LastlightTerrain> m_terrain;
     StreamingSettings m_streaming;
     std::unique_ptr<VoxelWorld> m_world;
@@ -151,7 +135,7 @@ private:
 
 void LastlightApp::onStart() {
     // --- World ------------------------------------------------------------------------
-    m_terrain = std::make_shared<lastlight::LastlightTerrain>(m_options.seed);
+    m_terrain = std::make_shared<lastlight::LastlightTerrain>(m_seed);
     m_streaming.viewRadius = m_options.viewRadius;
     m_streaming.minChunkY = -2;
     m_streaming.maxChunkY = 3;
@@ -162,7 +146,7 @@ void LastlightApp::onStart() {
     }
     m_world = std::make_unique<VoxelWorld>(m_terrain, palette, m_streaming, &jobs());
     m_chunkMeshes = std::make_unique<StreamedMeshSet>(renderer().context(), upload());
-    ZODAR_LOG_INFO("World seed {}, view radius {} chunks, {} worker threads", m_options.seed, m_options.viewRadius,
+    ZODAR_LOG_INFO("World seed {}, view radius {} chunks, {} worker threads", m_seed, m_options.viewRadius,
                    jobs().workerCount());
 
     MaterialDesc ground;
@@ -173,7 +157,7 @@ void LastlightApp::onStart() {
     // point-filtered by the game's voxel shader; one material and one descriptor for all blocks.
     if (m_options.textured) {
         const auto start = std::chrono::steady_clock::now();
-        const lastlight::BlockTextureSet textures = lastlight::generateBlockTextures(m_options.seed);
+        const lastlight::BlockTextureSet textures = lastlight::generateBlockTextures(m_seed);
         UploadBatch batch(upload());
         m_standardTextures = TextureArray(batch, scene().bindless(), textures.standard, "BlockTextures256");
         m_heroTextures = TextureArray(batch, scene().bindless(), textures.hero, "BlockTextures512");
@@ -227,6 +211,11 @@ void LastlightApp::onStart() {
     m_view.camera.position = {0.5f, static_cast<float>(spawnHeight) + m_options.spawnHeight, 0.5f};
     m_yaw = glm::radians(200.0f);
     m_pitch = glm::radians(m_options.pitch);
+    if (desc().camera) { // --camera: exact start view (agents, screenshots)
+        m_view.camera.position = desc().camera->position;
+        m_yaw = glm::radians(desc().camera->yawDegrees);
+        m_pitch = glm::radians(desc().camera->pitchDegrees);
+    }
 
     // Loading: stream the area around the spawn point before the first frame.
     const auto start = std::chrono::steady_clock::now();
@@ -300,7 +289,7 @@ void LastlightApp::onUpdate(const FrameTime& time) {
     }
     m_view.draws = m_draws;
     // Wall-clock time for visuals (as before the runtime migration); fixed clock when deterministic.
-    m_view.time = static_cast<float>(m_options.deterministic ? time.time : time.realTime);
+    m_view.time = static_cast<float>(desc().deterministic ? time.time : time.realTime);
 
     ++m_statsFrames;
     m_statsElapsed += time.realDt;
@@ -337,15 +326,8 @@ void LastlightApp::onShutdown() {
 } // namespace
 
 int main(int argc, char** argv) {
-    zodar::log::init({spdlog::level::info, ""});
-    int exitCode = EXIT_FAILURE;
-    try {
-        LastlightApp app(parseOptions(argc, argv));
-        exitCode = app.run();
-    } catch (const std::exception& e) {
-        ZODAR_LOG_ERROR("Fatal: {}", e.what());
-    }
-    ZODAR_LOG_INFO("Shutdown complete (exit code {})", exitCode);
-    zodar::log::shutdown();
-    return exitCode;
+    return zodar::runMain(argc, argv, defaultDesc(), kUsage,
+                          [](const zodar::ApplicationDesc& desc, std::span<const std::string> args) {
+                              return std::make_unique<LastlightApp>(desc, parseOptions(args));
+                          });
 }

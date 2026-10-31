@@ -2,7 +2,9 @@
 # or headless), with a fixed simulation timestep and validation-aware exit codes.
 add_library(ZodarRuntime STATIC
     Runtime/FixedTimestep.cpp
-    Runtime/Application.cpp)
+    Runtime/Application.cpp
+    Runtime/CommandLine.cpp
+    Runtime/RunReport.cpp)
 add_library(Zodar::Runtime ALIAS ZodarRuntime)
 
 # Headers are included as "Runtime/<File>.h".

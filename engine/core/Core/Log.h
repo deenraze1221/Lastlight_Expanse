@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -20,6 +21,15 @@ bool isInitialized();
 
 // Engine logger. Falls back to a console logger if init() was never called.
 spdlog::logger& engine();
+
+// Messages logged at warn and at error/critical level since process start (or resetCounts()).
+// Counted across init() calls; used by run reports.
+struct Counts {
+    uint64_t warnings = 0;
+    uint64_t errors = 0;
+};
+Counts counts();
+void resetCounts();
 
 } // namespace zodar::log
 

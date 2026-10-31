@@ -116,7 +116,7 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 | `LASTLIGHT_BUILD_GAME` | ON | Build the `LastlightExpanse` game (`game/`) |
 | `ZODAR_BUILD_TESTS` | ON | Build `ZodarTests` (doctest) |
 | `ZODAR_BUILD_TOOLS` | ON | Build `engine/tools/` (ZodarBench, ZodarAssetCompiler, ZodarUISandbox) |
-| `ZODAR_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.runtime_headless` (selects the offscreen driver itself), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.zodarbench_smoke`, `gpu.lastlight_smoke` (headless) (others need a video driver) |
+| `ZODAR_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.runtime_headless`, `gpu.runtime_capture_report` (select the offscreen driver themselves), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.zodarbench_smoke`, `gpu.lastlight_smoke` (headless) (others need a video driver) |
 | `ZODAR_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` for engine code |
 
 ## HelloTriangle arguments
@@ -131,17 +131,51 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 
 Exit codes: 0 ok, 1 fatal error, 2 validation errors occurred, 3 screenshot failed.
 
-## LastlightExpanse
+## Standard options (apps on `zodar::Application`)
+
+`LastlightExpanse` and `ZodarRuntimeSmoke` share one command line (`engine/runtime/Runtime/CommandLine.h`;
+ModelViewer and ZodarBench move to it in Phase A3). `--help` prints it:
 
 ```
-LastlightExpanse [--seed N] [--view-radius CHUNKS] [--threads N] [--frames N] [--screenshot out.ppm]
-                 [--width W] [--height H] [--no-validation] [--overlay]
-                 [--lighting-quality low|medium|high|ultra] [--untextured] [--no-fog]
-                 [--spawn-height H] [--pitch DEG] [--headless] [--deterministic]
+--frames N                 Render N frames, then exit (0 = until the window closes)
+--headless                 No visible window (SDL offscreen driver); needs --frames
+--deterministic            Every frame advances exactly one fixed step
+--fixed-dt S               Fixed simulation step in seconds (default 1/60)
+--width W --height H       Window / render size
+--screenshot F             Save the last frame (.png or .ppm); needs --frames
+--capture-frames LIST      Also save these 1-based frames, e.g. 10,60,120
+--capture-dir DIR          Directory for --capture-frames (default: captures), files frame_000010.png
+--report F.json            Write a run report at exit
+--log-file F               Also write the log to F
+--seed N                   App-defined seed
+--camera X,Y,Z,YAW,PITCH   Start camera (degrees), for apps that have a camera
+--threads N                Worker threads (0 = run jobs inline)
+--no-validation            Disable Vulkan validation layers
+--overlay | --no-overlay   Profiler overlay visible at start
 ```
 
-`--headless` runs without a visible window (SDL offscreen driver, no `SDL_VIDEO_DRIVER` needed;
-requires `--frames`). `--deterministic` advances exactly 1/60 s per frame. Exit codes as above.
+Exit codes: 0 ok, 1 fatal error / bad arguments / report not written, 2 validation errors,
+3 screenshot or capture missing. Missing parent directories of `--screenshot`, `--capture-dir`
+and `--report` are created.
+
+The run report (`--report`, schema `zodar.run_report` v1, documented in
+`engine/runtime/Runtime/RunReport.h`) contains: run settings, device and API version, validation
+and log warning/error counts, FPS (mean, p50/p95/p99), frame/CPU/GPU frame-time summaries
+(count, mean, min, max, p50, p95, p99), per-CPU-scope and per-GPU-pass summaries, last-frame
+render stats, GPU memory (last and peak), and every screenshot/capture with its frame and status.
+
+```bash
+./build/bin/LastlightExpanse --headless --deterministic --frames 120 --screenshot out/shot.png --report out/run.json
+```
+
+### LastlightExpanse
+
+```
+LastlightExpanse [standard options] [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]
+                 [--untextured] [--no-fog] [--spawn-height H] [--pitch DEG]
+```
+
+Defaults: seed 1337, 1600×900. `--camera` overrides the spawn position and view.
 
 ## ModelViewer
 
@@ -291,6 +325,7 @@ SDL_VIDEO_DRIVER=offscreen ctest --test-dir build --output-on-failure
 
 Apps built on `zodar::Application` (the game, `ZodarRuntimeSmoke`) also accept a headless flag
 that selects the offscreen driver themselves, e.g. `LastlightExpanse --headless --frames 60`.
+Screenshots and captures can be PNG, which agents read directly.
 
 ```bash
 xvfb-run -a ctest --test-dir build --output-on-failure
