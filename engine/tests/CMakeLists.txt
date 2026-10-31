@@ -12,6 +12,7 @@ add_executable(ZodarTests
     Core/ProfilerTests.cpp
     Core/ErrorTests.cpp
     Core/ImageIOTests.cpp
+    Core/FileWatcherTests.cpp
     Renderer/CameraTests.cpp
     Renderer/DeletionQueueTests.cpp
     Renderer/FrustumTests.cpp

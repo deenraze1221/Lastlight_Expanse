@@ -20,6 +20,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <algorithm>
 #include <set>
 #include <tuple>
@@ -578,5 +579,280 @@ TEST_CASE("scene file: modelRenderer by registry id and by path renders the load
     draws.clear();
     collectDraws(world, draws);
     CHECK(draws.size() == 3);
+    gpu().context->waitIdle();
+}
+
+// --- Hot reload (Phase C5) ------------------------------------------------------------------
+
+namespace {
+
+// Temporary folder for hot-reload tests: solid-colour textures and material files.
+struct ReloadDir {
+    std::filesystem::path dir = std::filesystem::temp_directory_path() / "zodar_hot_reload_tests";
+
+    ReloadDir() {
+        std::filesystem::remove_all(dir);
+        std::filesystem::create_directories(dir);
+    }
+    ~ReloadDir() {
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec);
+    }
+    std::filesystem::path write(const std::string& name, const std::string& text) const {
+        std::ofstream(dir / name, std::ios::binary | std::ios::trunc) << text;
+        return dir / name;
+    }
+    std::filesystem::path solid(const std::string& name, uint8_t r, uint8_t g, uint8_t b) const {
+        std::vector<uint8_t> pixels(32 * 32 * 4);
+        for (size_t i = 0; i < pixels.size(); i += 4) {
+            pixels[i] = r;
+            pixels[i + 1] = g;
+            pixels[i + 2] = b;
+            pixels[i + 3] = 255;
+        }
+        REQUIRE(writePng(dir / name, 32, 32, pixels));
+        return dir / name;
+    }
+    static std::string unlit(const std::string& texture, const std::string& extra = "") {
+        return R"({"shader": "zodar/unlit", )" + extra + R"("baseColorTexture": {"path": ")" + texture +
+               R"(", "filter": "pixelArt"}})";
+    }
+};
+
+// Index of the strongest channel of the centre pixel (0 = red, 1 = green, 2 = blue).
+int dominantChannel(const std::vector<uint8_t>& rgba, VkExtent2D extent) {
+    const uint8_t* p = &rgba[((extent.height / 2) * extent.width + extent.width / 2) * 4];
+    return p[0] > p[1] && p[0] > p[2] ? 0 : (p[1] > p[2] ? 1 : 2);
+}
+
+GpuMesh makePlane() {
+    UploadBatch batch(*gpu().upload);
+    GpuMesh plane(batch, primitives::plane(2.0f, 2.0f));
+    batch.submit();
+    return plane;
+}
+
+} // namespace
+
+TEST_CASE("hot reload: textures and material files reload in place; failures keep the previous version") {
+    zodar::test::ValidationGuard guard;
+    const ReloadDir files;
+    files.solid("tex.png", 255, 0, 0);
+    files.solid("green.png", 0, 255, 0);
+    files.write("mat.material.json", ReloadDir::unlit("tex.png"));
+    Fixture f;
+    AssetManagerDesc desc;
+    desc.root = files.dir;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+    MaterialSystem& materials = f.scene.materials();
+    const GpuMesh plane = makePlane();
+    const VkExtent2D extent{64, 48};
+    std::vector<MeshDraw> draws;
+
+    const MaterialAssetHandle mat = assets.loadMaterial("mat.material.json");
+    REQUIRE(mat.ready());
+    const TextureHandle tex = mat->textures.at(0);
+    const TextureAsset* texAddress = &tex.get();
+    const MaterialAsset* matAddress = &mat.get();
+    const MaterialHandle gfxHandle = mat->handle;
+    const uint32_t oldSlot = tex->texture.bindlessIndex();
+    CHECK(dominantChannel(f.render(planeView(plane, gfxHandle, draws), extent), extent) == 0);
+
+    SUBCASE("texture change refreshes the material that uses it") {
+        files.solid("tex.png", 0, 0, 255);
+        const AssetReloadResult r = assets.reloadFiles({files.dir / "tex.png"});
+        CHECK(r.ok());
+        CHECK(r.reloaded.size() == 1);
+        CHECK(r.materialsRefreshed == 1);
+        CHECK(&tex.get() == texAddress); // same object, new GPU texture
+        CHECK(tex.generation() == 1);
+        CHECK(tex->texture.bindlessIndex() != oldSlot);
+        CHECK(materials.hasPendingUpdates());
+        CHECK(dominantChannel(f.render(planeView(plane, gfxHandle, draws), extent), extent) == 2);
+
+        // A broken file: reload fails, the previous texture stays in use.
+        files.write("tex.png", "not a png");
+        const AssetReloadResult broken = assets.reload(tex);
+        CHECK_FALSE(broken.ok());
+        REQUIRE(broken.failed.size() == 1);
+        CHECK(broken.failed[0].find("tex.png") != std::string::npos);
+        CHECK(tex.ready());
+        CHECK(tex.generation() == 1);
+        CHECK(dominantChannel(f.render(planeView(plane, gfxHandle, draws), extent), extent) == 2);
+        CHECK(assets.stats().reloads == 1);
+        CHECK(assets.stats().reloadFailures == 1);
+    }
+
+    SUBCASE("material file change: new texture, same gfx material; invalid edits are rejected") {
+        files.write("mat.material.json", ReloadDir::unlit("green.png"));
+        const AssetReloadResult r = assets.reloadFiles({files.dir / "mat.material.json"});
+        CHECK(r.ok());
+        CHECK(&mat.get() == matAddress);
+        CHECK(mat->handle == gfxHandle);
+        CHECK(mat.generation() == 1);
+        CHECK(mat->textures.at(0)->path.filename() == "green.png");
+        CHECK(dominantChannel(f.render(planeView(plane, gfxHandle, draws), extent), extent) == 1);
+
+        files.write("mat.material.json", ReloadDir::unlit("green.png", R"("alphaMode": "blend", )"));
+        AssetReloadResult rejected = assets.reload(mat);
+        REQUIRE(rejected.failed.size() == 1);
+        CHECK(rejected.failed[0].find("pipeline state") != std::string::npos);
+        files.write("mat.material.json", R"({"shader": )");
+        rejected = assets.reload(mat);
+        CHECK(rejected.failed.size() == 1);
+        files.write("mat.material.json", ReloadDir::unlit("missing.png"));
+        rejected = assets.reload(mat);
+        CHECK(rejected.failed.size() == 1);
+        CHECK(mat.ready());
+        CHECK(mat.generation() == 1);
+        CHECK(dominantChannel(f.render(planeView(plane, gfxHandle, draws), extent), extent) == 1);
+    }
+
+    SUBCASE("a failed material recovers once its texture exists") {
+        files.write("late.material.json", ReloadDir::unlit("late.png"));
+        const MaterialAssetHandle late = assets.loadMaterial("late.material.json");
+        REQUIRE(late.failed());
+        files.solid("late.png", 0, 255, 0);
+        const AssetReloadResult r = assets.reloadFiles({files.dir / "late.png"});
+        CHECK(r.ok());
+        REQUIRE(late.ready());
+        CHECK(late.generation() == 1);
+        CHECK(dominantChannel(f.render(planeView(plane, late->handle, draws), extent), extent) == 1);
+
+        files.write("mat.material.json", ReloadDir::unlit("green.png"));
+        CHECK(assets.reload(mat).ok());
+        CHECK(assets.stats().textures == 3); // tex.png (held by `tex`), green.png, late.png
+        f.render(planeView(plane, gfxHandle, draws), extent);
+        Fixture::collect();
+    }
+    gpu().context->waitIdle();
+}
+
+TEST_CASE("hot reload: data materials update atomically") {
+    zodar::test::ValidationGuard guard;
+    const ReloadDir files;
+    files.solid("red.png", 255, 0, 0);
+    files.solid("blue.png", 0, 0, 255);
+    Fixture f;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, {});
+    MaterialSystem& materials = f.scene.materials();
+    MaterialData a;
+    a.shader = "zodar/unlit";
+    a.baseColorTexture.path = "red.png";
+    MaterialData b = a;
+    const MaterialAssetHandle ma = assets.createMaterial(a, files.dir, "scene#a");
+    const MaterialAssetHandle mb = assets.createMaterial(b, files.dir, "scene#b");
+    REQUIRE(ma.ready());
+    REQUIRE(mb.ready());
+    CHECK(assets.reload(ma).failed.size() == 1); // not from a file
+
+    MaterialData a2 = a;
+    a2.baseColor = {0.5f, 0.5f, 0.5f, 1.0f};
+    a2.baseColorTexture.path = "blue.png";
+    MaterialData b2 = b;
+    b2.baseColorTexture.path = "missing.png"; // fails: nothing changes
+    AssetReloadResult r = assets.updateMaterialData({{ma, a2, files.dir}, {mb, b2, files.dir}});
+    CHECK(r.failed.size() == 1);
+    CHECK(r.reloaded.empty());
+    CHECK(ma.generation() == 0);
+    CHECK(materials.material(ma->handle).baseColorFactor == glm::vec4(1.0f));
+
+    r = assets.updateMaterialData({{ma, a2, files.dir}});
+    CHECK(r.ok());
+    CHECK(ma.generation() == 1);
+    CHECK(ma->data == a2);
+    CHECK(materials.material(ma->handle).baseColorFactor == glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
+    CHECK(materials.material(ma->handle).baseColor.texture == &ma->textures.at(0)->texture);
+    gpu().context->waitIdle();
+}
+
+TEST_CASE("hot reload: glTF models reload in place, with their texture files as dependencies") {
+    zodar::test::ValidationGuard guard;
+    const ReloadDir files;
+    std::filesystem::copy(kExampleDir / "crate.gltf", files.dir / "crate.gltf");
+    std::filesystem::create_directories(files.dir / "textures");
+    std::filesystem::copy(kExampleDir / "textures" / "crate.png", files.dir / "textures" / "crate.png");
+    std::string original;
+    {
+        std::ifstream in(files.dir / "crate.gltf", std::ios::binary);
+        original.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    Fixture f;
+    AssetManagerDesc desc;
+    desc.root = files.dir;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+    MaterialSystem& materials = f.scene.materials();
+
+    const ModelHandle crate = assets.loadModel("crate.gltf");
+    REQUIRE(crate.ready());
+    const gfx::Model* address = &crate->model;
+    const std::vector<std::filesystem::path> watched = assets.watchedFiles();
+    CHECK(std::ranges::find(watched, files.dir / "textures" / "crate.png") != watched.end());
+    CHECK(std::ranges::find(watched, files.dir / "crate.gltf") != watched.end());
+
+    // Texture file of the model changed: the model reloads.
+    const auto inUse = [&] { return materials.materialCount() - materials.freeMaterialCount(); };
+    const uint32_t inUseBefore = inUse();
+    AssetReloadResult r = assets.reloadFiles({files.dir / "textures" / "crate.png"});
+    CHECK(r.ok());
+    CHECK(r.reloaded == std::vector<std::string>{crate.key()});
+    CHECK(&crate->model == address);
+    CHECK(crate.generation() == 1);
+    CHECK(crate->model.meshCount() == 1);
+
+    // Broken file: previous model kept and still drawable.
+    files.write("crate.gltf", "{ broken");
+    r = assets.reload(crate);
+    CHECK(r.failed.size() == 1);
+    CHECK(crate.ready());
+    CHECK(crate.generation() == 1);
+    SceneView view;
+    view.camera.position = {1.2f, 1.0f, 1.6f};
+    view.camera.lookAt({0, 0, 0});
+    std::vector<MeshDraw> draws;
+    crate->model.appendDraws(draws);
+    view.draws = draws;
+    CHECK(distinctColors(f.render(view, {64, 64})) > 4);
+
+    files.write("crate.gltf", original);
+    CHECK(assets.reloadFiles({files.dir / "crate.gltf"}).ok());
+    CHECK(crate.generation() == 2);
+    // The two replaced models released their materials (own + glTF default) after the GPU.
+    Fixture::collect();
+    CHECK(inUse() == inUseBefore);
+    gpu().context->waitIdle();
+}
+
+TEST_CASE("hot reload: opt-in file watching reloads changed files in update()") {
+    zodar::test::ValidationGuard guard;
+    const ReloadDir files;
+    files.solid("tex.png", 255, 0, 0);
+    Fixture f;
+    AssetManagerDesc desc;
+    desc.root = files.dir;
+    desc.watchInterval = std::chrono::milliseconds(0);
+    {
+        AssetManager off(*gpu().context, *gpu().upload, f.scene, desc); // watchFiles = false (default)
+        CHECK_FALSE(off.watching());
+        CHECK(off.pollFileChanges().empty());
+    }
+    desc.watchFiles = true;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+    CHECK(assets.watching() == kHotReloadAvailable);
+    if (!kHotReloadAvailable) {
+        MESSAGE("file watching not compiled in (non-Debug build or ZODAR_HOT_RELOAD=OFF)");
+        return;
+    }
+    const TextureHandle tex = assets.loadTexture("tex.png");
+    REQUIRE(tex.ready());
+    assets.update(); // starts watching tex.png
+    CHECK(tex.generation() == 0);
+    files.solid("tex.png", 0, 0, 255);
+    std::filesystem::last_write_time(files.dir / "tex.png",
+                                     std::filesystem::last_write_time(files.dir / "tex.png") + std::chrono::seconds(2));
+    assets.update();
+    CHECK(tex.generation() == 1);
+    assets.update(); // no further change
+    CHECK(tex.generation() == 1);
     gpu().context->waitIdle();
 }

@@ -1,4 +1,4 @@
-# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3, scene models C4, palettes C7)
+# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3, scene models C4, hot reload C5, palettes C7)
 
 Module `Zodar::AssetManager` (`engine/rendering/AssetManager/AssetManager/AssetManager.h`).
 Working example: `examples/asset_loading` rendered by the sample `ZodarAssetLoading`
@@ -192,5 +192,48 @@ compiler version 1 are ignored (key version 2). Tests: `pixel art:*` (unit) and
   The failure is cached while handles exist; drop them to retry.
 - Single-threaded (render thread). Release every handle before the AssetManager is destroyed;
   declare it before the members holding handles. Its destructor waits for the device.
-- Pending async loads at destruction are dropped after a device wait. Hot reload and
-  streaming budgets are later Phase C steps (`docs/AI_FIRST_ROADMAP.md`).
+- Pending async loads at destruction are dropped after a device wait. Streaming budgets are a
+  later phase (`docs/AI_FIRST_ROADMAP.md`).
+
+## Hot reload (Phase C5)
+
+```cpp
+AssetReloadResult r = assets.reloadFiles({"textures/crate.png"}); // every asset using the file
+assets.reload(textureHandle);          // or one asset (texture, model, material file)
+if (!r.ok()) for (auto& f : r.failed) log(f); // "<key>: <error>"; previous version kept
+```
+
+- The new GPU objects are swapped into the existing cache record: handles, `&handle->texture`,
+  `&handle->model` and material handles (`MaterialAsset::handle`) stay valid; only the
+  content changes. `handle.generation()` counts successful reloads.
+- The previous GPU objects go to the device deletion queue (frames in flight finish first).
+- Materials using a reloaded texture are refreshed (`MaterialSystem::updateMaterial`, GPU
+  entry rewritten by the next recorded frame; `AssetReloadResult::materialsRefreshed`).
+- Material files are re-parsed; their textures load through the cache. Changing `shader`,
+  `alphaMode` or `doubleSided` is rejected (pipeline state; restart instead).
+- Models reload when the `.gltf`/`.glb` or one of its `.bin`/image files changes. A reloaded
+  model has new gfx material handles: read them from the model (e.g. `appendDraws`) every
+  frame instead of caching them.
+- Failure (missing/broken file, unknown shader, missing texture): nothing changes; the error
+  is returned and logged. A *failed* asset whose file is fixed becomes ready (failed file
+  materials are retried on every `reloadFiles`).
+- Materials created from data (`createMaterial`, inline scene materials) change through
+  `updateMaterialData({{handle, data, baseDirectory}, ...})` (all or nothing).
+- Reloads are blocking (decode + upload on the calling thread); assets still loading
+  asynchronously are skipped.
+
+### File watching (opt-in, Debug builds)
+
+```cpp
+AssetManagerDesc desc;
+desc.watchFiles = true;                       // off by default
+desc.watchInterval = std::chrono::milliseconds(250);
+// assets.update() every frame now polls the files of all live assets and reloads changes
+```
+
+- Compiled in only for Debug builds with the CMake option `ZODAR_HOT_RELOAD` (default ON);
+  `zodar::kHotReloadAvailable` tells. Release builds ignore `watchFiles`; explicit `reload*`
+  calls work in every build.
+- `Core/FileWatcher` polls size + modification time (no OS notification API, no threads).
+  `assets.watchedFiles()` lists what is watched; `assets.pollFileChanges()` checks now.
+- A half-written file fails to reload and is picked up again by the next change.

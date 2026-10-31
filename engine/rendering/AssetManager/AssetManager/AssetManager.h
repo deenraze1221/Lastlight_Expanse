@@ -4,6 +4,7 @@
 #include "Assets/ModelData.h"
 #include "Assets/TextureCache.h"
 #include "Assets/TextureStandards.h"
+#include "Core/FileWatcher.h"
 #include "Core/JobSystem.h"
 #include "Renderer/Resources/UploadQueue.h"
 #include "Renderer/Material.h"
@@ -13,6 +14,7 @@
 #include "SceneFile/MaterialFile.h"
 #include "SceneFile/SceneFile.h"
 
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <filesystem>
@@ -51,6 +53,18 @@
 // Dropping every handle of a loading asset cancels it (decoded data is discarded; a finished
 // upload is retired like any released asset).
 // Models are uploaded as standalone meshes (CPU draw path): GeometryPool cannot free meshes.
+//
+// Hot reload (Phase C5): reload(handle) / reloadFiles(paths) re-read changed files and swap
+// the new GPU resources into the existing cache records, so handles, TextureAsset /
+// ModelAsset / MaterialAsset addresses (&handle->model, &handle->texture) and material
+// handles stay valid; handle.generation() increases. Old GPU objects are retired through the
+// deletion queue (frames in flight keep using them). A failed reload keeps the previous
+// asset (the error is returned and logged); a failed asset that loads again becomes ready.
+// Materials using a reloaded texture are refreshed (MaterialSystem::updateMaterial). A
+// material reload cannot change shader, alphaMode or doubleSided (pipeline state): it fails.
+// A reloaded model gets new gfx material handles (read them from the model every frame).
+// Automatic file watching is opt-in (AssetManagerDesc::watchFiles) and only compiled into
+// Debug builds (kHotReloadAvailable): update() then polls every watchInterval.
 //
 // Rules: use from the render thread. Release every handle before the AssetManager is
 // destroyed; the destructor waits for the device and runs the retired destructions.
@@ -101,6 +115,28 @@ struct AssetManagerDesc {
     // Async uploads started per update(): stops once this many bytes were staged (at least
     // one asset per update, so large assets still progress).
     uint64_t uploadBudgetBytes = 32ull << 20;
+    // Hot reload (C5): watch the files of every live asset (textures, material files,
+    // models and their buffers/images) and reload changed ones
+    // in update(). Ignored unless kHotReloadAvailable (Debug builds with ZODAR_HOT_RELOAD).
+    bool watchFiles = false;
+    std::chrono::milliseconds watchInterval{250};
+};
+
+// Outcome of a hot reload (Phase C5): what was reloaded and what failed (old content kept).
+struct AssetReloadResult {
+    std::vector<std::string> reloaded; // asset keys
+    std::vector<std::string> failed;   // "<key>: <error>"
+    size_t materialsRefreshed = 0;     // materials updated because a texture changed
+    bool ok() const { return failed.empty(); }
+    bool empty() const { return reloaded.empty() && failed.empty(); }
+    void append(const AssetReloadResult& other);
+};
+
+// New data for a material created from data (createMaterial, e.g. inline scene materials).
+struct MaterialDataUpdate {
+    AssetHandle<MaterialAsset> handle;
+    MaterialData data;
+    std::filesystem::path baseDirectory; // texture paths resolve against it
 };
 
 struct TextureLoadSettings {
@@ -200,6 +236,28 @@ public:
     // Async loads not finished yet (decoding, waiting for budget, uploading, materials).
     size_t pendingCount() const;
 
+    // --- Hot reload (Phase C5) ------------------------------------------------------------
+    // Re-reads the asset's file(s) now (blocking) and swaps the result in place. Loading
+    // handles are skipped (empty result). Material files are re-parsed; materials created
+    // from data cannot be reloaded from a file (use updateMaterialData).
+    AssetReloadResult reload(const TextureHandle& texture);
+    AssetReloadResult reload(const ModelHandle& model);
+    AssetReloadResult reload(const MaterialAssetHandle& material);
+    // Reloads every live asset that depends on one of `changedFiles` (textures, material
+    // files, models with their .bin/image files), textures
+    // first. Failed file materials are retried too (their texture may have been fixed).
+    AssetReloadResult reloadFiles(const std::vector<std::filesystem::path>& changedFiles);
+    // Replaces the data of materials (all or nothing: every texture is loaded and every
+    // pipeline-state check passes before any material changes).
+    AssetReloadResult updateMaterialData(const std::vector<MaterialDataUpdate>& updates);
+    // Files the live assets depend on (absolute, sorted), as watched by watchFiles.
+    std::vector<std::filesystem::path> watchedFiles();
+    // True when file watching is active (desc.watchFiles and kHotReloadAvailable).
+    bool watching() const { return kHotReloadAvailable && m_desc.watchFiles; }
+    // Checks the watched files now and reloads changed assets (update() calls it every
+    // watchInterval while watching). Empty result when not watching or nothing changed.
+    AssetReloadResult pollFileChanges();
+
     // Absolute, normalised path used as cache key.
     std::filesystem::path resolve(const std::filesystem::path& path) const;
     const AssetManagerDesc& desc() const { return m_desc; }
@@ -214,6 +272,8 @@ public:
         uint64_t released = 0; // entries whose last handle was dropped
         size_t pending = 0;    // async loads in flight (pendingCount())
         size_t uploading = 0;  // ... of which GPU uploads not yet ready
+        uint64_t reloads = 0;        // successful hot reloads (assets and shaders)
+        uint64_t reloadFailures = 0; // failed hot reloads (previous content kept)
     };
     Stats stats() const;
 
@@ -242,6 +302,19 @@ private:
         std::unique_ptr<ModelAsset> staged;
         gfx::UploadTicket ticket;
     };
+    struct TextureSource {
+        std::filesystem::path file;
+        TextureLoadSettings settings;
+    };
+    struct ModelSource {
+        std::filesystem::path file;
+        ModelLoadSettings settings;
+        std::optional<std::vector<std::filesystem::path>> files; // file + dependencies (lazy)
+    };
+    struct PreparedMaterial {
+        gfx::MaterialDesc desc;
+        std::vector<TextureHandle> textures;
+    };
     struct MaterialRequest {
         MaterialAssetHandle handle;
         std::unique_ptr<MaterialAsset> staged;
@@ -253,6 +326,12 @@ private:
                                                 const TextureLoadSettings& settings, gfx::UploadBatch& batch);
     std::unique_ptr<ModelAsset> createModel(const DecodedModel& decoded, const std::filesystem::path& file,
                                             const ModelLoadSettings& settings, gfx::UploadBatch& batch);
+    PreparedMaterial prepareMaterial(const MaterialData& data, const std::filesystem::path& baseDirectory);
+    void commitMaterial(const MaterialAssetHandle& handle, const MaterialData& data, PreparedMaterial prepared);
+    void reloadTexture(const TextureHandle& texture, AssetReloadResult& result);
+    void reloadModel(const ModelHandle& model, AssetReloadResult& result);
+    void reloadMaterialFile(const MaterialAssetHandle& material, AssetReloadResult& result, bool reportFailure);
+    void finishReload(const AssetReloadResult& result);
     void submitDecode(uint64_t id, std::function<Decoded()> work);
     void processDecoded(uint64_t budget);
     void processUploads();
@@ -274,6 +353,13 @@ private:
     std::vector<TextureUpload> m_textureUploads;
     std::vector<ModelUpload> m_modelUploads;
     std::vector<MaterialRequest> m_materialRequests;
+
+    // Hot reload: how each live texture/model key was loaded (pruned when released).
+    std::unordered_map<std::string, TextureSource> m_textureSources;
+    std::unordered_map<std::string, ModelSource> m_modelSources;
+    FileWatcher m_watcher;
+    uint64_t m_reloads = 0;
+    uint64_t m_reloadFailures = 0;
 };
 
 } // namespace zodar

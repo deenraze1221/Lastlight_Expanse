@@ -13,6 +13,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <system_error>
 #include <variant>
 
@@ -30,6 +31,22 @@ void releaseModelMaterials(gfx::MaterialSystem& materials, const gfx::Model& mod
         materials.releaseMaterial(h);
     }
     materials.releaseMaterial(model.fallbackMaterial());
+}
+
+// Deferred destruction of replaced or released assets (frames in flight may still use them).
+void retireTexture(gfx::VulkanContext& context, std::unique_ptr<TextureAsset> t) {
+    context.deletionQueue().retire([t = share(std::move(t))]() mutable { t.reset(); });
+}
+
+void retireModel(gfx::VulkanContext& context, gfx::SceneRenderer& scene, std::unique_ptr<ModelAsset> m) {
+    context.deletionQueue().retire([m = share(std::move(m)), &scene]() mutable {
+        releaseModelMaterials(scene.materials(), m->model);
+        m.reset();
+    });
+}
+
+bool samePipelineState(const gfx::MaterialDesc& a, const gfx::MaterialDesc& b) {
+    return a.shader == b.shader && a.alphaMode == b.alphaMode && a.doubleSided == b.doubleSided;
 }
 
 std::string samplerKey(const std::optional<gfx::SamplerDesc>& sampler) {
@@ -143,15 +160,8 @@ std::vector<std::string> SceneMaterialAssets::errors() const {
 AssetManager::AssetManager(gfx::VulkanContext& context, gfx::UploadContext& upload, gfx::SceneRenderer& scene,
                            AssetManagerDesc desc)
     : m_context(context), m_upload(upload), m_scene(scene), m_desc(std::move(desc)),
-      m_textures([&context](std::unique_ptr<TextureAsset> t) {
-          context.deletionQueue().retire([t = share(std::move(t))]() mutable { t.reset(); });
-      }),
-      m_models([&context, &scene](std::unique_ptr<ModelAsset> m) {
-          context.deletionQueue().retire([m = share(std::move(m)), &scene]() mutable {
-              releaseModelMaterials(scene.materials(), m->model);
-              m.reset();
-          });
-      }),
+      m_textures([&context](std::unique_ptr<TextureAsset> t) { retireTexture(context, std::move(t)); }),
+      m_models([&context, &scene](std::unique_ptr<ModelAsset> m) { retireModel(context, scene, std::move(m)); }),
       m_materials([&context, &scene](std::unique_ptr<MaterialAsset> m) {
           // Dropping the texture handles retires the textures in the same submission window.
           const gfx::MaterialHandle handle = m->handle;
@@ -281,7 +291,9 @@ uint64_t uploadBytes(const ModelData& data) {
 
 TextureHandle AssetManager::loadTexture(const std::filesystem::path& path, const TextureLoadSettings& settings) {
     const std::filesystem::path file = resolve(path);
-    TextureHandle handle = m_textures.getOrLoad(textureKey(file, settings), [&] {
+    const std::string key = textureKey(file, settings);
+    m_textureSources.try_emplace(key, TextureSource{file, settings});
+    TextureHandle handle = m_textures.getOrLoad(key, [&] {
         auto decoded = decodeTextureFile<DecodedTexture>(file, settings, m_desc.checkTextureSizes);
         gfx::UploadBatch batch(m_upload);
         auto asset = createTexture(decoded, file, settings, batch);
@@ -296,7 +308,9 @@ TextureHandle AssetManager::loadTexture(const std::filesystem::path& path, const
 
 ModelHandle AssetManager::loadModel(const std::filesystem::path& path, const ModelLoadSettings& settings) {
     const std::filesystem::path file = resolve(path);
-    ModelHandle handle = m_models.getOrLoad(modelKey(file, settings), [&] {
+    const std::string key = modelKey(file, settings);
+    m_modelSources.try_emplace(key, ModelSource{file, settings, std::nullopt});
+    ModelHandle handle = m_models.getOrLoad(key, [&] {
         const auto decoded = decodeModelFile<DecodedModel>(file, settings, m_desc.checkTextureSizes);
         gfx::UploadBatch batch(m_upload);
         auto asset = createModel(decoded, file, settings, batch);
@@ -328,37 +342,44 @@ MaterialAssetHandle AssetManager::loadMaterial(const std::filesystem::path& path
 MaterialAssetHandle AssetManager::createMaterial(const MaterialData& data, const std::filesystem::path& baseDirectory,
                                                  const std::string& key) {
     MaterialAssetHandle handle = m_materials.getOrLoad(key, [&] {
-        gfx::MaterialSystem& materials = m_scene.materials();
+        PreparedMaterial prepared = prepareMaterial(data, baseDirectory);
         auto asset = std::make_unique<MaterialAsset>();
         asset->data = data;
         asset->path = key.substr(0, key.find('#'));
-        gfx::MaterialDesc desc = toMaterialDesc(data, 0);
-        try {
-            desc.shader = materials.findShader(data.shader);
-        } catch (const Error&) {
-            fail("material '" + data.name + "': unknown shader '" + data.shader + "'");
-        }
-        for (const TextureSlot& slot : kSlots) {
-            const MaterialTextureData& t = data.*slot.data;
-            if (t.empty()) {
-                continue;
-            }
-            TextureHandle texture = loadTexture(texturePath(t, baseDirectory), {slot.usage, true});
-            if (texture.failed()) {
-                fail("material '" + data.name + "': " + slot.name + ": " + texture.error());
-            }
-            gfx::TextureBinding& binding = desc.*slot.binding;
-            binding.texture = &texture->texture;
-            binding.sampler = samplerFor(t, m_desc.defaultSampler);
-            asset->textures.push_back(std::move(texture));
-        }
-        asset->handle = materials.createMaterial(desc);
+        asset->textures = std::move(prepared.textures);
+        asset->handle = m_scene.materials().createMaterial(prepared.desc);
         return asset;
     });
     if (handle.loading()) {
         waitAll();
     }
     return handle;
+}
+
+AssetManager::PreparedMaterial AssetManager::prepareMaterial(const MaterialData& data,
+                                                            const std::filesystem::path& baseDirectory) {
+    PreparedMaterial prepared;
+    prepared.desc = toMaterialDesc(data, 0);
+    try {
+        prepared.desc.shader = m_scene.materials().findShader(data.shader);
+    } catch (const Error&) {
+        fail("material '" + data.name + "': unknown shader '" + data.shader + "'");
+    }
+    for (const TextureSlot& slot : kSlots) {
+        const MaterialTextureData& t = data.*slot.data;
+        if (t.empty()) {
+            continue;
+        }
+        TextureHandle texture = loadTexture(texturePath(t, baseDirectory), {slot.usage, true});
+        if (texture.failed()) {
+            fail("material '" + data.name + "': " + slot.name + ": " + texture.error());
+        }
+        gfx::TextureBinding& binding = prepared.desc.*slot.binding;
+        binding.texture = &texture->texture;
+        binding.sampler = samplerFor(t, m_desc.defaultSampler);
+        prepared.textures.push_back(std::move(texture));
+    }
+    return prepared;
 }
 
 SceneMaterialAssets AssetManager::createSceneMaterials(const SceneDocument& document,
@@ -477,7 +498,9 @@ void AssetManager::submitDecode(uint64_t id, std::function<Decoded()> work) {
 TextureHandle AssetManager::loadTextureAsync(const std::filesystem::path& path, const TextureLoadSettings& settings) {
     const std::filesystem::path file = resolve(path);
     bool created = false;
-    TextureHandle handle = m_textures.getOrCreatePending(textureKey(file, settings), created);
+    const std::string key = textureKey(file, settings);
+    m_textureSources.try_emplace(key, TextureSource{file, settings});
+    TextureHandle handle = m_textures.getOrCreatePending(key, created);
     if (!created) {
         return handle;
     }
@@ -495,7 +518,9 @@ TextureHandle AssetManager::loadTextureAsync(const std::filesystem::path& path, 
 ModelHandle AssetManager::loadModelAsync(const std::filesystem::path& path, const ModelLoadSettings& settings) {
     const std::filesystem::path file = resolve(path);
     bool created = false;
-    ModelHandle handle = m_models.getOrCreatePending(modelKey(file, settings), created);
+    const std::string key = modelKey(file, settings);
+    m_modelSources.try_emplace(key, ModelSource{file, settings, std::nullopt});
+    ModelHandle handle = m_models.getOrCreatePending(key, created);
     if (!created) {
         return handle;
     }
@@ -683,6 +708,9 @@ void AssetManager::processMaterials() {
 }
 
 void AssetManager::update() {
+    if (watching() && m_watcher.due(m_desc.watchInterval)) {
+        pollFileChanges();
+    }
     processDecoded(m_desc.uploadBudgetBytes);
     processUploads();
     processMaterials();
@@ -710,6 +738,248 @@ size_t AssetManager::pendingCount() const {
            m_materialRequests.size();
 }
 
+// --- Hot reload (C5) ----------------------------------------------------------------------
+
+void AssetReloadResult::append(const AssetReloadResult& other) {
+    reloaded.insert(reloaded.end(), other.reloaded.begin(), other.reloaded.end());
+    failed.insert(failed.end(), other.failed.begin(), other.failed.end());
+    materialsRefreshed += other.materialsRefreshed;
+}
+
+void AssetManager::commitMaterial(const MaterialAssetHandle& handle, const MaterialData& data,
+                                  PreparedMaterial prepared) {
+    gfx::MaterialSystem& materials = m_scene.materials();
+    auto fresh = std::make_unique<MaterialAsset>();
+    fresh->data = data;
+    fresh->path = handle.key().substr(0, handle.key().find('#'));
+    fresh->textures = std::move(prepared.textures);
+    if (handle.ready()) {
+        // Same gfx material: the GPU table entry is rewritten by the next recorded frame.
+        fresh->handle = handle->handle;
+        materials.updateMaterial(fresh->handle, prepared.desc);
+    } else {
+        fresh->handle = materials.createMaterial(prepared.desc);
+    }
+    // The previous content only holds texture handles now: dropping them retires textures
+    // no longer used through the deletion queue (after the frames that may still read them).
+    m_materials.replace(handle, std::move(fresh));
+}
+
+void AssetManager::reloadTexture(const TextureHandle& texture, AssetReloadResult& result) {
+    const auto source = m_textureSources.find(texture.key());
+    if (texture.loading() || source == m_textureSources.end()) {
+        return;
+    }
+    const TextureSource& src = source->second;
+    std::unique_ptr<TextureAsset> fresh;
+    try {
+        auto decoded = decodeTextureFile<DecodedTexture>(src.file, src.settings, m_desc.checkTextureSizes);
+        gfx::UploadBatch batch(m_upload);
+        fresh = createTexture(decoded, src.file, src.settings, batch);
+        batch.submit();
+    } catch (const std::exception& e) {
+        result.failed.push_back(texture.key() + ": " + e.what());
+        return;
+    }
+    if (std::unique_ptr<TextureAsset> old = m_textures.replace(texture, std::move(fresh))) {
+        retireTexture(m_context, std::move(old));
+    }
+    result.reloaded.push_back(texture.key());
+    // Materials store the texture's address; rewrite their GPU entries with the new slot.
+    gfx::MaterialSystem& materials = m_scene.materials();
+    for (const std::string& key : m_materials.keys()) {
+        const MaterialAssetHandle material = m_materials.find(key);
+        if (!material.ready() || std::ranges::find(material->textures, texture) == material->textures.end()) {
+            continue;
+        }
+        const gfx::MaterialDesc desc = materials.material(material->handle);
+        materials.updateMaterial(material->handle, desc);
+        ++result.materialsRefreshed;
+    }
+}
+
+void AssetManager::reloadModel(const ModelHandle& model, AssetReloadResult& result) {
+    const auto source = m_modelSources.find(model.key());
+    if (model.loading() || source == m_modelSources.end()) {
+        return;
+    }
+    ModelSource& src = source->second;
+    src.files.reset(); // dependencies may change with the file
+    std::unique_ptr<ModelAsset> fresh;
+    try {
+        const auto decoded = decodeModelFile<DecodedModel>(src.file, src.settings, m_desc.checkTextureSizes);
+        gfx::UploadBatch batch(m_upload);
+        fresh = createModel(decoded, src.file, src.settings, batch);
+        batch.submit();
+    } catch (const std::exception& e) {
+        result.failed.push_back(model.key() + ": " + e.what());
+        return;
+    }
+    if (std::unique_ptr<ModelAsset> old = m_models.replace(model, std::move(fresh))) {
+        retireModel(m_context, m_scene, std::move(old));
+    }
+    result.reloaded.push_back(model.key());
+}
+
+void AssetManager::reloadMaterialFile(const MaterialAssetHandle& material, AssetReloadResult& result,
+                                      bool reportFailure) {
+    if (material.loading()) {
+        return;
+    }
+    const std::string& key = material.key();
+    try {
+        if (key.find('#') != std::string::npos) {
+            fail("created from data, not from a material file (use updateMaterialData)");
+        }
+        const std::filesystem::path file(key);
+        const MaterialData data = loadMaterialFile(file);
+        PreparedMaterial prepared = prepareMaterial(data, file.parent_path());
+        if (material.ready() &&
+            !samePipelineState(m_scene.materials().material(material->handle), prepared.desc)) {
+            fail("shader, alphaMode or doubleSided changed; hot reload cannot change pipeline state (restart)");
+        }
+        commitMaterial(material, data, std::move(prepared));
+    } catch (const std::exception& e) {
+        if (reportFailure) {
+            result.failed.push_back(key + ": " + e.what());
+        }
+        return;
+    }
+    result.reloaded.push_back(key);
+}
+
+void AssetManager::finishReload(const AssetReloadResult& result) {
+    m_reloads += result.reloaded.size();
+    m_reloadFailures += result.failed.size();
+    for (const std::string& key : result.reloaded) {
+        ZODAR_LOG_INFO("Hot reload: reloaded {}", key);
+    }
+    for (const std::string& failure : result.failed) {
+        ZODAR_LOG_WARN("Hot reload failed (previous version kept): {}", failure);
+    }
+}
+
+AssetReloadResult AssetManager::reload(const TextureHandle& texture) {
+    AssetReloadResult result;
+    reloadTexture(texture, result);
+    finishReload(result);
+    return result;
+}
+
+AssetReloadResult AssetManager::reload(const ModelHandle& model) {
+    AssetReloadResult result;
+    reloadModel(model, result);
+    finishReload(result);
+    return result;
+}
+
+AssetReloadResult AssetManager::reload(const MaterialAssetHandle& material) {
+    AssetReloadResult result;
+    reloadMaterialFile(material, result, true);
+    finishReload(result);
+    return result;
+}
+
+AssetReloadResult AssetManager::updateMaterialData(const std::vector<MaterialDataUpdate>& updates) {
+    AssetReloadResult result;
+    std::vector<PreparedMaterial> prepared;
+    prepared.reserve(updates.size());
+    for (const MaterialDataUpdate& u : updates) {
+        try {
+            if (!u.handle.valid() || u.handle.loading()) {
+                fail("material is empty or still loading");
+            }
+            prepared.push_back(prepareMaterial(u.data, u.baseDirectory));
+            if (u.handle.ready() &&
+                !samePipelineState(m_scene.materials().material(u.handle->handle), prepared.back().desc)) {
+                fail("shader, alphaMode or doubleSided changed; hot reload cannot change pipeline state (restart)");
+            }
+        } catch (const std::exception& e) {
+            result.failed.push_back((u.handle.valid() ? u.handle.key() : std::string("<empty>")) + ": " + e.what());
+        }
+    }
+    if (result.failed.empty()) {
+        for (size_t i = 0; i < updates.size(); ++i) {
+            commitMaterial(updates[i].handle, updates[i].data, std::move(prepared[i]));
+            result.reloaded.push_back(updates[i].handle.key());
+        }
+    }
+    finishReload(result);
+    return result;
+}
+
+std::vector<std::filesystem::path> AssetManager::watchedFiles() {
+    std::erase_if(m_textureSources, [&](const auto& e) { return !m_textures.find(e.first).valid(); });
+    std::erase_if(m_modelSources, [&](const auto& e) { return !m_models.find(e.first).valid(); });
+    std::set<std::filesystem::path> files;
+    for (const auto& [key, source] : m_textureSources) {
+        files.insert(source.file);
+    }
+    for (auto& [key, source] : m_modelSources) {
+        if (!source.files) {
+            source.files = std::vector<std::filesystem::path>{source.file};
+            try {
+                const AssetFingerprint fingerprint = fingerprintAsset(AssetType::Model, source.file);
+                source.files->insert(source.files->end(), fingerprint.dependencies.begin(),
+                                     fingerprint.dependencies.end());
+            } catch (const std::exception&) {
+                // Unreadable model: watch the file itself; a fixed file reloads it.
+            }
+        }
+        files.insert(source.files->begin(), source.files->end());
+    }
+    for (const std::string& key : m_materials.keys()) {
+        if (key.find('#') == std::string::npos) {
+            files.insert(std::filesystem::path(key));
+        }
+    }
+    return {files.begin(), files.end()};
+}
+
+AssetReloadResult AssetManager::reloadFiles(const std::vector<std::filesystem::path>& changedFiles) {
+    AssetReloadResult result;
+    std::set<std::filesystem::path> changed;
+    for (const std::filesystem::path& p : changedFiles) {
+        changed.insert(resolve(p));
+    }
+    if (changed.empty()) {
+        return result;
+    }
+    watchedFiles(); // prunes released sources, fills model dependencies
+    for (const auto& [key, source] : std::unordered_map(m_textureSources)) {
+        if (changed.contains(source.file)) {
+            reloadTexture(m_textures.find(key), result);
+        }
+    }
+    for (const std::string& key : m_materials.keys()) {
+        const MaterialAssetHandle material = m_materials.find(key);
+        if (key.find('#') != std::string::npos || !material.valid()) {
+            continue;
+        }
+        if (changed.contains(std::filesystem::path(key))) {
+            reloadMaterialFile(material, result, true);
+        } else if (material.failed()) {
+            reloadMaterialFile(material, result, false); // retry quietly (a texture may be fixed)
+        }
+    }
+    for (const auto& [key, source] : std::unordered_map(m_modelSources)) {
+        if (std::ranges::any_of(*source.files, [&](const std::filesystem::path& f) { return changed.contains(f); })) {
+            reloadModel(m_models.find(key), result);
+        }
+    }
+    finishReload(result);
+    return result;
+}
+
+AssetReloadResult AssetManager::pollFileChanges() {
+    if (!watching()) {
+        return {};
+    }
+    m_watcher.setWatched(watchedFiles());
+    const std::vector<std::filesystem::path> changed = m_watcher.poll();
+    return changed.empty() ? AssetReloadResult{} : reloadFiles(changed);
+}
+
 AssetManager::Stats AssetManager::stats() const {
     const auto& t = m_textures.stats();
     const auto& m = m_models.stats();
@@ -724,6 +994,8 @@ AssetManager::Stats AssetManager::stats() const {
     s.released = t.released + m.released + a.released;
     s.pending = pendingCount();
     s.uploading = m_textureUploads.size() + m_modelUploads.size();
+    s.reloads = m_reloads;
+    s.reloadFailures = m_reloadFailures;
     return s;
 }
 

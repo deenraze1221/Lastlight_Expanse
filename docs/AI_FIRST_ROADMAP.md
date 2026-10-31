@@ -106,7 +106,10 @@ Make every app start, run, capture and report the same way.
   component, `loadSceneModels[Async]`; revised texture standards; pixel art never BC7.
 - **C7 done:** palette validation (`assets.json` master palette + sub-palettes, off-palette
   texel counts, `paletteDeviation` in reports, `--palette`, `--sub-palette`).
-  Remaining Phase C: C5/C6 hot reload. Streaming budgets, FBX/audio import and skins move to
+- **C5 done:** asset hot reload (textures, models, material files; in-place swap keeps
+  handles/addresses, dependent materials refreshed, old GPU objects retired, failures keep the
+  previous version; opt-in `Core/FileWatcher` watching in Debug builds).
+  Remaining Phase C: C6 shader + scene hot reload. Streaming budgets, FBX/audio import and skins move to
   later phases (audit: PROGRESS.md).
 - `AssetManager` with typed handles (`Handle<Mesh>`, `Handle<Texture>`, `Handle<Material>`,
   `Handle<AudioClip>`...), ref counting, async load on `JobSystem` + `UploadQueue`, unload via

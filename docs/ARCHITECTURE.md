@@ -308,7 +308,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
     equivalent C++ scene via both WorldRender paths and after capture/reload; mutable material
     updates match freshly created materials (CPU path and GpuScene, sync validation clean).
 
-## Asset manager (Phases C1-C4, C7)
+## Asset manager (Phases C1-C5, C7)
 
 - Module `Zodar::AssetManager` (`engine/rendering/AssetManager`, depends on Renderer + SceneFile).
   Guide: `docs/guide/ASSETS.md`; example `examples/asset_loading` + sample `ZodarAssetLoading`.
@@ -369,8 +369,19 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   colour textures (texture usage color, material base colour/emissive, model images used as
   base colour/emissive) not in the palette: warning + `PaletteDeviation` + report keys, all
   absent without a palette (no behaviour change). Swatches are not hash dependencies. CPU only.
-- Not yet (later Phase C steps):
-  streaming budgets (`docs/ASSET_STREAMING.md`), hot reload, audio/FBX importers,
+- Hot reload (C5): `AssetCache::replace` swaps the new value into the existing record
+  (`std::swap` of the asset structs), so handles and addresses users hold stay valid and
+  `generation()` increases; the previous content is retired like a released asset. Materials
+  keep their `MaterialSystem` slot (`updateMaterial`); because `MaterialDesc` stores texture
+  addresses and `toGpu` reads bindless slots at record time, a reloaded texture only needs
+  `updateMaterial` on its users. Pipeline-state changes (shader/alphaMode/doubleSided) are
+  rejected: `GpuScene` caches blend flags and groups per pipeline. Failed reloads change
+  nothing. Reloads are synchronous (debug feature; reuses the blocking load path).
+  `Core/FileWatcher` (size + mtime polling, portable, no threads) drives opt-in watching
+  (`AssetManagerDesc::watchFiles`), compiled only into Debug builds (`ZODAR_HOT_RELOAD`,
+  `kHotReloadAvailable`). Model dependencies come from `fingerprintAsset` (C3).
+- Not yet (later phases):
+  streaming budgets (`docs/ASSET_STREAMING.md`), audio/FBX importers,
   scene-file `model` references (meshes still bound by name in `SceneBindings`).
 
 ## Frame flow (Milestone 1)

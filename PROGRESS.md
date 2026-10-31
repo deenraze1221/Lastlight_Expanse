@@ -107,7 +107,24 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase C7 complete (palette validation). Phases A, B, C1-C4 unchanged.
+- `main`: Phase C5 complete (asset hot reload). Phases A, B, C1-C4, C7 unchanged.
+
+## Phase C5 — asset hot reload (done)
+- `AssetCache::replace` (in-place swap of the asset struct, previous content returned,
+  failed -> ready) + `AssetHandle::generation()`.
+- `AssetManager::reload(texture|model|material)`, `reloadFiles(paths)` (textures, then file
+  materials incl. quiet retry of failed ones, then models via glTF dependencies),
+  `updateMaterialData` (atomic, data materials), `watchedFiles`, `pollFileChanges`,
+  `AssetReloadResult`, stats `reloads`/`reloadFailures`. Texture reload refreshes dependent
+  materials via `updateMaterial`; old GPU objects retired on the deletion queue; pipeline-state
+  changes rejected; failures keep the previous version and are logged.
+- Opt-in watching: `AssetManagerDesc::watchFiles` + `watchInterval`, polled in `update()`;
+  compiled only into Debug builds (`ZODAR_HOT_RELOAD` CMake option, `kHotReloadAvailable`);
+  `Core/FileWatcher` (size + mtime polling).
+- Tests: unit `asset cache: replace ...`, `file watcher:*` (2); GPU `hot reload:*` (4:
+  textures + material files incl. failures/recovery, atomic data materials, glTF models with
+  texture dependencies, opt-in watching). Verified GCC 13 Debug, 0 warnings, 195/195 unit,
+  61/61 GPU cases, 23/23 ctest, 0 validation messages.
 
 ## Phase C7 — palette validation (done)
 - `AssetRegistry`: optional `"palette"` (swatch PNG | `#rrggbb` list | `{colors, subPalettes}`),
@@ -250,8 +267,7 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Remaining Phase C (when requested): C5 asset hot reload (textures, materials, models in
-   place), C6 shader + scene-file hot reload. Then close Phase C (move streaming budgets,
+1. Remaining Phase C (when requested): C6 shader + scene-file hot reload. Then close Phase C (move streaming budgets,
    FBX/audio import, skins to later phases). Game: re-author terrain textures to 32×32. Optionally migrate game draws/terrain textures to assets.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench

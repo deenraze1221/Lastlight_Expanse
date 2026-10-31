@@ -3,7 +3,8 @@ add_library(ZodarCore STATIC
     Error.cpp
     ImageIO.cpp
     Profiler.cpp
-    JobSystem.cpp)
+    JobSystem.cpp
+    FileWatcher.cpp)
 add_library(Zodar::Core ALIAS ZodarCore)
 
 # engine/core holds both Core/ and Platform/; headers are included as "Core/<File>.h".
@@ -14,4 +15,8 @@ target_compile_definitions(ZodarCore PUBLIC
     ZODAR_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
     ZODAR_VERSION_MINOR=${PROJECT_VERSION_MINOR}
     ZODAR_VERSION_PATCH=${PROJECT_VERSION_PATCH})
+# Hot reload file watching (C5/C6): Debug configurations only, see Core/FileWatcher.h.
+if(ZODAR_HOT_RELOAD)
+    target_compile_definitions(ZodarCore PUBLIC $<$<CONFIG:Debug>:ZODAR_HOT_RELOAD=1>)
+endif()
 zodar_set_warnings(ZodarCore)

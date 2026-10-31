@@ -165,3 +165,42 @@ TEST_CASE("asset cache: pending entries resolve or reject later (async loads)") 
     CHECK(retired == 1);
     CHECK_FALSE(cache.find("x").valid());
 }
+
+TEST_CASE("asset cache: replace swaps content in place (hot reload) and keeps addresses") {
+    std::vector<int> retired;
+    AssetCache<Dummy> cache([&](std::unique_ptr<Dummy> d) { retired.push_back(d->value); });
+    AssetHandle<Dummy> a = cache.getOrLoad("a", [] { return std::make_unique<Dummy>(Dummy{1}); });
+    const AssetHandle<Dummy> b = cache.find("a");
+    Dummy* address = &a.get();
+    CHECK(a.generation() == 0);
+
+    std::unique_ptr<Dummy> old = cache.replace(a, std::make_unique<Dummy>(Dummy{2}));
+    REQUIRE(old);
+    CHECK(old->value == 1);         // previous content handed back (caller retires it)
+    CHECK(&a.get() == address);     // same object, new content
+    CHECK(b->value == 2);           // every handle sees it
+    CHECK(a.generation() == 1);
+    CHECK(cache.replace(a, nullptr) == nullptr); // null: no effect
+    CHECK(a.generation() == 1);
+
+    // Failed entry: replace makes it ready (a fixed file reloads).
+    AssetHandle<Dummy> f = cache.getOrLoad("f", []() -> std::unique_ptr<Dummy> { throw Error("broken"); });
+    REQUIRE(f.failed());
+    CHECK(cache.replace(f, std::make_unique<Dummy>(Dummy{5})) == nullptr);
+    CHECK(f.ready());
+    CHECK(f.error().empty());
+    CHECK(f->value == 5);
+    CHECK(f.generation() == 1);
+
+    // Loading entry: left alone, value returned.
+    bool created = false;
+    AssetHandle<Dummy> p = cache.getOrCreatePending("p", created);
+    std::unique_ptr<Dummy> back = cache.replace(p, std::make_unique<Dummy>(Dummy{9}));
+    REQUIRE(back);
+    CHECK(back->value == 9);
+    CHECK(p.loading());
+    CHECK(p.generation() == 0);
+
+    a = {};
+    CHECK(retired.empty()); // b still holds it
+}

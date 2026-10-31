@@ -27,6 +27,10 @@
 // broken file is not retried every frame; dropping every handle allows a fresh attempt.
 // Async loads (Phase C2): getOrCreatePending() returns a Loading entry that the loader later
 // completes with resolve() or reject(); the handle is shared and cached meanwhile.
+// Hot reload (Phase C5): replace() swaps a new value into the existing record in place, so
+// every handle and every pointer/reference to the value (T&, &handle->member) stays valid and
+// sees the new content; generation() counts successful replacements. The previous content is
+// returned to the caller (which retires it like a released asset).
 // Not thread safe: use from one thread (the main/render thread).
 namespace zodar {
 
@@ -38,6 +42,7 @@ struct AssetRecord {
     AssetState state = AssetState::Failed;
     std::unique_ptr<T> value;
     std::string error; // Failed: why (exception message of the loader)
+    uint64_t generation = 0; // successful replace() calls (hot reloads)
 };
 
 template <class T>
@@ -72,6 +77,9 @@ public:
     }
     T* operator->() const { return &get(); }
     T& operator*() const { return get(); }
+
+    // 0 after the first load; +1 per successful hot reload (AssetCache::replace).
+    uint64_t generation() const { return record().generation; }
 
     long useCount() const { return m_record.use_count(); }
     bool operator==(const AssetHandle& other) const { return m_record == other.m_record; }
@@ -182,6 +190,28 @@ public:
         handle.m_record->error = std::move(error);
         handle.m_record->state = AssetState::Failed;
         ++m_shared->stats.failures;
+    }
+
+    // Hot reload: puts `fresh` into the record of `handle` (Ready or Failed; a Loading entry
+    // is left alone and `fresh` is returned unchanged). Ready: the values are swapped in
+    // place (T must be swappable), so the old object's address now holds the new content;
+    // the previous content is returned. Failed: the record becomes Ready with `fresh`
+    // (nothing returned). generation() is incremented in both cases. Null `fresh`: no effect.
+    std::unique_ptr<T> replace(const AssetHandle<T>& handle, std::unique_ptr<T> fresh) {
+        if (!fresh || !handle.valid() || handle.loading()) {
+            return fresh;
+        }
+        AssetRecord<T>& r = *handle.m_record;
+        ++r.generation;
+        if (r.state == AssetState::Ready) {
+            using std::swap;
+            swap(*r.value, *fresh);
+            return fresh;
+        }
+        r.value = std::move(fresh);
+        r.state = AssetState::Ready;
+        r.error.clear();
+        return nullptr;
     }
 
     // Entries with at least one live handle.

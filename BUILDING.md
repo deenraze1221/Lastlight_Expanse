@@ -123,6 +123,7 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 | `ZODAR_BUILD_TESTS` | ON | Build `ZodarTests` (doctest) |
 | `ZODAR_BUILD_TOOLS` | ON | Build `engine/tools/` (ZodarBench, ZodarAssetCompiler, ZodarUISandbox) |
 | `ZODAR_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.runtime_headless`, `gpu.runtime_capture_report` (select the offscreen driver themselves), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.zodarbench_smoke`, `gpu.lastlight_smoke` (headless) (others need a video driver) |
+| `ZODAR_HOT_RELOAD` | ON | Compile hot-reload file watching (`Core/FileWatcher`, `AssetManagerDesc::watchFiles`) into **Debug** configurations only; still opt-in at runtime. Explicit reload calls work in every build |
 | `ZODAR_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` for engine code |
 
 ## HelloTriangle arguments

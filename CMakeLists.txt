@@ -46,6 +46,7 @@ option(ZODAR_BUILD_TESTS "Build unit tests" ON)
 option(ZODAR_BUILD_TOOLS "Build engine tools (ZodarBench)" ON)
 option(ZODAR_GPU_TESTS "Register tests that need a Vulkan device and a video driver" OFF)
 option(LASTLIGHT_BUILD_GAME "Build the Lastlight Expanse game" ON)
+option(ZODAR_HOT_RELOAD "Compile asset/shader/scene file watching into Debug builds (opt-in at runtime)" ON)
 option(ZODAR_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in engine code" OFF)
 
 # All executables and compiled shaders land in one directory, for every configuration.
