@@ -27,6 +27,20 @@
   9.8 -> 9.7 FPS: within noise (±5%), no regression. Not verified: MSVC; 1.4 path under
   validation (needs layers >= 1.4.304; Ubuntu 24.04 ships 1.3.275).
 
+- Phase A1: `Zodar::Runtime` (`engine/runtime/Runtime`): `zodar::Application` (owns Platform,
+  Window, Renderer, UploadContext, SceneRenderer, RenderGraphResources, DebugOverlay, CpuProfiler,
+  JobSystem; hooks onStart/onEvent/onFixedUpdate/onUpdate/onRender/onShutdown; exit codes
+  0/1/2/3), `FixedTimestep` (accumulator, max steps, clamp, interpolation alpha), headless mode
+  (SDL offscreen driver via hint, no env var) and deterministic mode (one fixed step per frame).
+  Game migrated (`LastlightApp`; new `--headless`, `--deterministic`); ModelViewer/ZodarBench
+  unchanged (A3). Tests: 5 `FixedTimestep*` unit cases, `gpu.runtime_headless`
+  (`ZodarRuntimeSmoke`: driver, hook order, step/frame counts, frame time, screenshot pixel),
+  `gpu.lastlight_smoke` now `--headless --deterministic`. Verified: GCC 13 Debug + Release and
+  Clang 18 Debug, 0 warnings, 17/17 ctest each (128 unit cases), validation 0 errors; game
+  screenshot byte-identical to pre-migration (640x360, 90 frames); lavapipe game FPS (Release,
+  no validation, interleaved medians) 7.10 -> 7.27: within noise. Not verified this session:
+  MinGW/Windows, MSVC.
+
 ## Engine audit: open items (from SECTOR-ENGINE docs)
 - Renderer S4 awaiting RTX benchmarks; S5 shadows, S6 post (tonemap, TAA), S7 AO/GI, S8 volumetrics/fog, S9 HZB/meshlets planned.
 - Asset streaming designed (docs/ASSET_STREAMING.md), not implemented. MSVC/Windows build unverified here.
@@ -36,22 +50,19 @@
 - `docs/AI_FIRST_ROADMAP.md`: AI-first audit + phases A–G (runtime/tooling, ECS + scene files,
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
-## Current state (commit f64a190)
-- Branch `claude/peaceful-thompson-v8a01e`, clean tree, pushed.
-- All checks green: GCC 13 Debug/Release + Clang 18 Debug 16/16 ctest, MinGW Windows build +
-  123/123 unit tests (Wine), validation 0 errors, no performance regression.
+## Current state
+- Branch `claude/youthful-ride-bzkozz` (based on `claude/peaceful-thompson-v8a01e` f64a190 +
+  docs 2a735eb), Phase A1 committed and pushed.
+- All checks green (see Phase A1 entry).
 
 ## Current task
-- **Next: Phase A1** (docs/AI_FIRST_ROADMAP.md §2 Phase A, §4 item 1): `zodar::Application`
-  runtime (window or headless, fixed timestep, standard frame loop) in a new `Zodar::Runtime`
-  module; migrate `game/` onto it, keeping existing samples/tools unchanged until A3.
-  Not started.
+- **Next: Phase A2** (docs/AI_FIRST_ROADMAP.md §2 Phase A): standard command line for
+  `Application` apps, PNG screenshots + capture sequences, run report JSON. Not started.
 
 ## Next steps
-1. Phase A1 (above).
-2. Phase A2: standard CLI, PNG capture, run report JSON.
-3. Phase A3: CMakePresets + `tools/zodar.py`, RUNNING guide; migrate ModelViewer/ZodarBench.
-4. Phase B1/B2: EnTT world + transforms + renderer bridge; scene/material JSON.
+1. Phase A2 (above).
+2. Phase A3: CMakePresets + `tools/zodar.py`, RUNNING guide; migrate ModelViewer/ZodarBench.
+3. Phase B1/B2: EnTT world + transforms + renderer bridge; scene/material JSON.
 
 ## Backlog (rendering / game visuals, interleave when needed)
 - S5 shadows (CSM sun) in pbr.frag and voxel.frag.

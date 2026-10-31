@@ -21,7 +21,7 @@ Instructions for Claude Code sessions in this repository.
 
 - Repo: Lastlight Expanse game (`game/`) on the reusable ZODAR engine (`engine/`). Engine code
   never depends on `game/`. Layout and module rules: `docs/ARCHITECTURE.md`.
-- Status and next task: `PROGRESS.md`; plan: `docs/AI_FIRST_ROADMAP.md` (next: Phase A1).
+- Status and next task: `PROGRESS.md`; plan: `docs/AI_FIRST_ROADMAP.md` (next: Phase A2).
 - Language **C++23** (GCC 13, Clang 18, MinGW-w64 verified; MSVC unverified). Use only features
   listed as usable in `BUILDING.md` ("C++23 policy").
 - Vulkan **1.3 minimum**, 1.4 requested when available (`engine/graphics/Renderer/Vulkan/ApiVersion.h`).
@@ -37,7 +37,8 @@ SDL_VIDEO_DRIVER=offscreen ctest --test-dir build --output-on-failure
 ```
 
 - Focused: `./build/bin/ZodarTests -tc='name*'`, `./build/bin/ZodarGpuTests -tc='name*'`.
-- Game smoke: `SDL_VIDEO_DRIVER=offscreen ./build/bin/LastlightExpanse --frames 60 --screenshot out.ppm`.
+- Game smoke: `./build/bin/LastlightExpanse --headless --deterministic --frames 60 --screenshot out.ppm`.
+- New apps derive from `zodar::Application` (`engine/runtime/Runtime/Application.h`).
 - Benchmarks: `ZodarBench ... --no-validation --output report.json`; on lavapipe (software)
   compare runs interleaved and treat ±5% as noise.
 - Cloud containers: needs `glslang-tools`, `mesa-vulkan-drivers`, `vulkan-validationlayers`

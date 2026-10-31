@@ -12,6 +12,7 @@ project(ZODAR
 #   rendering: Graphics  <-  Renderer (frame loop, render graph, scene renderer, lighting)
 #   scene:     Core + Assets  <-  Scene (voxel terrain, chunk streaming, LOD; no GPU)
 #   tools:     Renderer  <-  Debug (ImGui tools)
+#   runtime:   Renderer + Debug  <-  Runtime (Application: window/headless, frame loop, fixed timestep)
 #   ui:        Core + Platform  <-  UI (renderer-independent: produces plain draw lists)
 # Nothing in engine/ depends on a game.
 add_subdirectory(core/Core)
@@ -22,6 +23,7 @@ add_subdirectory(graphics)
 add_subdirectory(rendering/Renderer)
 add_subdirectory(scene)
 add_subdirectory(tools/Debug)
+add_subdirectory(runtime)
 add_subdirectory(ui/UI)
 
 if(ZODAR_BUILD_SAMPLES)

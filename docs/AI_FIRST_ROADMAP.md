@@ -1,7 +1,8 @@
 # ZODAR — AI-First Engine Roadmap
 
-**Status:** audit done; C++23 / optional Vulkan 1.4 done (f64a190). **Next task: Phase A1**
-(`zodar::Application` + headless mode, migrate the game). No phase started yet.
+**Status:** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
+(`zodar::Application`, `FixedTimestep`, headless/deterministic modes, game migrated).
+**Next task: Phase A2** (standard CLI, PNG capture, run report JSON).
 
 Goal: ZODAR is driven by Claude Code (code, CLI, files, logs, screenshots), not by a visual
 editor. Every engine capability must be reachable through documented C++ APIs, text data
@@ -142,8 +143,8 @@ Visual editor, scene-graph GUI, standalone SDK/installer, marketplace, scripting
 networking (DEAD SECTOR M7 stays on the engine roadmap but after Phase E).
 
 ## 4. Suggested order of the next sessions
-1. **A1 (next)** `Application` + headless mode; migrate the game.
-2. A2 standard CLI, PNG capture, run report JSON.
+1. ~~A1 `Application` + headless mode; migrate the game.~~ Done.
+2. **A2 (next)** standard CLI, PNG capture, run report JSON.
 3. A3 CMake presets + `tools/zodar.py` + RUNNING guide; migrate ModelViewer/ZodarBench.
 4. B1 EnTT world, Transform hierarchy, renderer bridge.
 5. B2 scene/material JSON + reflection + round-trip tests.

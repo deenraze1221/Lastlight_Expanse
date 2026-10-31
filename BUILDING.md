@@ -116,7 +116,7 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 | `LASTLIGHT_BUILD_GAME` | ON | Build the `LastlightExpanse` game (`game/`) |
 | `ZODAR_BUILD_TESTS` | ON | Build `ZodarTests` (doctest) |
 | `ZODAR_BUILD_TOOLS` | ON | Build `engine/tools/` (ZodarBench, ZodarAssetCompiler, ZodarUISandbox) |
-| `ZODAR_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.zodarbench_smoke` (need a video driver) |
+| `ZODAR_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.runtime_headless` (selects the offscreen driver itself), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.zodarbench_smoke`, `gpu.lastlight_smoke` (headless) (others need a video driver) |
 | `ZODAR_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` for engine code |
 
 ## HelloTriangle arguments
@@ -130,6 +130,18 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 ```
 
 Exit codes: 0 ok, 1 fatal error, 2 validation errors occurred, 3 screenshot failed.
+
+## LastlightExpanse
+
+```
+LastlightExpanse [--seed N] [--view-radius CHUNKS] [--threads N] [--frames N] [--screenshot out.ppm]
+                 [--width W] [--height H] [--no-validation] [--overlay]
+                 [--lighting-quality low|medium|high|ultra] [--untextured] [--no-fog]
+                 [--spawn-height H] [--pitch DEG] [--headless] [--deterministic]
+```
+
+`--headless` runs without a visible window (SDL offscreen driver, no `SDL_VIDEO_DRIVER` needed;
+requires `--frames`). `--deterministic` advances exactly 1/60 s per frame. Exit codes as above.
 
 ## ModelViewer
 
@@ -276,6 +288,9 @@ Vulkan 1.3+ device (1.4 is used automatically when available). Two ways to get a
 ```bash
 SDL_VIDEO_DRIVER=offscreen ctest --test-dir build --output-on-failure
 ```
+
+Apps built on `zodar::Application` (the game, `ZodarRuntimeSmoke`) also accept a headless flag
+that selects the offscreen driver themselves, e.g. `LastlightExpanse --headless --frames 60`.
 
 ```bash
 xvfb-run -a ctest --test-dir build --output-on-failure

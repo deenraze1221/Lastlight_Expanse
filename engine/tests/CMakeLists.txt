@@ -21,6 +21,7 @@ add_executable(ZodarTests
     Renderer/ClusterMathTests.cpp
     Renderer/ApiVersionTests.cpp
     Scene/VoxelTests.cpp
+    Runtime/FixedTimestepTests.cpp
     UI/ThemeTests.cpp
     UI/DrawListTests.cpp
     UI/LayoutTests.cpp
@@ -34,7 +35,7 @@ add_executable(ZodarTests
     UI/ProgressBarTests.cpp
     UI/SvgFilterTests.cpp
     UI/LoadingScreenTests.cpp)
-target_link_libraries(ZodarTests PRIVATE Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::UI Zodar::stb doctest::doctest)
+target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::UI Zodar::stb doctest::doctest)
 # UI tests read the committed resources directly (fonts, original logos, manifest).
 target_compile_definitions(ZodarTests PRIVATE ZODAR_TEST_UI_DIR="${ZODAR_ENGINE_DIR}/ui/Resources/UI")
 zodar_set_warnings(ZodarTests)
@@ -103,6 +104,15 @@ if(ZODAR_GPU_TESTS)
         Gpu/Shaders/test_sample_array.frag)
     add_test(NAME gpu.subsystems COMMAND ZodarGpuTests)
     set_tests_properties(gpu.subsystems PROPERTIES TIMEOUT 300)
+
+    # zodar::Application end to end: headless (no SDL_VIDEO_DRIVER needed), deterministic
+    # fixed steps, hook order, scene render + screenshot, validation exit code.
+    add_executable(ZodarRuntimeSmoke Runtime/RuntimeSmoke.cpp)
+    target_link_libraries(ZodarRuntimeSmoke PRIVATE Zodar::Runtime SDL3::SDL3)
+    zodar_set_warnings(ZodarRuntimeSmoke)
+    add_test(NAME gpu.runtime_headless
+        COMMAND ZodarRuntimeSmoke --screenshot ${CMAKE_BINARY_DIR}/runtime_headless.ppm)
+    set_tests_properties(gpu.runtime_headless PROPERTIES TIMEOUT 120)
 
     add_test(NAME gpu.hello_triangle
         COMMAND HelloTriangle --frames 120 --screenshot ${CMAKE_BINARY_DIR}/hello_triangle.ppm)

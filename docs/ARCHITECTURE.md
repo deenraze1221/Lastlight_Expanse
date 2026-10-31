@@ -16,6 +16,7 @@ Engine code never includes game headers or links game targets.
 | `engine/assets/AssetPipeline` | `Zodar::AssetPipeline` | Offline BCn encoding, mip baking |
 | `engine/scene/Scene` | `Zodar::Scene` | Noise, voxel chunks, greedy mesher, LOD, chunk streaming (no GPU) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
+| `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep` |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarUISandbox |
 | `engine/ui` | `Zodar::UI` | Engine/tooling UI, UI resources |
 | `engine/samples`, `engine/tests` | — | HelloTriangle, ModelViewer; doctest unit + GPU tests |
@@ -47,7 +48,9 @@ code changes: each module adds its own include root, so every header keeps its
 
 ```
             game/          Samples/*   Tools/ZodarBench   Tests     Tools/ZodarAssetCompiler
-                       \          |           /             /    \            |
+              |                   |           /             /    \            |
+          Runtime (Application)   |          /             /      \           |
+                       \          |           /             /      \          |
                         +------ Debug (ImGui) ------+-------+      AssetPipeline (offline: BCn, mips)
                                      |                               |
                         +-------- Renderer -------+                  |
@@ -80,6 +83,7 @@ Planned modules (by milestone) slot in as follows: `Scene`, `Assets`, `Physics`,
 | Renderer/Vulkan | `DeviceCapabilities`, `GpuTimeline`, `PipelineCache` | Capability table + feature resolution with fallbacks; graphics timeline semaphore; validated on-disk pipeline cache |
 | Core | `Profiler` | CPU scope timers, frame-time history with percentiles |
 | Debug | `DebugOverlay` | ImGui profiler overlay (F1), headless capable, drawn as a render-graph pass |
+| Runtime | `Application`, `FixedTimestep` (A1) | Standard app runtime: owns Platform, Window, Renderer, UploadContext, SceneRenderer, RenderGraphResources, DebugOverlay, CpuProfiler, JobSystem; hooks `onStart/onEvent/onFixedUpdate/onUpdate/onRender/onShutdown`; fixed timestep with interpolation alpha; headless (SDL offscreen) and deterministic modes; exit codes 0/1/2/3. See "Application runtime" below |
 | Renderer | `GpuScene` (S2) | Persistent GPU-resident instances (transform, normal matrix, material, world AABB); dirty-range uploads; ordered GPU frustum culling (cull + prefix-sum scan + scatter, S2.1); multi-draw indirect per pipeline; blended instances sorted on the CPU |
 | Renderer | `GeometryPool` (S2) | Shared device-local vertex/index buffers (growable); pooled meshes can be drawn by one indirect call |
 | Renderer/Vulkan | `ComputePipeline` (S2) | Compute pipelines with owned layout |
@@ -175,6 +179,23 @@ Minecraft-inspired voxel look built only from engine capabilities (`game/`):
 | Forward shading into an RGBA16F target | Simple, MSAA-friendly, enough for M2 light counts; resolve/post stack on top. |
 | Deferred destruction by frame number | Render targets and bindless slots are released only after frames that used them completed. |
 | Validation on by default, errors counted | `HelloTriangle` exits with code 2 if any validation error occurred; the GPU test relies on it. |
+
+## Application runtime (Phase A1)
+
+| Decision | Reason |
+| --- | --- |
+| One `zodar::Application` base class with virtual hooks | One obvious way to start/run/stop an app; removes ~150 copied lines per executable |
+| Subsystems built in the constructor, hooks run only in `run()` | Hooks can rely on every subsystem; no virtual calls during construction |
+| Derived members destroyed before engine subsystems; `run()` waits for the GPU first | Game-owned GPU resources (meshes, textures, environments) are released while the renderer is alive |
+| Headless = SDL `offscreen` video driver (hint set with override priority before `SDL_Init`) | Same swapchain path as windowed runs (VK_EXT_headless_surface), no env var needed; requires `maxFrames` |
+| `FixedTimestep`: accumulator, `maxSteps` per frame, `maxFrameTime` clamp, dropped-time counter | Deterministic simulation independent of frame rate; no spiral of death |
+| `deterministic`: one fixed step per frame, frame dt = fixedDt | Same input -> same frames for agent tests and screenshots |
+| Escape requests quit in the runtime; overlay gets events first | Same behaviour as the hand-written loops it replaces |
+
+Frame order: events -> `onFixedUpdate` x N -> `onUpdate` -> `beginFrame` -> `onRender` (records
+into the frame's render graph, swapchain image imported as `output`) -> debug overlay pass ->
+graph execute -> `endFrame`. The screenshot is requested before the last frame's `beginFrame`.
+Migrated: `game/`. ModelViewer and ZodarBench keep their own loops until Phase A3.
 
 ## Frame flow (Milestone 1)
 
