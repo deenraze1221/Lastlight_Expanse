@@ -252,3 +252,24 @@ TEST_CASE("palette: the example registry uses only its palette colours") {
         CHECK_MESSAGE(res.paletteDeviation->offPalette == 0, res.id);
     }
 }
+
+TEST_CASE("palette: scenes check a texture used as colour by any material; long names are not truncated") {
+    const Dir d;
+    writeRgbaPng(d.dir / "shared.png", 8, 8, std::vector<uint32_t>(64, 0xff00ffff)); // all off-palette
+    // Material "a" uses it as a normal map first, "b" as base colour.
+    d.write("level.scene.json", R"({"version": 1, "materials": {
+        "a": {"normalTexture": "shared.png"}, "b": {"baseColorTexture": "shared.png"}}, "entities": []})");
+    AssetRegistry r(d.dir);
+    PaletteConfig config;
+    config.master.colors = {"#102030"};
+    const std::string longName(200, 'p');
+    config.subPalettes[longName].colors = {"#a0b0c0"};
+    r.setPalette(config);
+    AssetImportOptions options;
+    options.palette = longName;
+    importAsset(r, d.dir / "level.scene.json", options);
+    const AssetCheckResult scene = checkAsset(r, r.at("level"));
+    REQUIRE(scene.paletteDeviation.has_value());
+    CHECK(scene.paletteDeviation->offPalette == 64);
+    CHECK(contains(scene.warnings, "not in palette 'master+" + longName + "' (e.g. #ff00ff)"));
+}

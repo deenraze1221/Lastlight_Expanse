@@ -38,6 +38,9 @@ public:
     // Starts watching `path` (state recorded now, so the current content is not a change).
     // No effect if already watched.
     void watch(const std::filesystem::path& path);
+    // Watches `path` and records its current state now, also if already watched (the caller
+    // is about to read it, so earlier changes are consumed).
+    void refresh(const std::filesystem::path& path) { m_files[path] = stat(path); }
     void unwatch(const std::filesystem::path& path);
     // Watches exactly `paths`: new ones are recorded, missing ones dropped, existing ones keep
     // their recorded state (a change made before this call is still reported by poll()).

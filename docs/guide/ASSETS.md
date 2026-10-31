@@ -83,7 +83,13 @@ python3 tools/zodar.py assets check -- --registry assets/assets.json --report re
 
 (`ZodarAssetTool import|list|check` directly takes the same options.) Default ids are file
 names without asset extensions; a clash must be resolved with `--id`. Re-importing keeps the
-id and settings. Import fails if a dependency is missing.
+id and settings. Import fails if a dependency is missing. A file is imported under one id
+only (`--id` with another id fails); `--id` naming an entry of a different file or type
+starts from default settings. Sources are relative paths inside the registry directory
+(absolute or `..` sources are rejected when parsing). `assets.json` is written atomically
+(temporary file + rename). Malformed numeric options (`--density-target abc`) and an empty
+`--palette` are usage errors. A corrupt compiled KTX2 cache falls back to the source image
+with a warning.
 
 `check` exit code: 1 if any asset has errors (`--strict`: warnings too). Errors: missing
 source or dependency, unreadable/invalid file. Warnings: stale (source/dependency changed
@@ -219,8 +225,10 @@ if (!r.ok()) for (auto& f : r.failed) log(f); // "<key>: <error>"; previous vers
   materials are retried on every `reloadFiles`).
 - Materials created from data (`createMaterial`, inline scene materials) change through
   `updateMaterialData({{handle, data, baseDirectory}, ...})` (all or nothing).
-- Reloads are blocking (decode + upload on the calling thread); assets still loading
-  asynchronously are skipped.
+- Reloads are blocking (decode + upload on the calling thread). An asset still loading
+  asynchronously is skipped and its changed file retried by `update()` once it finished.
+- Watching baselines a file when it is read (load or reload), so a save during a load is
+  still reported; explicit reloads consume earlier changes (`FileWatcher::refresh`).
 
 ### File watching (opt-in, Debug builds)
 

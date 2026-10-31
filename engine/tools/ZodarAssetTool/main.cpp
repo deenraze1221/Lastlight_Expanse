@@ -28,6 +28,8 @@
 
 #include <cstdio>
 #include <fstream>
+#include <cmath>
+#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -96,9 +98,18 @@ Args parse(int argc, char** argv) {
         else if (arg == "--json") a.json = true;
         else if (arg == "--strict") a.strict = true;
         else if (arg == "--report") a.report = next();
-        else if (arg == "--density-target") a.check.texelDensityTarget = std::stod(next());
-        else if (arg == "--palette") {
-            PaletteSource palette = parsePaletteArgument(next());
+        else if (arg == "--density-target") {
+            const std::string value = next();
+            char* end = nullptr;
+            const double target = std::strtod(value.c_str(), &end);
+            if (value.empty() || end != value.c_str() + value.size() || !std::isfinite(target) || target <= 0.0) {
+                usage("--density-target needs a positive number, got '" + value + "'");
+            }
+            a.check.texelDensityTarget = target;
+        } else if (arg == "--palette") {
+            const std::string value = next();
+            if (value.empty()) usage("--palette needs a swatch PNG or #rrggbb list");
+            PaletteSource palette = parsePaletteArgument(value);
             for (const std::string& c : palette.colors) {
                 if (!parseHexColor(c)) usage("malformed --palette colour '" + c + "' (expected #rrggbb)");
             }
@@ -193,7 +204,13 @@ int cmdCheck(const Args& a) {
         warnings += r.errors.empty() && !r.warnings.empty();
     }
     if (!a.report.empty()) {
-        std::ofstream(a.report, std::ios::binary) << assetReportJson(registry, results);
+        std::ofstream report(a.report, std::ios::binary | std::ios::trunc);
+        report << assetReportJson(registry, results);
+        report.close();
+        if (!report) {
+            std::fprintf(stderr, "ZodarAssetTool: cannot write report '%s'\n", a.report.c_str());
+            return 1;
+        }
         std::printf("report: %s\n", a.report.c_str());
     }
     uint64_t paletteTexels = 0, offPalette = 0;

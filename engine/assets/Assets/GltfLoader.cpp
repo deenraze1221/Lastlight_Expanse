@@ -11,6 +11,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <cstdlib>
+#include <optional>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -162,8 +163,19 @@ private:
 
         ImageData loaded;
         bool compiled = false;
+        std::optional<Ktx2File> cached;
         if (m_options.useCompiledTextures && std::filesystem::exists(cache)) {
-            Ktx2File file = loadKtx2(cache);
+            try {
+                cached = loadKtx2(cache);
+            } catch (const std::exception& e) {
+                // A corrupt or truncated cache (e.g. interrupted compile) never fails the model.
+                ++m_model.textureStats.stale;
+                warn("compiled texture '" + cache.filename().string() + "' is unreadable (" + e.what() +
+                     "); using the source image");
+            }
+        }
+        if (cached) {
+            Ktx2File& file = *cached;
             const auto it = file.keyValues.find(kTextureSourceKey);
             if (pixelArt && isBlockCompressed(file.image.format)) {
                 ++m_model.textureStats.lossyRejected;

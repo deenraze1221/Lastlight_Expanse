@@ -365,7 +365,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   Bound via `SceneBindings::models`; captured via `SceneCaptureNames::models`.
 - Palettes (C7, `AssetRegistry.h`): optional `PaletteConfig` (master + named sub-palettes,
   each a PNG swatch or `#rrggbb` list) in `assets.json`; entries name a sub-palette
-  (`AssetEntry::palette`, extends the master). `checkAsset` counts opaque level-0 texels of
+  (`AssetEntry::palette`, extends the master). `checkAsset` counts non-transparent (alpha > 0) level-0 texels of
   colour textures (texture usage color, material base colour/emissive, model images used as
   base colour/emissive) not in the palette: warning + `PaletteDeviation` + report keys, all
   absent without a palette (no behaviour change). Swatches are not hash dependencies. CPU only.
@@ -468,6 +468,15 @@ registered with `MaterialSystem::registerShader`; games implement their own look
   Engine-wide shaders will live in top-level `Shaders/`; sample-only shaders stay with the sample.
 
 ## Known architectural debts (tracked)
+
+- Phase C audit (2026-10-31): `FileWatcher` detects size + mtime only (same-size edits within
+  coarse mtime resolution, e.g. FAT 2 s, are missed); a `gfx::Model` constructor that throws
+  part-way (material table full) leaks the materials it created; async material requests are
+  not cancelled when every user handle is dropped (textures still decode); `LiveScene` watches
+  scene + prefab files only (material/texture/model files through the AssetManager's
+  `watchFiles`; a missing texture of a failed scene load is not watched); the asset report
+  contains the absolute registry path; registry source containment is lexical (symlinks
+  inside the directory are followed).
 
 - Textures must outlive materials referencing them (material pipeline state is immutable;
   factors and textures change through `updateMaterial`).

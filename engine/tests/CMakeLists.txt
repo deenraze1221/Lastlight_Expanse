@@ -64,6 +64,12 @@ if(TARGET ZodarAssetTool)
         COMMAND ZodarAssetTool check --strict --palette "#000000,#ffffff"
                 --registry ${ZODAR_ENGINE_DIR}/../examples/asset_loading/assets.json)
     set_tests_properties(tools.asset_check_palette_strict PROPERTIES WILL_FAIL TRUE)
+    # Malformed numbers are a usage error, not a crash (std::terminate).
+    add_test(NAME tools.asset_tool_bad_arguments
+        COMMAND ZodarAssetTool check --density-target abc
+                --registry ${ZODAR_ENGINE_DIR}/../examples/asset_loading/assets.json)
+    set_tests_properties(tools.asset_tool_bad_arguments PROPERTIES
+        PASS_REGULAR_EXPRESSION "--density-target needs a positive number")
 endif()
 
 # Temporary UI sandbox (SDL3 software renderer, offscreen): renders the component gallery

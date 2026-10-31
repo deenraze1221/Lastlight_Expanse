@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdarg>
 #include <cstring>
 #include <iterator>
 #include <fstream>
@@ -44,6 +45,29 @@ std::optional<AssetType> parseAssetType(std::string_view name) {
 }
 
 namespace {
+
+// printf-style formatting into a std::string (no fixed buffer, no truncation).
+std::string formatText(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    va_list copy;
+    va_copy(copy, args);
+    const int size = std::vsnprintf(nullptr, 0, format, copy);
+    va_end(copy);
+    std::string text(size > 0 ? static_cast<size_t>(size) : 0, '\0');
+    if (size > 0) {
+        std::vsnprintf(text.data(), text.size() + 1, format, args);
+    }
+    va_end(args);
+    return text;
+}
+
+// True for absolute paths and paths whose first component is "..".
+bool escapesDirectory(const std::string& source) {
+    const std::filesystem::path p(source);
+    return p.is_absolute() || p.has_root_name() || (!p.empty() && *p.begin() == "..");
+}
+
 
 std::string lower(std::string s) {
     std::ranges::transform(s, s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -315,7 +339,10 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
                 issues.add(detail::child(path, "palette"), "unknown sub-palette '" + e.palette + "'");
             }
         }
-        detail::readString(a, "source", path, e.source, issues, true);
+        if (detail::readString(a, "source", path, e.source, issues, true) && escapesDirectory(e.source)) {
+            issues.add(detail::child(path, "source"),
+                       "source '" + e.source + "' must be a relative path inside the registry directory");
+        }
         std::string usage;
         if (detail::readString(a, "usage", path, usage, issues)) {
             if (const auto u = parseUsage(usage)) {
@@ -414,10 +441,25 @@ std::string AssetRegistry::serialize() const {
 }
 
 void AssetRegistry::save(const std::filesystem::path& file) const {
-    std::ofstream out(file, std::ios::binary | std::ios::trunc);
-    out << serialize();
-    if (!out) {
-        throw Error("cannot write asset registry '" + file.generic_string() + "'");
+    // Write a temporary file and rename it over the registry: a failed write (disk full,
+    // interrupted tool) never leaves a truncated assets.json behind.
+    std::filesystem::path temp = file;
+    temp += ".tmp";
+    {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        out << serialize();
+        out.close();
+        if (!out) {
+            std::error_code ec;
+            std::filesystem::remove(temp, ec);
+            throw Error("cannot write asset registry '" + file.generic_string() + "'");
+        }
+    }
+    std::error_code ec;
+    std::filesystem::rename(temp, file, ec);
+    if (ec) {
+        std::filesystem::remove(temp, ec);
+        throw Error("cannot write asset registry '" + file.generic_string() + "': " + ec.message());
     }
 }
 
@@ -459,8 +501,15 @@ std::filesystem::path normal(const std::filesystem::path& p) {
 std::string percentDecode(const std::string& uri) {
     std::string out;
     for (std::size_t i = 0; i < uri.size(); ++i) {
-        if (uri[i] == '%' && i + 2 < uri.size()) {
-            out += static_cast<char>(std::stoi(uri.substr(i + 1, 2), nullptr, 16));
+        const auto hex = [](char c) -> int {
+            return c >= '0' && c <= '9' ? c - '0'
+                   : c >= 'a' && c <= 'f' ? c - 'a' + 10
+                   : c >= 'A' && c <= 'F' ? c - 'A' + 10
+                                          : -1;
+        };
+        // Exactly two hex digits; anything else stays literal (like cgltf's URI decoding).
+        if (uri[i] == '%' && i + 2 < uri.size() && hex(uri[i + 1]) >= 0 && hex(uri[i + 2]) >= 0) {
+            out += static_cast<char>(hex(uri[i + 1]) * 16 + hex(uri[i + 2]));
             i += 2;
         } else {
             out += uri[i];
@@ -604,6 +653,10 @@ std::string relativePath(const std::filesystem::path& file, const std::filesyste
 
 } // namespace
 
+std::vector<std::filesystem::path> assetDependencies(AssetType type, const std::filesystem::path& source) {
+    return dependenciesOf(type, normal(source));
+}
+
 AssetFingerprint fingerprintAsset(AssetType type, const std::filesystem::path& source) {
     const std::filesystem::path file = normal(source);
     AssetFingerprint f;
@@ -642,7 +695,7 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
         throw Error("cannot import '" + file.generic_string() + "': file not found");
     }
     const std::string source = relativePath(abs, registry.directory());
-    if (source.empty() || source.starts_with("..")) {
+    if (source.empty() || escapesDirectory(source)) {
         throw Error("cannot import '" + file.generic_string() + "': outside the registry directory '" +
              normal(registry.directory()).generic_string() + "'");
     }
@@ -662,8 +715,15 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
     AssetEntry entry;
     const auto same = std::ranges::find(registry.entries(), source, &AssetEntry::source);
     if (!options.id.empty()) {
+        if (same != registry.entries().end() && same->id != options.id) {
+            throw Error("cannot import '" + source + "' as '" + options.id + "': already imported as '" + same->id +
+                        "'");
+        }
         if (const AssetEntry* e = registry.find(options.id)) {
-            entry = *e;
+            // Settings carry over only for the same file and type (e.g. re-import with --id).
+            if (e->source == source && e->type == (options.type ? *options.type : e->type)) {
+                entry = *e;
+            }
         }
         entry.id = options.id;
     } else if (same != registry.entries().end()) {
@@ -794,6 +854,13 @@ double texelDensity(const ModelData& data) {
             }
             const double size = double(data.images[static_cast<size_t>(image)].width) *
                                 double(data.images[static_cast<size_t>(image)].height);
+            // Malformed files (index values beyond the vertex count) are skipped, not read.
+            const uint64_t end = uint64_t(sub.firstIndex) + sub.indexCount;
+            if (end > mesh.indices.size() ||
+                std::any_of(mesh.indices.begin() + sub.firstIndex, mesh.indices.begin() + static_cast<std::ptrdiff_t>(end),
+                            [&](uint32_t index) { return index >= mesh.vertices.size(); })) {
+                continue;
+            }
             for (uint32_t i = sub.firstIndex; i + 2 < sub.firstIndex + sub.indexCount; i += 3) {
                 const Vertex& a = mesh.vertices[mesh.indices[i]];
                 const Vertex& b = mesh.vertices[mesh.indices[i + 1]];
@@ -899,10 +966,8 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
             const double tol = options.texelDensityTolerance;
             if (r.texelDensity > 0.0 && tol > 0.0 &&
                 (r.texelDensity < target / tol || r.texelDensity > target * tol)) {
-                char text[160];
-                std::snprintf(text, sizeof(text), "texel density %.1f texels/m outside %.0f..%.0f (target %.0f)",
-                              r.texelDensity, target / tol, target * tol, target);
-                r.warnings.push_back(text);
+                r.warnings.push_back(formatText("texel density %.1f texels/m outside %.0f..%.0f (target %.0f)",
+                                                r.texelDensity, target / tol, target * tol, target));
             }
             if (entry.compile && entry.outputs.empty()) {
                 r.warnings.push_back("compile is set but no compiled outputs are recorded (run: zodar.py import " +
@@ -947,17 +1012,20 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
                                        ", not a model");
                 }
             }
-            std::set<std::filesystem::path> seen;
+            // A texture used as colour by any material is palette-checked (once), even if another
+            // material uses it as a normal/data map first.
+            std::vector<std::filesystem::path> textures;
+            std::set<std::filesystem::path> colour;
             for (const SceneMaterial& m : doc.materials) {
-                std::vector<std::filesystem::path> textures;
                 const std::filesystem::path base = !m.source.empty() ? (file.parent_path() / m.source).parent_path()
                                                                      : sceneMaterialDirectory(m, file.parent_path());
                 addMaterialTextures(m.data, base, textures);
-                const std::set<std::filesystem::path> colour = colourTextures(m.data, base);
-                for (const auto& t : textures) {
-                    if (seen.insert(normal(t)).second) {
-                        checkImageFile(r, options, normal(t), dir, colour.contains(normal(t)) ? &palette : nullptr);
-                    }
+                colour.merge(colourTextures(m.data, base));
+            }
+            std::set<std::filesystem::path> seen;
+            for (const auto& t : textures) {
+                if (seen.insert(normal(t)).second) {
+                    checkImageFile(r, options, normal(t), dir, colour.contains(normal(t)) ? &palette : nullptr);
                 }
             }
             break;
@@ -969,11 +1037,10 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
     if (palette.used) {
         const PaletteDeviation& d = palette.deviation;
         if (d.offPalette > 0) {
-            char text[160];
-            std::snprintf(text, sizeof(text), "palette: %llu of %llu texels (%.2f%%) not in palette '%s' (e.g. ",
-                          static_cast<unsigned long long>(d.offPalette), static_cast<unsigned long long>(d.texels),
-                          d.percent(), d.palette.c_str());
-            std::string message = text;
+            std::string message = formatText("palette: %llu of %llu texels (%.2f%%) not in palette '",
+                                             static_cast<unsigned long long>(d.offPalette),
+                                             static_cast<unsigned long long>(d.texels), d.percent()) +
+                                  d.palette + "' (e.g. ";
             for (size_t i = 0; i < d.examples.size(); ++i) {
                 message += (i ? ", " : "") + hexColor(d.examples[i]);
             }

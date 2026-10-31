@@ -24,6 +24,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Runtime asset manager (Phase C). Loads textures (PNG/JPEG/TGA/BMP), glTF 2.0 models
@@ -239,8 +240,9 @@ public:
     size_t pendingCount() const;
 
     // --- Hot reload (Phase C5) ------------------------------------------------------------
-    // Re-reads the asset's file(s) now (blocking) and swaps the result in place. Loading
-    // handles are skipped (empty result). Material files are re-parsed; materials created
+    // Re-reads the asset's file(s) now (blocking) and swaps the result in place. Empty or
+    // loading handles are skipped (empty result; reloadFiles retries loading ones in update()
+    // once they finished). Material files are re-parsed; materials created
     // from data cannot be reloaded from a file (use updateMaterialData).
     AssetReloadResult reload(const TextureHandle& texture);
     AssetReloadResult reload(const ModelHandle& model);
@@ -338,6 +340,12 @@ private:
     void reloadMaterialFile(const MaterialAssetHandle& material, AssetReloadResult& result, bool reportFailure);
     void reloadShaders(const std::set<std::filesystem::path>& changed, AssetReloadResult& result);
     void finishReload(const AssetReloadResult& result);
+    std::filesystem::path materialPath(const std::string& key) const;
+    bool isMaterialFile(const std::string& key) const { return m_materialFiles.contains(key); }
+    void watchNow(const std::filesystem::path& file);
+    void trackModel(const std::string& key);
+    const std::vector<std::filesystem::path>& modelFiles(ModelSource& source);
+    void pruneSources();
     void submitDecode(uint64_t id, std::function<Decoded()> work);
     void processDecoded(uint64_t budget);
     void processUploads();
@@ -363,6 +371,8 @@ private:
     // Hot reload: how each live texture/model key was loaded (pruned when released).
     std::unordered_map<std::string, TextureSource> m_textureSources;
     std::unordered_map<std::string, ModelSource> m_modelSources;
+    std::unordered_set<std::string> m_materialFiles; // material keys loaded from a file
+    std::set<std::filesystem::path> m_deferredReloads; // changed while their asset was loading
     FileWatcher m_watcher;
     uint64_t m_reloads = 0;
     uint64_t m_reloadFailures = 0;

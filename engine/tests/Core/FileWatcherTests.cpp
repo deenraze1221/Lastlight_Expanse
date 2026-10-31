@@ -83,3 +83,17 @@ TEST_CASE("file watcher: setWatched keeps recorded state; due() rate-limits") {
     CHECK_FALSE(w.due(std::chrono::hours(1)));
     CHECK(w.due(std::chrono::seconds(0)));
 }
+
+TEST_CASE("file watcher: refresh consumes earlier changes") {
+    const WatchDir d;
+    const auto a = d.write("a.txt", "1");
+    FileWatcher w;
+    w.watch(a);
+    d.write("a.txt", "22");
+    w.watch(a); // already watched: keeps the old state
+    w.refresh(a); // records the current state
+    CHECK(w.poll().empty());
+    const auto b = d.dir / "b.txt";
+    w.refresh(b); // also starts watching
+    CHECK(w.watching(b));
+}

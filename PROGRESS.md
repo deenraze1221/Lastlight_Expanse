@@ -109,6 +109,31 @@
 ## Current state
 - `main`: Phase C complete (C1-C7; C6 shader + scene hot reload last). Phase D not started.
 
+## Phase C audit (C1-C7, done)
+- Two independent reviews (runtime/lifetime; registry/pipeline/palette) + doc pass. No Vulkan
+  use-after-free, material-slot double release or Texture move bug found.
+- Fixed (runtime): async create/upload exceptions failed every later update() (now reject the
+  asset); model material slots leaked when a model upload/reload threw; watcher baseline taken
+  at first poll instead of at read time (AssetManager + LiveScene; `FileWatcher::refresh`);
+  changes during async loads were lost (now deferred and retried in `update()`); `#` in
+  material file names treated as inline material; model dependency listing hashed all bytes
+  and was not path-normalised (`assetDependencies` + `resolve`); `updateMaterialData` could
+  partially commit on a full material table; source bookkeeping grew without bound;
+  `reload(empty handle)` threw.
+- Fixed (registry/tools): `--density-target abc` crashed ZodarAssetTool; empty `--palette`
+  silently disabled checks; report write unchecked; texel density read out-of-range indices of
+  malformed glTF; scene palette check skipped colour textures first seen as normal maps;
+  absolute/`..` registry sources accepted; `..name.png` rejected; `--id` reuse copied another
+  file's settings / allowed duplicate sources; non-atomic `assets.json` save; malformed `%XX`
+  URIs threw or decoded wrongly; fixed-size message buffers truncated; corrupt KTX2 cache
+  failed the whole model (now falls back to the source image).
+- Docs: stale texture-standard (128/256), texel-density (64) and mesh-binding notes; palette
+  alpha rule wording (alpha > 0); new debts listed in ARCHITECTURE.md.
+- Tests added: registry hardening, scene palette dedupe + long names, file watcher refresh,
+  deferred async reload / `#` material / empty handles, read-time baseline,
+  `tools.asset_tool_bad_arguments`. Verified GCC 13 Debug and Release: 0 warnings, 24/24 ctest,
+  199/199 unit, 64/64 GPU cases, 0 validation messages. Not run: Clang, MinGW, MSVC.
+
 ## Phase C6 — shader + scene hot reload (done)
 - `MaterialSystem::reloadShader(handle, DeletionQueue&)` -> `ShaderReloadResult`: SPIR-V
   checks (header, entry-point stage, instruction bounds), every cached colour/depth pipeline
@@ -154,7 +179,7 @@
   `Palette`, `loadPalette`, `parseHexColor`, `hexColor`, `parsePaletteArgument`,
   `AssetCheckOptions::palette`, `AssetCheckResult::paletteDeviation`, texture palette counts,
   `AssetImportOptions::palette`.
-- Checks: opaque level-0 texels of colour textures only (texture usage color, material base
+- Checks: non-transparent (alpha > 0) level-0 texels of colour textures only (texture usage color, material base
   colour/emissive, model base colour/emissive images); transparent texels ignored; warning with
   count, percent and example colours; report `paletteDeviation` + per-texture counts.
 - Tool: `check --palette swatch.png|#rrggbb,...` (overrides master), palette summary line,

@@ -846,15 +846,19 @@ TEST_CASE("hot reload: opt-in file watching reloads changed files in update()") 
     }
     const TextureHandle tex = assets.loadTexture("tex.png");
     REQUIRE(tex.ready());
-    assets.update(); // starts watching tex.png
-    CHECK(tex.generation() == 0);
+    // The baseline is taken when the file is read: an edit before the first poll is seen.
+    files.solid("tex.png", 0, 255, 0);
+    std::filesystem::last_write_time(files.dir / "tex.png",
+                                     std::filesystem::last_write_time(files.dir / "tex.png") + std::chrono::seconds(1));
+    assets.update();
+    CHECK(tex.generation() == 1);
     files.solid("tex.png", 0, 0, 255);
     std::filesystem::last_write_time(files.dir / "tex.png",
                                      std::filesystem::last_write_time(files.dir / "tex.png") + std::chrono::seconds(2));
     assets.update();
-    CHECK(tex.generation() == 1);
+    CHECK(tex.generation() == 2);
     assets.update(); // no further change
-    CHECK(tex.generation() == 1);
+    CHECK(tex.generation() == 2);
     gpu().context->waitIdle();
 }
 
@@ -1046,5 +1050,42 @@ TEST_CASE("hot reload: live scenes reload changed scene and prefab files; failur
     }
     CHECK(world.entityCount() == 0); // the LiveScene destroyed its entities
     Fixture::collect();
+    gpu().context->waitIdle();
+}
+
+TEST_CASE("hot reload: changes during async loads are deferred; '#' material files; empty handles") {
+    zodar::test::ValidationGuard guard;
+    const ReloadDir files;
+    files.solid("tex.png", 255, 0, 0);
+    files.write("a#1.material.json", ReloadDir::unlit("tex.png"));
+    Fixture f;
+    AssetManagerDesc desc;
+    desc.root = files.dir;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+
+    CHECK(assets.reload(TextureHandle{}).empty()); // no throw
+    CHECK(assets.reload(ModelHandle{}).empty());
+    CHECK(assets.reload(MaterialAssetHandle{}).empty());
+
+    // Decoded (inline, no jobs) but the upload is pending: the change is retried in update().
+    const TextureHandle tex = assets.loadTextureAsync("tex.png");
+    REQUIRE(tex.loading());
+    files.solid("tex.png", 0, 0, 255);
+    CHECK(assets.reloadFiles({files.dir / "tex.png"}).empty());
+    assets.waitAll();
+    REQUIRE(tex.ready());
+    CHECK(tex.generation() == 0);
+    assets.update();
+    CHECK(tex.generation() == 1);
+    assets.update();
+    CHECK(tex.generation() == 1); // retried once only
+
+    // A '#' in a material file name is not an inline material: path kept, reloadable.
+    const MaterialAssetHandle mat = assets.loadMaterial("a#1.material.json");
+    REQUIRE(mat.ready());
+    CHECK(mat->path.filename() == "a#1.material.json");
+    const AssetReloadResult r = assets.reloadFiles({files.dir / "a#1.material.json"});
+    CHECK(r.ok());
+    CHECK(mat.generation() == 1);
     gpu().context->waitIdle();
 }

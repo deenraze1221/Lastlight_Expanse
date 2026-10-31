@@ -292,7 +292,9 @@ uint64_t uploadBytes(const ModelData& data) {
 TextureHandle AssetManager::loadTexture(const std::filesystem::path& path, const TextureLoadSettings& settings) {
     const std::filesystem::path file = resolve(path);
     const std::string key = textureKey(file, settings);
+    pruneSources();
     m_textureSources.try_emplace(key, TextureSource{file, settings});
+    watchNow(file); // baseline before reading: a save during the load is still seen
     TextureHandle handle = m_textures.getOrLoad(key, [&] {
         auto decoded = decodeTextureFile<DecodedTexture>(file, settings, m_desc.checkTextureSizes);
         gfx::UploadBatch batch(m_upload);
@@ -309,12 +311,19 @@ TextureHandle AssetManager::loadTexture(const std::filesystem::path& path, const
 ModelHandle AssetManager::loadModel(const std::filesystem::path& path, const ModelLoadSettings& settings) {
     const std::filesystem::path file = resolve(path);
     const std::string key = modelKey(file, settings);
+    pruneSources();
     m_modelSources.try_emplace(key, ModelSource{file, settings, std::nullopt});
+    trackModel(key);
     ModelHandle handle = m_models.getOrLoad(key, [&] {
         const auto decoded = decodeModelFile<DecodedModel>(file, settings, m_desc.checkTextureSizes);
         gfx::UploadBatch batch(m_upload);
         auto asset = createModel(decoded, file, settings, batch);
-        batch.submit();
+        try {
+            batch.submit();
+        } catch (...) {
+            retireModel(m_context, m_scene, std::move(asset)); // releases its material slots
+            throw;
+        }
         return asset;
     });
     if (handle.loading()) {
@@ -326,6 +335,8 @@ ModelHandle AssetManager::loadModel(const std::filesystem::path& path, const Mod
 MaterialAssetHandle AssetManager::loadMaterial(const std::filesystem::path& path) {
     const std::filesystem::path file = resolve(path);
     const std::string key = file.generic_string();
+    m_materialFiles.insert(key);
+    watchNow(file);
     if (MaterialAssetHandle cached = m_materials.find(key); cached.valid()) {
         return createMaterial({}, {}, key); // counts the hit (and waits if loading); data unused
     }
@@ -345,7 +356,7 @@ MaterialAssetHandle AssetManager::createMaterial(const MaterialData& data, const
         PreparedMaterial prepared = prepareMaterial(data, baseDirectory);
         auto asset = std::make_unique<MaterialAsset>();
         asset->data = data;
-        asset->path = key.substr(0, key.find('#'));
+        asset->path = materialPath(key);
         asset->textures = std::move(prepared.textures);
         asset->handle = m_scene.materials().createMaterial(prepared.desc);
         return asset;
@@ -499,7 +510,9 @@ TextureHandle AssetManager::loadTextureAsync(const std::filesystem::path& path, 
     const std::filesystem::path file = resolve(path);
     bool created = false;
     const std::string key = textureKey(file, settings);
+    pruneSources();
     m_textureSources.try_emplace(key, TextureSource{file, settings});
+    watchNow(file);
     TextureHandle handle = m_textures.getOrCreatePending(key, created);
     if (!created) {
         return handle;
@@ -519,7 +532,9 @@ ModelHandle AssetManager::loadModelAsync(const std::filesystem::path& path, cons
     const std::filesystem::path file = resolve(path);
     bool created = false;
     const std::string key = modelKey(file, settings);
+    pruneSources();
     m_modelSources.try_emplace(key, ModelSource{file, settings, std::nullopt});
+    trackModel(key);
     ModelHandle handle = m_models.getOrCreatePending(key, created);
     if (!created) {
         return handle;
@@ -538,6 +553,8 @@ ModelHandle AssetManager::loadModelAsync(const std::filesystem::path& path, cons
 MaterialAssetHandle AssetManager::loadMaterialAsync(const std::filesystem::path& path) {
     const std::filesystem::path file = resolve(path);
     const std::string key = file.generic_string();
+    m_materialFiles.insert(key);
+    watchNow(file);
     if (MaterialAssetHandle cached = m_materials.find(key); cached.valid()) {
         bool created = false;
         return m_materials.getOrCreatePending(key, created); // counts the hit
@@ -566,7 +583,7 @@ MaterialAssetHandle AssetManager::createMaterialAsync(const MaterialData& data,
     request.handle = handle;
     request.staged = std::make_unique<MaterialAsset>();
     request.staged->data = data;
-    request.staged->path = key.substr(0, key.find('#'));
+    request.staged->path = materialPath(key);
     request.desc = toMaterialDesc(data, 0);
     try {
         request.desc.shader = m_scene.materials().findShader(data.shader);
@@ -630,9 +647,14 @@ void AssetManager::processDecoded(uint64_t budget) {
                 if (started && staged + bytes > budget) {
                     break; // next update
                 }
-                gfx::UploadBatch batch(m_upload);
-                auto asset = createTexture(decoded, r.file, r.settings, batch);
-                m_textureUploads.push_back({r.handle, std::move(asset), batch.submitAsync()});
+                try {
+                    gfx::UploadBatch batch(m_upload);
+                    auto asset = createTexture(decoded, r.file, r.settings, batch);
+                    m_textureUploads.push_back({r.handle, std::move(asset), batch.submitAsync()});
+                } catch (const std::exception& e) { // e.g. bindless table full: fail this asset only
+                    ZODAR_LOG_WARN("{}", e.what());
+                    m_textures.reject(r.handle, e.what());
+                }
                 staged += bytes;
                 started = true;
             }
@@ -650,9 +672,19 @@ void AssetManager::processDecoded(uint64_t budget) {
                 if (started && staged + bytes > budget) {
                     break;
                 }
-                gfx::UploadBatch batch(m_upload);
-                auto asset = createModel(decoded, r.file, r.settings, batch);
-                m_modelUploads.push_back({r.handle, std::move(asset), batch.submitAsync()});
+                std::unique_ptr<ModelAsset> asset;
+                try {
+                    gfx::UploadBatch batch(m_upload);
+                    asset = createModel(decoded, r.file, r.settings, batch);
+                    const gfx::UploadTicket ticket = batch.submitAsync();
+                    m_modelUploads.push_back({r.handle, std::move(asset), ticket});
+                } catch (const std::exception& e) { // e.g. material table full: fail this asset only
+                    if (asset) {
+                        retireModel(m_context, m_scene, std::move(asset));
+                    }
+                    ZODAR_LOG_WARN("{}", e.what());
+                    m_models.reject(r.handle, e.what());
+                }
                 staged += bytes;
                 started = true;
             }
@@ -711,6 +743,15 @@ void AssetManager::update() {
     if (watching() && m_watcher.due(m_desc.watchInterval)) {
         pollFileChanges();
     }
+    if (!m_deferredReloads.empty()) {
+        // Files that changed while their asset was still loading (async): reload once loaded
+        // (reloadFiles defers them again while they are still loading).
+        const std::vector<std::filesystem::path> files(m_deferredReloads.begin(), m_deferredReloads.end());
+        m_deferredReloads.clear();
+        processUploads();
+        processMaterials();
+        reloadFiles(files);
+    }
     processDecoded(m_desc.uploadBudgetBytes);
     processUploads();
     processMaterials();
@@ -751,7 +792,7 @@ void AssetManager::commitMaterial(const MaterialAssetHandle& handle, const Mater
     gfx::MaterialSystem& materials = m_scene.materials();
     auto fresh = std::make_unique<MaterialAsset>();
     fresh->data = data;
-    fresh->path = handle.key().substr(0, handle.key().find('#'));
+    fresh->path = materialPath(handle.key());
     fresh->textures = std::move(prepared.textures);
     if (handle.ready()) {
         // Same gfx material: the GPU table entry is rewritten by the next recorded frame.
@@ -766,11 +807,21 @@ void AssetManager::commitMaterial(const MaterialAssetHandle& handle, const Mater
 }
 
 void AssetManager::reloadTexture(const TextureHandle& texture, AssetReloadResult& result) {
+    if (!texture.valid()) {
+        return;
+    }
     const auto source = m_textureSources.find(texture.key());
-    if (texture.loading() || source == m_textureSources.end()) {
+    if (source == m_textureSources.end()) {
+        return;
+    }
+    if (texture.loading()) {
+        m_deferredReloads.insert(source->second.file); // retried by update() once loaded
         return;
     }
     const TextureSource& src = source->second;
+    if (watching()) {
+        m_watcher.refresh(src.file); // read now: earlier changes are consumed
+    }
     std::unique_ptr<TextureAsset> fresh;
     try {
         auto decoded = decodeTextureFile<DecodedTexture>(src.file, src.settings, m_desc.checkTextureSizes);
@@ -799,11 +850,23 @@ void AssetManager::reloadTexture(const TextureHandle& texture, AssetReloadResult
 }
 
 void AssetManager::reloadModel(const ModelHandle& model, AssetReloadResult& result) {
+    if (!model.valid()) {
+        return;
+    }
     const auto source = m_modelSources.find(model.key());
-    if (model.loading() || source == m_modelSources.end()) {
+    if (source == m_modelSources.end()) {
         return;
     }
     ModelSource& src = source->second;
+    if (model.loading()) {
+        m_deferredReloads.insert(src.file);
+        return;
+    }
+    if (watching()) {
+        for (const std::filesystem::path& f : modelFiles(src)) {
+            m_watcher.refresh(f);
+        }
+    }
     src.files.reset(); // dependencies may change with the file
     std::unique_ptr<ModelAsset> fresh;
     try {
@@ -812,9 +875,14 @@ void AssetManager::reloadModel(const ModelHandle& model, AssetReloadResult& resu
         fresh = createModel(decoded, src.file, src.settings, batch);
         batch.submit();
     } catch (const std::exception& e) {
+        if (fresh) {
+            retireModel(m_context, m_scene, std::move(fresh)); // never published: free its materials
+        }
         result.failed.push_back(model.key() + ": " + e.what());
+        trackModel(model.key());
         return;
     }
+    trackModel(model.key());
     if (std::unique_ptr<ModelAsset> old = m_models.replace(model, std::move(fresh))) {
         retireModel(m_context, m_scene, std::move(old));
     }
@@ -823,15 +891,24 @@ void AssetManager::reloadModel(const ModelHandle& model, AssetReloadResult& resu
 
 void AssetManager::reloadMaterialFile(const MaterialAssetHandle& material, AssetReloadResult& result,
                                       bool reportFailure) {
-    if (material.loading()) {
+    if (!material.valid()) {
         return;
     }
     const std::string& key = material.key();
+    if (material.loading()) {
+        if (isMaterialFile(key)) {
+            m_deferredReloads.insert(std::filesystem::path(key));
+        }
+        return;
+    }
     try {
-        if (key.find('#') != std::string::npos) {
+        if (!isMaterialFile(key)) {
             fail("created from data, not from a material file (use updateMaterialData)");
         }
         const std::filesystem::path file(key);
+        if (watching()) {
+            m_watcher.refresh(file);
+        }
         const MaterialData data = loadMaterialFile(file);
         PreparedMaterial prepared = prepareMaterial(data, file.parent_path());
         if (material.ready() &&
@@ -927,6 +1004,15 @@ AssetReloadResult AssetManager::updateMaterialData(const std::vector<MaterialDat
             result.failed.push_back((u.handle.valid() ? u.handle.key() : std::string("<empty>")) + ": " + e.what());
         }
     }
+    // Failed handles need a new MaterialSystem slot: check capacity before changing anything.
+    const gfx::MaterialSystem& ms = m_scene.materials();
+    const size_t needed = static_cast<size_t>(
+        std::ranges::count_if(updates, [](const MaterialDataUpdate& u) { return u.handle.failed(); }));
+    const size_t available =
+        gfx::MaterialSystem::kMaxMaterials - ms.materialCount() + ms.freeMaterialCount();
+    if (result.failed.empty() && needed > available) {
+        result.failed.push_back("material table is full (" + std::to_string(needed) + " new materials needed)");
+    }
     if (result.failed.empty()) {
         for (size_t i = 0; i < updates.size(); ++i) {
             commitMaterial(updates[i].handle, updates[i].data, std::move(prepared[i]));
@@ -937,30 +1023,68 @@ AssetReloadResult AssetManager::updateMaterialData(const std::vector<MaterialDat
     return result;
 }
 
+std::filesystem::path AssetManager::materialPath(const std::string& key) const {
+    return isMaterialFile(key) ? std::filesystem::path(key) : std::filesystem::path(key.substr(0, key.find('#')));
+}
+
+void AssetManager::watchNow(const std::filesystem::path& file) {
+    if (watching()) {
+        m_watcher.watch(file);
+    }
+}
+
+const std::vector<std::filesystem::path>& AssetManager::modelFiles(ModelSource& source) {
+    if (!source.files) {
+        source.files = std::vector<std::filesystem::path>{source.file};
+        try {
+            for (const std::filesystem::path& d : assetDependencies(AssetType::Model, source.file)) {
+                source.files->push_back(resolve(d)); // same form as resolve()d change paths
+            }
+        } catch (const std::exception&) {
+            // Unreadable model: watch the file itself; a fixed file reloads it.
+        }
+    }
+    return *source.files;
+}
+
+void AssetManager::trackModel(const std::string& key) {
+    if (!watching()) {
+        return;
+    }
+    if (const auto it = m_modelSources.find(key); it != m_modelSources.end()) {
+        for (const std::filesystem::path& f : modelFiles(it->second)) {
+            m_watcher.watch(f);
+        }
+    }
+}
+
+void AssetManager::pruneSources() {
+    // Amortised: only when the bookkeeping clearly outgrew the live caches.
+    if (m_textureSources.size() > 2 * m_textures.size() + 64) {
+        std::erase_if(m_textureSources, [&](const auto& e) { return !m_textures.find(e.first).valid(); });
+    }
+    if (m_modelSources.size() > 2 * m_models.size() + 64) {
+        std::erase_if(m_modelSources, [&](const auto& e) { return !m_models.find(e.first).valid(); });
+    }
+    if (m_materialFiles.size() > 2 * m_materials.size() + 64) {
+        std::erase_if(m_materialFiles, [&](const std::string& k) { return !m_materials.find(k).valid(); });
+    }
+}
+
 std::vector<std::filesystem::path> AssetManager::watchedFiles() {
     std::erase_if(m_textureSources, [&](const auto& e) { return !m_textures.find(e.first).valid(); });
     std::erase_if(m_modelSources, [&](const auto& e) { return !m_models.find(e.first).valid(); });
+    std::erase_if(m_materialFiles, [&](const std::string& k) { return !m_materials.find(k).valid(); });
     std::set<std::filesystem::path> files;
     for (const auto& [key, source] : m_textureSources) {
         files.insert(source.file);
     }
     for (auto& [key, source] : m_modelSources) {
-        if (!source.files) {
-            source.files = std::vector<std::filesystem::path>{source.file};
-            try {
-                const AssetFingerprint fingerprint = fingerprintAsset(AssetType::Model, source.file);
-                source.files->insert(source.files->end(), fingerprint.dependencies.begin(),
-                                     fingerprint.dependencies.end());
-            } catch (const std::exception&) {
-                // Unreadable model: watch the file itself; a fixed file reloads it.
-            }
-        }
-        files.insert(source.files->begin(), source.files->end());
+        const std::vector<std::filesystem::path>& f = modelFiles(source);
+        files.insert(f.begin(), f.end());
     }
-    for (const std::string& key : m_materials.keys()) {
-        if (key.find('#') == std::string::npos) {
-            files.insert(std::filesystem::path(key));
-        }
+    for (const std::string& key : m_materialFiles) {
+        files.insert(std::filesystem::path(key));
     }
     const gfx::MaterialSystem& materials = m_scene.materials();
     for (gfx::ShaderHandle h = 0; h < materials.shaderCount(); ++h) {
@@ -987,7 +1111,7 @@ AssetReloadResult AssetManager::reloadFiles(const std::vector<std::filesystem::p
     }
     for (const std::string& key : m_materials.keys()) {
         const MaterialAssetHandle material = m_materials.find(key);
-        if (key.find('#') != std::string::npos || !material.valid()) {
+        if (!isMaterialFile(key) || !material.valid()) {
             continue;
         }
         if (changed.contains(std::filesystem::path(key))) {

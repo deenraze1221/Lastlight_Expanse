@@ -28,8 +28,19 @@ bool LiveScene::reload() {
     SceneMaterialAssets materials;
     SceneInstance instance;
     bool instantiated = false;
+    if (watching()) {
+        m_watcher.refresh(m_path); // baseline before reading: a save during the reload is seen
+    }
+    const auto watchFiles = [&] {
+        if (watching()) {
+            for (const std::filesystem::path& f : files) {
+                m_watcher.refresh(f);
+            }
+        }
+    };
     try {
         document = loadSceneFile(m_path, &files);
+        watchFiles();
         models = m_assets.loadSceneModels(document, m_path, m_desc.registry);
         materials = m_assets.createSceneMaterials(document, m_path);
 
@@ -65,6 +76,7 @@ bool LiveScene::reload() {
         if (instantiated) {
             destroyEntities(instance);
         }
+        watchFiles(); // e.g. a broken prefab (parse threw before the call above)
         if (!files.empty()) {
             m_files = std::move(files); // watch the files involved, e.g. a broken prefab
         }

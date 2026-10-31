@@ -234,3 +234,52 @@ TEST_CASE("asset registry: the committed example registry is up to date") {
         CHECK_MESSAGE(res.warnings.empty(), res.id << " (re-run zodar.py import after editing example assets)");
     }
 }
+
+TEST_CASE("asset registry: hardening (sources outside the directory, ids, URI decoding, atomic save)") {
+    const Workspace w;
+    // Sources must stay inside the registry directory.
+    const auto escaping = parseIssues(
+        R"({"schema": "zodar.asset_registry", "version": 1, "assets": [{"id": "a", "type": "texture", "source": "../x.png"}]})");
+    REQUIRE_FALSE(escaping.empty());
+    CHECK(escaping[0].message.find("inside the registry directory") != std::string::npos);
+    CHECK_FALSE(parseIssues(R"({"schema": "zodar.asset_registry", "version": 1, "assets": [{"id": "a", "type": "texture", "source": "/abs/x.png"}]})")
+                    .empty());
+
+    AssetRegistry r(w.dir);
+    // A file name starting with ".." is inside the directory.
+    std::filesystem::copy(w.dir / "textures" / "crate.png", w.dir / "..hero.png");
+    CHECK(importAsset(r, w.dir / "..hero.png").source == "..hero.png");
+    CHECK_THROWS_WITH_AS(importAsset(r, w.dir.parent_path() / "outside.png"), doctest::Contains("file not found"), Error);
+
+    // --id: one source has one entry; settings of another file never carry over.
+    importAsset(r, w.dir / "textures" / "crate.png");
+    AssetImportOptions other;
+    other.id = "other";
+    CHECK_THROWS_WITH_AS(importAsset(r, w.dir / "textures" / "crate.png", other), doctest::Contains("already imported as"),
+                         Error);
+    AssetImportOptions normalMap;
+    normalMap.usage = TextureUsage::Normal;
+    importAsset(r, w.dir / "textures" / "rune.png", normalMap);
+    AssetImportOptions retarget;
+    retarget.id = "rune";
+    std::filesystem::copy(w.dir / "textures" / "crate.png", w.dir / "fresh.png");
+    const AssetEntry moved = importAsset(r, w.dir / "fresh.png", retarget);
+    CHECK(moved.source == "fresh.png");
+    CHECK((moved.usage == TextureUsage::Color)); // not the old entry's normal-map usage
+
+    // glTF URIs: %XX decoded, malformed escapes kept literally (no exception, no wrong file).
+    w.write("uris.gltf", R"({"asset": {"version": "2.0"}, "buffers": [{"uri": "a%20b.bin", "byteLength": 1},
+        {"uri": "c%zzd.bin", "byteLength": 1}, {"uri": "e%1gf.bin", "byteLength": 1}]})");
+    const std::vector<std::filesystem::path> deps = assetDependencies(AssetType::Model, w.dir / "uris.gltf");
+    std::vector<std::string> names;
+    for (const auto& d : deps) {
+        names.push_back(d.filename().string());
+    }
+    CHECK(names == std::vector<std::string>{"a b.bin", "c%zzd.bin", "e%1gf.bin"});
+
+    // save() replaces the file atomically and leaves no temporary file.
+    r.save(w.dir / "assets.json");
+    CHECK(AssetRegistry::load(w.dir / "assets.json").serialize() == r.serialize());
+    CHECK_FALSE(std::filesystem::exists(w.dir / "assets.json.tmp"));
+    CHECK_THROWS_AS(r.save(w.dir / "missing_dir" / "assets.json"), Error);
+}

@@ -146,6 +146,8 @@ struct AssetFingerprint {
 };
 // Throws zodar::Error / DataError if the source cannot be read or parsed.
 [[nodiscard]] AssetFingerprint fingerprintAsset(AssetType type, const std::filesystem::path& source);
+// Only the dependency list of fingerprintAsset (parses, never hashes file contents).
+[[nodiscard]] std::vector<std::filesystem::path> assetDependencies(AssetType type, const std::filesystem::path& source);
 
 struct AssetImportOptions {
     std::string id;                    // empty: default id from the file name
