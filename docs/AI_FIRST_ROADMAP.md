@@ -6,6 +6,9 @@
 run report JSON). **Phase A3 done** (CMake presets, `tools/zodar.py`, `docs/guide/RUNNING.md`,
 ModelViewer + ZodarBench on `Application`, JSON-lines log sink): **Phase A complete**.
 **Phase B1.2 done** (`Zodar::World` components, `Name`/`Transform`, hierarchy). **Phase B1.3 done** (renderer bridge, `Zodar::WorldRender`). **Phase B2 done** (scene/material/prefab JSON, reflection, scene components, World capture, mutable materials; `Zodar::SceneFile`).
+**Phase C1 done** (`Zodar::AssetManager`: cached ref-counted GPU textures/glTF models/material
+files with texture slots, deferred release, pixel-art sampler preset, texture size standards;
+remaining Phase C items listed under Phase C).
 
 Goal: ZODAR is driven by Claude Code (code, CLI, files, logs, screenshots), not by a visual
 editor. Every engine capability must be reachable through documented C++ APIs, text data
@@ -89,6 +92,11 @@ Make every app start, run, capture and report the same way.
   test); `examples/scene_from_json`.
 
 ### Phase C — Asset manager (3–4 sessions)
+- **C1 done:** `AssetManager` (synchronous loads; PNG/JPEG textures, glTF 2.0 models, material
+  files with texture slots, scene materials), `AssetCache<T>`/`AssetHandle<T>` ref counting,
+  release through the deletion queue, `MaterialSystem::releaseMaterial`, failure states with
+  messages, `SamplerDesc::pixelArt()`, texture size standards (32/64/128/256, warnings).
+  Remaining below: async loads, registry + CLI, streaming, more importers, hot reload.
 - `AssetManager` with typed handles (`Handle<Mesh>`, `Handle<Texture>`, `Handle<Material>`,
   `Handle<AudioClip>`...), ref counting, async load on `JobSystem` + `UploadQueue`, unload via
   deletion queue, failure states with messages.

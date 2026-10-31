@@ -12,12 +12,13 @@ Engine code never includes game headers or links game targets.
 | `engine/graphics/Renderer/{Vulkan,Resources}` | `Zodar::Graphics` | Vulkan context, swapchain, pipelines, capabilities, timeline, pipeline cache, GPU buffers/images, uploads, deletion queue, frame allocator |
 | `engine/rendering/Renderer` | `Zodar::Renderer` | Frame loop, render graph, scene renderer, GPU scene, materials, lighting, IBL, `StreamedMeshSet` |
 | `engine/rendering/Shaders` | — | Engine shader library (`Include/zodar/*.glsl`) and built-in shaders |
-| `engine/assets/Assets` | `Zodar::Assets` | CPU meshes/images/models, glTF, KTX2, texture cache |
+| `engine/assets/Assets` | `Zodar::Assets` | CPU meshes/images/models, glTF, KTX2, texture cache, `AssetCache<T>` (ref-counted handles), texture size standards (C) |
 | `engine/assets/AssetPipeline` | `Zodar::AssetPipeline` | Offline BCn encoding, mip baking |
 | `engine/scene/Scene` | `Zodar::Scene` | Noise, voxel chunks, greedy mesher, LOD, chunk streaming (no GPU) |
 | `engine/world/World` | `Zodar::World` | Entities over EnTT: `zodar::World` / `zodar::Entity`, components, `Name`/`Transform`, hierarchy, `entities()`, component reflection (B1.1-B2; no GPU) |
 | `engine/rendering/WorldRender` | `Zodar::WorldRender` | World -> renderer bridge: `MeshRenderer`, `collectDraws` (CPU path), `WorldRenderSync` (GpuScene) (B1.3); camera/light/environment/fog components, `collectLighting`/`collectCamera` (B2) |
-| `engine/rendering/SceneFile` | `Zodar::SceneFile` | `*.scene.json` / `*.material.json`: parse + validate (`DataError`), serialize, `createSceneMaterials`, `instantiateScene` into a World (B2) |
+| `engine/rendering/SceneFile` | `Zodar::SceneFile` | `*.scene.json` / `*.material.json`: parse + validate (`DataError`), serialize, `createSceneMaterials`, `instantiateScene` into a World (B2); material texture slots (C) |
+| `engine/rendering/AssetManager` | `Zodar::AssetManager` | Runtime asset manager (C): cached GPU textures (PNG/JPEG/TGA/BMP), glTF models, material files with textures, scene materials; release via the deletion queue |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
 | `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON. Used by the game, ModelViewer and ZodarBench |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarUISandbox |
@@ -301,11 +302,35 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
     table slot; `recordPendingUpdates` (start of `SceneRenderer::render` / a `MaterialUpdates`
     graph pass) writes it with `vkCmdUpdateBuffer` between ALL_COMMANDS barriers, so earlier
     submissions finish reading first. Pipeline state is immutable (GpuScene buckets by it).
-  - Not yet: prefab references kept on save (documents are flat), IBL environment / textures
-    in files (Phase C assets).
+  - Not yet: prefab references kept on save (documents are flat), IBL environment in files.
+    Material texture slots exist since Phase C1 (loaded by the AssetManager).
   - Verified: GPU tests render `examples/scene_from_json` (lights, prefab) pixel-identical to the
     equivalent C++ scene via both WorldRender paths and after capture/reload; mutable material
     updates match freshly created materials (CPU path and GpuScene, sync validation clean).
+
+## Asset manager (Phase C1)
+
+- Module `Zodar::AssetManager` (`engine/rendering/AssetManager`, depends on Renderer + SceneFile).
+  Guide: `docs/guide/ASSETS.md`; example `examples/asset_loading` + sample `ZodarAssetLoading`.
+- Generic CPU core `Assets/AssetCache.h`: `AssetCache<T>` maps a key (resolved absolute path +
+  load settings) to a shared record; `AssetHandle<T>` shares ownership (`shared_ptr` with a
+  deleter). The last handle erases the entry and hands the value to a retire function. Failed
+  loads are records too (state + message), cached while held. Single-threaded by contract.
+- GPU lifetime: retire = `VulkanContext::deletionQueue()` (frames in flight finish first).
+  Materials get a new `MaterialSystem::releaseMaterial` (free list, LIFO reuse in
+  `createMaterial`; the slot is written directly because the GPU no longer reads it). Models
+  release their materials + glTF fallback material. Material assets hold their texture handles.
+  The destructor waits idle and flushes the deletion queue; handles must be released first.
+- Models are uploaded standalone (CPU draw path): `GeometryPool` cannot free meshes yet.
+- Sampling: `gfx::SamplerDesc::pixelArt()` (nearest mag/min, linear mip, no anisotropy).
+  Engine default stays linear (`AssetManagerDesc::defaultSampler`); games pick pixel art.
+  glTF sampler filters are honoured end to end (GPU test checks the material's sampler).
+- Texture standards (`Assets/TextureStandards.h`): 32/64/128/256 square; anything else loads
+  with a warning (asset warnings + log), never an error.
+- Loading is synchronous (one `UploadBatch` per asset). Not yet (later Phase C steps): async
+  loads on `JobSystem` + `UploadQueue`, `assets.json` registry and `zodar import/assets` CLI,
+  streaming budgets (`docs/ASSET_STREAMING.md`), hot reload, audio/FBX importers,
+  scene-file `model` references (meshes still bound by name in `SceneBindings`).
 
 ## Frame flow (Milestone 1)
 

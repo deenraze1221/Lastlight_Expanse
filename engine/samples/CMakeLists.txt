@@ -1,2 +1,3 @@
 add_subdirectory(HelloTriangle)
 add_subdirectory(ModelViewer)
+add_subdirectory(AssetLoading)

@@ -112,7 +112,14 @@ public:
     ShaderHandle unlitShader() const { return m_unlit; }
 
     // Materials are immutable once created (updating in-flight data safely is planned).
+    // Reuses a released handle when one is free.
     MaterialHandle createMaterial(const MaterialDesc& desc);
+
+    // Returns a material's table slot for reuse by a later createMaterial (asset unloading).
+    // Call only once the GPU no longer reads it (e.g. from a DeletionQueue retire). Drops a
+    // pending update of the handle. Fails for an unknown or already released handle.
+    void releaseMaterial(MaterialHandle handle);
+    uint32_t freeMaterialCount() const { return static_cast<uint32_t>(m_free.size()); }
 
     // Mutable materials (deferred GPU update): changes factors, textures and custom data of an
     // existing material. The CPU description changes immediately; the GPU table entry is
@@ -158,6 +165,7 @@ private:
     std::vector<Shader> m_shaders;
     std::vector<MaterialDesc> m_materials;
     std::vector<MaterialHandle> m_pending; // Unique handles awaiting a GPU table write.
+    std::vector<MaterialHandle> m_free;    // Released handles (reused LIFO).
     GpuBuffer m_materialBuffer;
     std::unordered_map<uint64_t, std::unique_ptr<GraphicsPipeline>> m_pipelines;
     ShaderHandle m_pbr = 0;

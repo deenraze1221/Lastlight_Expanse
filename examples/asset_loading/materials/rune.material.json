@@ -1,0 +1,7 @@
+{
+  "name": "rune",
+  "roughness": 0.9,
+  "baseColorTexture": { "path": "../textures/rune.png", "filter": "pixelArt" },
+  "emissiveTexture": { "path": "../textures/rune.png", "filter": "pixelArt" },
+  "emissive": [0.6, 0.6, 0.6]
+}

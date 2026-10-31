@@ -5,6 +5,7 @@ add_executable(ZodarTests
     Assets/TextureAssetTests.cpp
     Assets/EnvironmentMapTests.cpp
     Assets/MeshDataTests.cpp
+    Assets/AssetCacheTests.cpp
     Core/LogTests.cpp
     Core/ProfilerTests.cpp
     Core/ErrorTests.cpp
@@ -25,6 +26,7 @@ add_executable(ZodarTests
     World/WorldComponentTests.cpp
     World/WorldRenderTests.cpp
     SceneFile/SceneFileTests.cpp
+    SceneFile/MaterialTextureTests.cpp
     Runtime/FixedTimestepTests.cpp
     Runtime/CommandLineTests.cpp
     Runtime/RunReportTests.cpp
@@ -102,8 +104,9 @@ if(ZODAR_GPU_TESTS)
         Gpu/UploadQueueTests.cpp
         Gpu/LightingTests.cpp
         Gpu/IblTests.cpp
-        Gpu/WorldRenderTests.cpp)
-    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::WorldRender Zodar::SceneFile Zodar::Debug Zodar::AssetPipeline doctest::doctest)
+        Gpu/WorldRenderTests.cpp
+        Gpu/AssetManagerTests.cpp)
+    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::WorldRender Zodar::SceneFile Zodar::AssetManager Zodar::Debug Zodar::AssetPipeline doctest::doctest)
     zodar_set_warnings(ZodarGpuTests)
     target_compile_definitions(ZodarGpuTests PRIVATE ZODAR_TEST_SHADER_DIR="${ZODAR_OUTPUT_DIR}/shaders"
         ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples")
@@ -134,6 +137,10 @@ if(ZODAR_GPU_TESTS)
     add_test(NAME gpu.model_viewer_demo
         COMMAND ModelViewer --frames 30 --width 640 --height 360 --screenshot ${CMAKE_BINARY_DIR}/model_viewer_demo.ppm)
     set_tests_properties(gpu.model_viewer_demo PROPERTIES TIMEOUT 300)
+    add_test(NAME gpu.asset_loading_example
+        COMMAND ZodarAssetLoading --headless --deterministic --frames 30 --width 640 --height 360
+                --screenshot ${CMAKE_BINARY_DIR}/asset_loading_example.png)
+    set_tests_properties(gpu.asset_loading_example PROPERTIES TIMEOUT 300)
     add_test(NAME gpu.zodarbench_smoke
         COMMAND ZodarBench --objects 256 --lights 8 --width 640 --height 360 --warmup 5 --frames 20
                 --output ${CMAKE_BINARY_DIR}/zodarbench_smoke.json)

@@ -98,7 +98,8 @@ struct SceneBindings {
 };
 
 // Creates every scene material in `materials` (file order); result maps material id ->
-// handle. Throws DataError for unknown shader names before creating anything.
+// handle. Throws DataError for unknown shader names before creating anything. Texture slots
+// are not loaded here (neutral defaults): use AssetManager::createSceneMaterials for textures.
 [[nodiscard]] std::unordered_map<std::string, gfx::MaterialHandle>
 createSceneMaterials(const SceneDocument& document, gfx::MaterialSystem& materials, std::string_view file = "<scene>");
 

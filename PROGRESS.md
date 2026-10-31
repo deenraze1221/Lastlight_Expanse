@@ -107,8 +107,32 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase B2 complete (scene/material/prefab JSON, reflection, scene components, World
-  capture, mutable materials). Phases A, B1.x unchanged.
+- `main`: Phase C1 complete (asset manager). Phases A, B1.x, B2 unchanged.
+
+## Phase C1 — asset manager (done)
+- Module `Zodar::AssetManager` (`engine/rendering/AssetManager`): `loadTexture` (PNG/JPEG/TGA/BMP,
+  usage + mips), `loadModel` (glTF 2.0 .gltf/.glb, optional sampler override), `loadMaterial`
+  (`*.material.json` with textures), `createMaterial`, `createSceneMaterials`; cache by
+  resolved path + settings; failures as handle state + message (no throw); stats.
+- `Assets/AssetCache.h` (`AssetCache<T>`, `AssetHandle<T>`: shared ownership, retire on last
+  release, failed records cached while held); `Assets/TextureStandards.h` (32/64/128/256
+  classes, warnings for other sizes).
+- Lifetime: release through the device deletion queue; `MaterialSystem::releaseMaterial` + free
+  list (slot reuse); `Model::fallbackMaterial()`; models release their materials.
+- Material files: texture slots (`baseColorTexture` ... `emissiveTexture`, string or
+  `{path, filter, wrap}`), `samplerFor`; serialization unchanged for untextured materials.
+- `gfx::SamplerDesc::pixelArt()` (nearest mag/min, linear mips, no anisotropy); glTF sampler
+  filters verified end to end.
+- Example `examples/asset_loading` (glTF crate 64², rune 32² material, scene with pixel-art and
+  linear materials) + sample `ZodarAssetLoading` (ctest `gpu.asset_loading_example`).
+- Docs: `docs/guide/ASSETS.md`; SCENE_FILES (texture slots), ARCHITECTURE (module + decisions),
+  ART_DIRECTION (new size standards 64/32/128/256, texel density 1/64 m), roadmap.
+- Tests: unit `asset cache:*` (3), `texture standards:*`, `material textures:*` (4), updated
+  material validation case; GPU `asset manager:*` (4: pixel-art vs linear rendering, caching +
+  shared textures + deferred release + slot reuse, failures/warnings, example glTF + scene
+  materials). Verified GCC 13 Debug, 0 warnings, 176/176 unit, 52/52 GPU cases, 20/20 ctest,
+  0 validation messages. Not run: Release, Clang, MinGW, MSVC.
+- Behaviour change: `*Texture` keys in material files are now parsed (previously errors).
 
 ## Current task
 - **Phase B2 core done**: module `Zodar::SceneFile` (`engine/rendering/SceneFile`, nlohmann/json
@@ -140,7 +164,9 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Next roadmap phase (C asset manager) when requested; optionally migrate game draws to scene files.
+1. Remaining Phase C (when requested): async loads (JobSystem + UploadQueue), `assets.json`
+   registry + `zodar import/assets` CLI, streaming budgets, hot reload, scene-file model
+   references, audio/FBX importers. Optionally migrate game draws/terrain textures to assets.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.

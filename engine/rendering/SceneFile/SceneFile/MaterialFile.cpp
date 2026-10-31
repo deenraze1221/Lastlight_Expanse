@@ -22,6 +22,87 @@ const char* alphaModeName(gfx::AlphaMode mode) {
     return "opaque";
 }
 
+const char* filterName(MaterialTextureFilter filter) {
+    switch (filter) {
+    case MaterialTextureFilter::PixelArt: return "pixelArt";
+    case MaterialTextureFilter::Nearest: return "nearest";
+    case MaterialTextureFilter::Linear: return "linear";
+    case MaterialTextureFilter::Default: break;
+    }
+    return "default";
+}
+
+const char* wrapName(MaterialTextureWrap wrap) {
+    switch (wrap) {
+    case MaterialTextureWrap::Clamp: return "clamp";
+    case MaterialTextureWrap::Mirror: return "mirror";
+    case MaterialTextureWrap::Repeat: break;
+    }
+    return "repeat";
+}
+
+struct TextureSlot {
+    const char* key;
+    MaterialTextureData MaterialData::*member;
+};
+constexpr TextureSlot kTextureSlots[] = {
+    {"baseColorTexture", &MaterialData::baseColorTexture},
+    {"metallicRoughnessTexture", &MaterialData::metallicRoughnessTexture},
+    {"normalTexture", &MaterialData::normalTexture},
+    {"occlusionTexture", &MaterialData::occlusionTexture},
+    {"emissiveTexture", &MaterialData::emissiveTexture},
+};
+
+void readTexture(const Json& object, std::string_view key, const std::string& parent, MaterialTextureData& out,
+                 Issues& issues) {
+    const auto it = object.find(key);
+    if (it == object.end()) {
+        return;
+    }
+    const std::string path = child(parent, key);
+    MaterialTextureData t;
+    if (it->is_string()) {
+        t.path = it->get<std::string>();
+        if (t.path.empty()) {
+            issues.add(path, "texture path is empty");
+        }
+    } else if (it->is_object()) {
+        checkKeys(*it, path, {"path", "filter", "wrap"}, issues);
+        readString(*it, "path", path, t.path, issues, true);
+        std::string filter;
+        if (readString(*it, "filter", path, filter, issues)) {
+            if (filter == "default") {
+                t.filter = MaterialTextureFilter::Default;
+            } else if (filter == "pixelArt") {
+                t.filter = MaterialTextureFilter::PixelArt;
+            } else if (filter == "nearest") {
+                t.filter = MaterialTextureFilter::Nearest;
+            } else if (filter == "linear") {
+                t.filter = MaterialTextureFilter::Linear;
+            } else {
+                issues.add(child(path, "filter"),
+                           "unknown texture filter '" + filter + "' (expected default, pixelArt, nearest or linear)");
+            }
+        }
+        std::string wrap;
+        if (readString(*it, "wrap", path, wrap, issues)) {
+            if (wrap == "repeat") {
+                t.wrap = MaterialTextureWrap::Repeat;
+            } else if (wrap == "clamp") {
+                t.wrap = MaterialTextureWrap::Clamp;
+            } else if (wrap == "mirror") {
+                t.wrap = MaterialTextureWrap::Mirror;
+            } else {
+                issues.add(child(path, "wrap"), "unknown texture wrap '" + wrap + "' (expected repeat, clamp or mirror)");
+            }
+        }
+    } else {
+        issues.add(path, "expected a texture path string or object, got " + typeName(*it));
+        return;
+    }
+    out = std::move(t);
+}
+
 } // namespace
 
 void readMaterialObject(const Json& object, const std::string& path, const std::string& defaultName,
@@ -31,7 +112,8 @@ void readMaterialObject(const Json& object, const std::string& path, const std::
     }
     checkKeys(object, path,
               {"name", "shader", "alphaMode", "alphaCutoff", "doubleSided", "baseColor", "metallic", "roughness",
-               "normalScale", "occlusionStrength", "emissive", "custom0", "custom1"},
+               "normalScale", "occlusionStrength", "emissive", "custom0", "custom1", "baseColorTexture",
+               "metallicRoughnessTexture", "normalTexture", "occlusionTexture", "emissiveTexture"},
               issues);
     MaterialData m;
     m.name = defaultName;
@@ -59,6 +141,9 @@ void readMaterialObject(const Json& object, const std::string& path, const std::
     readVec<3>(object, "emissive", path, m.emissive, issues, 0.0f, kMax);
     readVec<4>(object, "custom0", path, m.custom0, issues);
     readVec<4>(object, "custom1", path, m.custom1, issues);
+    for (const TextureSlot& slot : kTextureSlots) {
+        readTexture(object, slot.key, path, m.*slot.member, issues);
+    }
     if (m.name.empty()) {
         issues.add(child(path, "name"), "material has no name");
     }
@@ -80,6 +165,12 @@ Json materialJson(const MaterialData& m) {
     j["emissive"] = vecJson(m.emissive);
     j["custom0"] = vecJson(m.custom0);
     j["custom1"] = vecJson(m.custom1);
+    for (const TextureSlot& slot : kTextureSlots) {
+        const MaterialTextureData& t = m.*slot.member;
+        if (!t.empty()) {
+            j[slot.key] = Json{{"path", t.path}, {"filter", filterName(t.filter)}, {"wrap", wrapName(t.wrap)}};
+        }
+    }
     return j;
 }
 
@@ -108,6 +199,21 @@ MaterialData loadMaterialFile(const std::filesystem::path& path) {
 
 std::string serializeMaterial(const MaterialData& material) {
     return detail::materialJson(material).dump(2) + "\n";
+}
+
+gfx::SamplerDesc samplerFor(const MaterialTextureData& texture, const gfx::SamplerDesc& defaultSampler) {
+    gfx::SamplerDesc d;
+    switch (texture.filter) {
+    case MaterialTextureFilter::PixelArt: d = gfx::SamplerDesc::pixelArt(); break;
+    case MaterialTextureFilter::Nearest: d = gfx::SamplerDesc::nearest(); break;
+    case MaterialTextureFilter::Linear: d = gfx::SamplerDesc::linear(); break;
+    case MaterialTextureFilter::Default: d = defaultSampler; break;
+    }
+    const gfx::AddressMode mode = texture.wrap == MaterialTextureWrap::Clamp    ? gfx::AddressMode::ClampToEdge
+                                  : texture.wrap == MaterialTextureWrap::Mirror ? gfx::AddressMode::MirroredRepeat
+                                                                                : gfx::AddressMode::Repeat;
+    d.addressU = d.addressV = mode;
+    return d;
 }
 
 gfx::MaterialDesc toMaterialDesc(const MaterialData& m, gfx::ShaderHandle shader) {

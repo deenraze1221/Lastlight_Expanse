@@ -4,6 +4,7 @@ add_library(ZodarAssets STATIC
     ImageData.cpp
     Ktx2.cpp
     TextureCache.cpp
+    TextureStandards.cpp
     EnvironmentMaps.cpp
     MeshData.cpp
     Primitives.cpp)

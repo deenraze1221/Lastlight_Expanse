@@ -14,8 +14,34 @@
 //   { "name": "brick", "shader": "zodar/pbr", "baseColor": [0.8, 0.3, 0.2, 1],
 //     "roughness": 0.7, "metallic": 0, "emissive": [0, 0, 0] }
 // Every field is optional (defaults = gfx::MaterialDesc defaults, shader "zodar/pbr").
-// Unknown fields are errors. Textures are not supported yet (Phase C asset manager).
+// Unknown fields are errors. Textures (Phase C): "baseColorTexture", "metallicRoughnessTexture",
+// "normalTexture", "occlusionTexture", "emissiveTexture", each a path string or
+//   { "path": "crate.png", "filter": "default|pixelArt|nearest|linear", "wrap": "repeat|clamp|mirror" }
+// Paths are relative to the file holding the material. Textures are loaded and bound by the
+// AssetManager (Zodar::AssetManager); createMaterial/toMaterialDesc below leave them neutral.
 namespace zodar {
+
+enum class MaterialTextureFilter : uint8_t {
+    Default,  // the loader's default sampler (AssetManagerDesc::defaultSampler)
+    PixelArt, // gfx::SamplerDesc::pixelArt(): nearest mag/min, linear mips
+    Nearest,  // gfx::SamplerDesc::nearest()
+    Linear,   // gfx::SamplerDesc::linear() (trilinear + anisotropic)
+};
+enum class MaterialTextureWrap : uint8_t { Repeat, Clamp, Mirror };
+
+// One texture slot of a material file. Empty path: no texture (neutral default).
+struct MaterialTextureData {
+    std::string path;
+    MaterialTextureFilter filter = MaterialTextureFilter::Default;
+    MaterialTextureWrap wrap = MaterialTextureWrap::Repeat;
+
+    bool empty() const { return path.empty(); }
+    bool operator==(const MaterialTextureData&) const = default;
+};
+
+// Sampler for a texture slot; `defaultSampler` is used for MaterialTextureFilter::Default
+// (its address modes are replaced by `texture.wrap` in every case).
+[[nodiscard]] gfx::SamplerDesc samplerFor(const MaterialTextureData& texture, const gfx::SamplerDesc& defaultSampler);
 
 // CPU description of a material as stored in a file: gfx::MaterialDesc without GPU handles
 // (the shader is referenced by its registered name).
@@ -33,6 +59,11 @@ struct MaterialData {
     glm::vec3 emissive{0.0f};
     glm::vec4 custom0{0.0f};
     glm::vec4 custom1{0.0f};
+    MaterialTextureData baseColorTexture;
+    MaterialTextureData metallicRoughnessTexture; // glTF packing: G = roughness, B = metallic
+    MaterialTextureData normalTexture;
+    MaterialTextureData occlusionTexture; // R channel
+    MaterialTextureData emissiveTexture;
 
     bool operator==(const MaterialData&) const = default;
 };
@@ -46,7 +77,8 @@ struct MaterialData {
 // ".material.json" (or the extension).
 [[nodiscard]] MaterialData loadMaterialFile(const std::filesystem::path& path);
 
-// Deterministic, pretty-printed JSON with every field written; parseMaterial(serialize(m)) == m.
+// Deterministic, pretty-printed JSON with every field written (texture slots only when set);
+// parseMaterial(serialize(m)) == m.
 [[nodiscard]] std::string serializeMaterial(const MaterialData& material);
 
 // GPU description for MaterialSystem::createMaterial (textures stay neutral defaults).

@@ -92,10 +92,27 @@ MaterialHandle MaterialSystem::createMaterial(const MaterialDesc& desc) {
         fail("Material table is full");
     }
     const GpuMaterial gpu = toGpu(desc);
+    if (!m_free.empty()) {
+        // The slot is no longer read by the GPU (releaseMaterial contract): write it directly.
+        const MaterialHandle handle = m_free.back();
+        m_free.pop_back();
+        m_materialBuffer.write(&gpu, sizeof(gpu), static_cast<VkDeviceSize>(handle) * sizeof(GpuMaterial));
+        m_materials[handle] = desc;
+        return handle;
+    }
     const auto handle = static_cast<MaterialHandle>(m_materials.size());
     m_materialBuffer.write(&gpu, sizeof(gpu), static_cast<VkDeviceSize>(handle) * sizeof(GpuMaterial));
     m_materials.push_back(desc);
     return handle;
+}
+
+void MaterialSystem::releaseMaterial(MaterialHandle handle) {
+    ZODAR_ENSURE(handle < m_materials.size(), "releaseMaterial: unknown material handle " + std::to_string(handle));
+    ZODAR_ENSURE(std::find(m_free.begin(), m_free.end(), handle) == m_free.end(),
+                 "releaseMaterial: material handle " + std::to_string(handle) + " was already released");
+    std::erase(m_pending, handle);
+    m_materials[handle].name += " (released)";
+    m_free.push_back(handle);
 }
 
 void MaterialSystem::updateMaterial(MaterialHandle handle, const MaterialDesc& desc) {

@@ -99,8 +99,17 @@ All fields optional; defaults match `gfx::MaterialDesc`.
 | `emissive` | [3] linear radiance | [0, 0, 0] | >= 0 |
 | `custom0`, `custom1` | [4] | zeros | finite (custom shaders) |
 
-Textures are not supported in files yet (Phase C asset manager); texture fields are reported
-as errors.
+| `baseColorTexture`, `metallicRoughnessTexture`, `normalTexture`, `occlusionTexture`, `emissiveTexture` | path string or object | none | see below |
+
+Texture slots (Phase C) take a path string or
+`{ "path": "...", "filter": "default|pixelArt|nearest|linear", "wrap": "repeat|clamp|mirror" }`
+(defaults `default`, `repeat`). Paths are relative to the file that holds the material (the
+material file, or the scene file for inline materials). `default` uses the loader's default
+sampler (`AssetManagerDesc::defaultSampler`); `pixelArt` = nearest magnification/minification
+with linear mip blending. Textures are loaded and bound only through the AssetManager
+(`AssetManager::loadMaterial` / `createSceneMaterials`, guide `docs/guide/ASSETS.md`);
+`zodar::createMaterial` / `createSceneMaterials` keep neutral textures. Serialization writes
+texture slots only when set (untextured materials serialize as before).
 
 ## Errors
 

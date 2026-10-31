@@ -20,22 +20,28 @@ modes, mip control, lighting, shadows, fog, weather). Games choose the look (see
 
 ## 2. Texture standards
 
+Updated in Phase C (2026-10-31); enforced as warnings by the engine
+(`Assets/TextureStandards.h`, `AssetManager`).
+
 | Size | Use |
 | --- | --- |
-| 256×256 | Standard: environment objects, terrain blocks, props, items |
-| 512×512 | Important assets: weapons, characters, mutants, hero blocks |
-| 1024×1024 | Only when genuinely necessary; give the reason in the asset's notes |
+| 64×64 | Primary standard: terrain blocks, environment objects, props |
+| 32×32 | Small props, items, decals |
+| 128×128 | Characters, weapons, mutants |
+| 256×256 | Maximum: unique assets only; give the reason in the asset's notes |
 
 - Sizes are powers of two and square. Non-square atlases need a documented reason.
 - **Consistent palette.** Each game keeps one master palette. All textures are quantised to it, or
   to documented sub-palettes per biome or faction.
 - **Consistent texel density.** One art pixel should cover about the same world size on every
-  asset. The terrain reference is 256² per 1 m voxel face with 2×2-texel art pixels, so one art
-  pixel is 1/128 m. Props and characters stay within 2× of that art-pixel size. Hero assets may
-  be up to 2× finer. Confirm or adjust this reference when the first Blockbench assets are made.
+  asset. Reference: 64² per 1 m voxel face, one texel per art pixel, so one art pixel is 1/64 m
+  (16 texels per Blockbench unit at 16 units/m). Props and characters stay within 2× of that.
+  The current procedural terrain textures (256², 2×2-texel art pixels, `game/`) predate this
+  standard; migrating them is game work, scheduled separately.
 - **Consistent pixel-art appearance.** Hard edges, deliberate dithering, no photo sources, no
   upscaled low-res art without cleanup.
-- **Sampling.** Use nearest-neighbour magnification and minification on pixel art.
+- **Sampling.** Use nearest-neighbour magnification and minification on pixel art
+  (`gfx::SamplerDesc::pixelArt()`; material files: `"filter": "pixelArt"`).
 - **Mipmaps.** Configure them carefully: blend between mip levels (linear mip filter) to stop
   distant shimmer, build mips with a filter that keeps the palette readable, and set the anisotropy
   per material. Smooth or non-pixel-art textures (UI gradients, sky, effects) may use linear
@@ -61,9 +67,12 @@ modes, mip control, lighting, shadows, fog, weather). Games choose the look (see
   it through the engine importer. Blockbench `.bbmodel` source files are versioned next to the
   exports so assets can be re-exported.
 
-## 4. Future technical requirements (not implemented)
+## 4. Technical requirements
 
-What exists today:
+What exists today (Phase C1 added the asset manager, see `docs/guide/ASSETS.md`):
+- `AssetManager` loads PNG textures, glTF models and material files with texture slots;
+  `pixelArt` filter preset; texture size warnings (32/64/128/256).
+- glTF sampler filters are honoured end to end (verified by GPU test on the material sampler).
 - `GltfLoader` imports meshes, materials, UVs, textures and glTF samplers. Nearest
   mag/min/mip filters and wrap modes are read into `ModelSampler`. `KHR_texture_transform` is
   accepted.
@@ -80,8 +89,8 @@ Required work, to be scheduled:
 2. **Pixel-art texture rules in the asset pipeline** (engine, generic, configured per game).
    Each texture gets a "pixel art" usage flag that means: no BCn compression (or an
    art-preserving mode, decided by A/B tests), mip generation that keeps the palette readable,
-   nearest sampling, and a max-anisotropy setting. Size validation (256/512/1024, power of two)
-   gives a warning, not an error.
+   nearest sampling, and a max-anisotropy setting. Size validation (32/64/128/256) gives a
+   warning, not an error (done at load time in Phase C1; the offline compiler check remains).
 3. **Asset validation report** (engine tool). Texture size class, texel density per mesh
    (texels per metre, from UV area against world area), palette deviation against a
    game-supplied palette, and triangle counts. Output is JSON, so agents can check assets
@@ -96,7 +105,7 @@ Required work, to be scheduled:
 
 ## 5. Review checklist for new art
 
-- [ ] Size class correct (256 / 512 / 1024 with reason).
+- [ ] Size class correct (64 primary / 32 small / 128 characters+weapons / 256 unique with reason).
 - [ ] Palette matches the game's master palette.
 - [ ] Texel density within the documented range.
 - [ ] Reads crisply up close (nearest sampling) and does not shimmer at distance (mips).

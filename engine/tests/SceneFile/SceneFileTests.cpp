@@ -87,7 +87,7 @@ TEST_CASE("scene file: material defaults, fields and round-trip") {
 TEST_CASE("scene file: material validation reports every problem with its path") {
     const auto issues = issuesOf([] {
         (void)parseMaterial(R"({"name": "bad", "roughness": 1.5, "baseColor": [1, 0, 0], "alphaMode": "glass",
-            "metallic": "high", "baseColorTexture": "a.png", "roughnes": 0.3})",
+            "metallic": "high", "baseColorTexture": 5, "roughnes": 0.3})",
                             "bad.material.json");
     });
     CHECK(issues.size() == 6);
@@ -95,11 +95,11 @@ TEST_CASE("scene file: material validation reports every problem with its path")
     CHECK(hasIssue(issues, "/baseColor", "array of 4 numbers"));
     CHECK(hasIssue(issues, "/alphaMode", "unknown alpha mode 'glass'"));
     CHECK(hasIssue(issues, "/metallic", "expected a number, got string"));
-    CHECK(hasIssue(issues, "/baseColorTexture", "not supported yet"));
+    CHECK(hasIssue(issues, "/baseColorTexture", "expected a texture path string or object"));
     CHECK(hasIssue(issues, "/roughnes", "unknown field"));
     CHECK(issues[0].file == "bad.material.json");
     // Schema errors carry the line:column of the offending value.
-    CHECK(issues[0].path == "/baseColorTexture");
+    CHECK(issues[0].path == "/roughnes"); // unknown fields are reported first
     CHECK(issues[0].line == 2);
     CHECK(issues[0].toString().starts_with("bad.material.json:2:"));
 

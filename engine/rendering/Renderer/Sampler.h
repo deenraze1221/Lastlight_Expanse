@@ -31,6 +31,13 @@ struct SamplerDesc {
         d.maxAnisotropy = 1.0f;
         return d;
     }
+    // Pixel art (docs/ART_DIRECTION.md): nearest magnification and minification keep art
+    // pixels crisp; linear blending between mip levels stops distant shimmer.
+    static SamplerDesc pixelArt() {
+        SamplerDesc d = nearest();
+        d.mipFilter = Filter::Linear;
+        return d;
+    }
 };
 
 struct SamplerDescHash {

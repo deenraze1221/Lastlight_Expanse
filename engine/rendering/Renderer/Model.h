@@ -46,6 +46,8 @@ public:
     size_t meshCount() const { return m_meshes.size(); }
     size_t textureCount() const { return m_textures.size(); }
     const std::vector<MaterialHandle>& materials() const { return m_materials; }
+    // Material of primitives without one (glTF default material).
+    MaterialHandle fallbackMaterial() const { return m_fallbackMaterial; }
     // Registers every node submesh as a GpuScene instance (meshes must be pooled).
     void addToScene(GpuScene& scene, const glm::mat4& transform = glm::mat4(1.0f)) const;
 

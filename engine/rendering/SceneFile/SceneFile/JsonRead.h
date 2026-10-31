@@ -216,7 +216,8 @@ void checkKeysIn(const Json& object, const std::string& path, const Names& allow
         if (!known) {
             std::string message = "unknown field '" + key + "'";
             if (key.ends_with("Texture") || key == "textures") {
-                message += " (textures in material files are not supported yet; planned with the Phase C asset manager)";
+                message += " (material texture slots: baseColorTexture, metallicRoughnessTexture, normalTexture, "
+                           "occlusionTexture, emissiveTexture)";
             }
             issues.add(child(path, key), message);
         }
