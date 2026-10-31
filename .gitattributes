@@ -1,0 +1,2 @@
+# Asset registry hashes cover exact file bytes: never convert line endings of example assets.
+examples/asset_loading/** -text

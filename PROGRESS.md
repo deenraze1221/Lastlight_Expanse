@@ -107,7 +107,27 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase C2 complete (async asset loading). Phases A, B, C1 unchanged.
+- `main`: Phase C3 complete (asset registry + CLI). Phases A, B, C1, C2 unchanged.
+
+## Phase C3 — asset registry and CLI (done)
+- `AssetManager/AssetRegistry.h`: `assets.json` (`zodar.asset_registry` v1: id, type, source,
+  import settings, dependencies, FNV-1a hash, compiled outputs), parse with DataError
+  (line:column + JSON path), deterministic serialize, `importAsset`, `fingerprintAsset`
+  (dependency discovery: glTF/GLB URIs, material textures, scene materials, prefabs
+  recursively), `checkAsset`/`checkRegistry` + `assetReportJson` (`zodar.asset_report` v1:
+  size classes, triangle/vertex counts, texel density, stale/missing), `textureLoadSettings`
+  / `modelLoadSettings` for loading by id.
+- Tool `ZodarAssetTool import|list|check` (`--compile` bakes KTX2 via `compileModelTextures`);
+  `zodar.py import FILE...` and `zodar.py assets list|check`.
+- `sceneMaterialDirectory` (SceneFile): inline prefab materials now resolve their textures
+  next to the prefab (fixes AssetManager scene materials from prefabs too).
+- Example registry `examples/asset_loading/assets.json` (5 assets, all ok); sample loads the
+  crate by id; ctest `tools.asset_check_example` (`check --strict`).
+- Tests: 5 `asset registry:*` unit cases (types/settings, parse validation + round-trip,
+  import/dependencies/hash/stale/missing/size warnings/report, density + prefab dirs, example
+  registry current). Verified GCC 13 Debug, 0 warnings, 182/182 unit, 55/55 GPU cases, 22/22
+  ctest, 0 validation messages; `--compile` path checked manually on a temp copy.
+  Not run: Release, Clang, MinGW, MSVC.
 
 ## Phase C2 — async asset loading (done)
 - `AssetCache`: `Loading` state, `getOrCreatePending`, `resolve`, `reject`; handles
@@ -183,8 +203,8 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Remaining Phase C (when requested): C3 `assets.json` registry + `zodar import/assets` CLI,
-   C4 scene-file model references, C5 hot reload, streaming budgets, audio/FBX importers. Optionally migrate game draws/terrain textures to assets.
+1. Remaining Phase C (when requested): C4 scene-file model references (`"model": "crate"`
+   by registry id or path), C5 hot reload, streaming budgets, palette check, audio/FBX importers. Optionally migrate game draws/terrain textures to assets.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.

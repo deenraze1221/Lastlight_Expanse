@@ -86,6 +86,13 @@ struct SceneDocument {
 // Reads and parses a scene (or prefab) file; material and prefab references resolve next to it.
 [[nodiscard]] SceneDocument loadSceneFile(const std::filesystem::path& path);
 
+// Directory that relative paths inside `material` (texture slots of inline materials) resolve
+// against: the scene's directory, or the defining prefab's directory for prefab materials
+// (id "<prefab path>#<id>", nested prefabs chained). File-referenced materials resolve their
+// textures next to `sceneDirectory / material.source` instead.
+[[nodiscard]] std::filesystem::path sceneMaterialDirectory(const SceneMaterial& material,
+                                                           const std::filesystem::path& sceneDirectory);
+
 // Deterministic, pretty-printed JSON. Referenced materials are written as their `source`
 // path (the material file itself is not written), inline ones in full.
 // parseScene(serializeScene(doc), ..., same base directory) == doc.

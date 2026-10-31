@@ -1,4 +1,4 @@
-# Assets: textures, glTF models and materials (Phase C1, async C2)
+# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3)
 
 Module `Zodar::AssetManager` (`engine/rendering/AssetManager/AssetManager/AssetManager.h`).
 Working example: `examples/asset_loading` rendered by the sample `ZodarAssetLoading`
@@ -59,6 +59,47 @@ void onUpdate(const zodar::FrameTime&) override {
 - Worker jobs touch only their inputs and a mutex-protected result queue; caches and handles
   stay on the render thread.
 
+## Asset registry and CLI (Phase C3)
+
+`assets.json` next to the assets lists every asset by id (schema `zodar.asset_registry` v1):
+
+```json
+{ "schema": "zodar.asset_registry", "version": 1, "assets": [
+  { "id": "crate", "type": "model", "source": "crate.gltf", "sampling": "file", "compile": false,
+    "hash": "fnv1a64:da26810eac1f9b88", "dependencies": ["textures/crate.png"] } ] }
+```
+
+Types: `texture` (`usage` color|data|normal, `mips`), `model` (`sampling`
+file|pixelArt|nearest|linear, `compile`, `outputs`), `material`, `scene`, `prefab`. Paths are
+relative to the registry directory. `hash` covers the source and every dependency.
+
+```bash
+python3 tools/zodar.py import assets/crate.gltf                      # add/update (nearest assets.json, else ./assets.json)
+python3 tools/zodar.py import assets/textures/crate.png --id crate_texture
+python3 tools/zodar.py import assets/crate.gltf --compile --sampling pixelArt   # + KTX2 cache
+python3 tools/zodar.py assets list -- --registry assets/assets.json
+python3 tools/zodar.py assets check -- --registry assets/assets.json --report report.json --strict
+```
+
+(`ZodarAssetTool import|list|check` directly takes the same options.) Default ids are file
+names without asset extensions; a clash must be resolved with `--id`. Re-importing keeps the
+id and settings. Import fails if a dependency is missing.
+
+`check` exit code: 1 if any asset has errors (`--strict`: warnings too). Errors: missing
+source or dependency, unreadable/invalid file. Warnings: stale (source/dependency changed
+since import: re-import), non-standard texture size, texel density outside 32..128 texels/m
+(target 64, `--density-target N`), glTF importer notes, missing compiled outputs. The report
+(`zodar.asset_report` v1) has per asset: status, errors, warnings, textures (size + class),
+meshes, vertices, triangles, materials, texelDensity.
+
+Loading by id:
+
+```cpp
+const zodar::AssetRegistry registry = zodar::AssetRegistry::load("assets/assets.json");
+const zodar::AssetEntry& crate = registry.at("crate");
+zodar::ModelHandle h = assets.loadModelAsync(registry.sourcePath(crate), zodar::modelLoadSettings(crate));
+```
+
 ## Material texture slots
 
 `*.material.json` (and inline scene materials) accept `baseColorTexture`,
@@ -96,5 +137,5 @@ Square 64×64 (primary), 32×32 (small props), 128×128 (characters, weapons), u
   The failure is cached while handles exist; drop them to retry.
 - Single-threaded (render thread). Release every handle before the AssetManager is destroyed;
   declare it before the members holding handles. Its destructor waits for the device.
-- Pending async loads at destruction are dropped after a device wait. An asset registry and
-  hot reload are later Phase C steps (`docs/AI_FIRST_ROADMAP.md`).
+- Pending async loads at destruction are dropped after a device wait. Hot reload and
+  streaming budgets are later Phase C steps (`docs/AI_FIRST_ROADMAP.md`).

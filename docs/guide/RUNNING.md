@@ -40,6 +40,8 @@ Arguments after `--` go to the app unchanged. The exit code is the build's, test
 | `zodar.py shot APP [--frames 120] [--out zodar-shots] -- ARGS` | headless deterministic run with `--screenshot` + `--report` | run report summary, PNG and report paths (exit 3 if either is missing) |
 | `zodar.py bench -- ARGS` | ZodarBench | benchmark summary (CPU/GPU frame, top passes, draws) |
 | `zodar.py report FILE.json` | — | summary of a run report or ZodarBench report |
+| `zodar.py import FILE... [--id ID] [--compile] ...` | ZodarAssetTool import | one line per imported asset (id, type, hash, dependencies) |
+| `zodar.py assets list\|check [--report F] [--strict]` | ZodarAssetTool | registry listing; check: one line per problem + summary, JSON report (`docs/guide/ASSETS.md`) |
 
 `APP`: `game` (LastlightExpanse), `viewer` (ModelViewer), `bench` (ZodarBench), `runtime`
 (ZodarRuntimeSmoke) or any executable name in `<build>/bin`. Logs: `<build>/zodar-logs/`

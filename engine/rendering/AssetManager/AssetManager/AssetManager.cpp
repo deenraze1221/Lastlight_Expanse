@@ -343,7 +343,8 @@ SceneMaterialAssets AssetManager::createSceneMaterials(const SceneDocument& docu
     for (const SceneMaterial& material : document.materials) {
         MaterialAssetHandle handle =
             material.source.empty()
-                ? createMaterial(material.data, directory, scene.generic_string() + "#" + material.id)
+                ? createMaterial(material.data, sceneMaterialDirectory(material, directory),
+                                 scene.generic_string() + "#" + material.id)
                 : loadMaterial(directory / material.source);
         if (handle.failed()) {
             issues.push_back({scene.generic_string(), 0, 0, "/materials/" + material.id, handle.error()});
@@ -478,7 +479,8 @@ SceneMaterialAssets AssetManager::createSceneMaterialsAsync(const SceneDocument&
     for (const SceneMaterial& material : document.materials) {
         result.byId[material.id] =
             material.source.empty()
-                ? createMaterialAsync(material.data, directory, scene.generic_string() + "#" + material.id)
+                ? createMaterialAsync(material.data, sceneMaterialDirectory(material, directory),
+                                      scene.generic_string() + "#" + material.id)
                 : loadMaterialAsync(directory / material.source);
     }
     return result;

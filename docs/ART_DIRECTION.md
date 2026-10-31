@@ -94,7 +94,8 @@ Required work, to be scheduled:
 3. **Asset validation report** (engine tool). Texture size class, texel density per mesh
    (texels per metre, from UV area against world area), palette deviation against a
    game-supplied palette, and triangle counts. Output is JSON, so agents can check assets
-   without looking at them.
+   without looking at them. *Done in Phase C3* (`zodar.py assets check --report`: size class,
+   texel density per model, triangle counts), except the palette deviation check.
 4. **Lighting features** (rendering roadmap): S5 dynamic shadows (cascaded sun shadows in
    `pbr.frag` and `voxel.frag`), ambient occlusion beyond the mesher's voxel AO (S7), and
    weather (rain/snow) plus the day–night cycle (backlog).

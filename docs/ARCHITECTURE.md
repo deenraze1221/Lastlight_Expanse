@@ -18,10 +18,10 @@ Engine code never includes game headers or links game targets.
 | `engine/world/World` | `Zodar::World` | Entities over EnTT: `zodar::World` / `zodar::Entity`, components, `Name`/`Transform`, hierarchy, `entities()`, component reflection (B1.1-B2; no GPU) |
 | `engine/rendering/WorldRender` | `Zodar::WorldRender` | World -> renderer bridge: `MeshRenderer`, `collectDraws` (CPU path), `WorldRenderSync` (GpuScene) (B1.3); camera/light/environment/fog components, `collectLighting`/`collectCamera` (B2) |
 | `engine/rendering/SceneFile` | `Zodar::SceneFile` | `*.scene.json` / `*.material.json`: parse + validate (`DataError`), serialize, `createSceneMaterials`, `instantiateScene` into a World (B2); material texture slots (C) |
-| `engine/rendering/AssetManager` | `Zodar::AssetManager` | Runtime asset manager (C): cached GPU textures (PNG/JPEG/TGA/BMP), glTF models, material files with textures, scene materials; release via the deletion queue |
+| `engine/rendering/AssetManager` | `Zodar::AssetManager` | Runtime asset manager (C): cached GPU textures (PNG/JPEG/TGA/BMP), glTF models, material files with textures, scene materials; release via the deletion queue; async loads (C2); `AssetRegistry` (`assets.json`, import, hashes, checks; CPU only, C3) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
 | `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON. Used by the game, ModelViewer and ZodarBench |
-| `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarUISandbox |
+| `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarAssetTool (asset registry CLI, C3), ZodarUISandbox |
 | `engine/ui` | `Zodar::UI` | Engine/tooling UI, UI resources |
 | `engine/samples`, `engine/tests` | — | HelloTriangle, ModelViewer; doctest unit + GPU tests |
 | `game/` | `LastlightExpanse` | The game |
@@ -308,7 +308,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
     equivalent C++ scene via both WorldRender paths and after capture/reload; mutable material
     updates match freshly created materials (CPU path and GpuScene, sync validation clean).
 
-## Asset manager (Phases C1-C2)
+## Asset manager (Phases C1-C3)
 
 - Module `Zodar::AssetManager` (`engine/rendering/AssetManager`, depends on Renderer + SceneFile).
   Guide: `docs/guide/ASSETS.md`; example `examples/asset_loading` + sample `ZodarAssetLoading`.
@@ -336,7 +336,20 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   frame can sample an unacquired image. Async materials are created when their textures are
   ready. Cancellation = all user handles dropped (request holds the last one).
   `waitAll()` = `JobSystem::waitIdle` + `UploadQueue::wait` per ticket.
-- Not yet (later Phase C steps): `assets.json` registry and `zodar import/assets` CLI,
+- Registry (C3, `AssetManager/AssetRegistry.h`): `assets.json` (`zodar.asset_registry` v1)
+  next to the assets; entries sorted by id; paths relative to the registry directory.
+  Dependencies are discovered by parsing (glTF buffer/image URIs incl. GLB JSON chunk, material
+  texture slots, scene material files, prefab files recursively, prefab inline-material
+  textures via `sceneMaterialDirectory`). Hash = FNV-1a 64 over source + dependencies (paths
+  relative to the source, sizes, bytes): location independent, no crypto needed. `check` never
+  throws: errors = unusable (missing source/dependency, parse failure), warnings = stale hash,
+  size standards, texel density (target 64 texels/m, ±2×), missing compiled outputs. Report
+  JSON `zodar.asset_report` v1. CLI `ZodarAssetTool` (CPU only; `--compile` uses the existing
+  `compileModelTextures` cache), wrapped by `zodar.py import|assets`; ctest
+  `tools.asset_check_example` keeps the example registry current. The runtime loads by id via
+  `registry.sourcePath(entry)` + `modelLoadSettings/textureLoadSettings`; the AssetManager
+  itself stays path-based.
+- Not yet (later Phase C steps): palette deviation check,
   streaming budgets (`docs/ASSET_STREAMING.md`), hot reload, audio/FBX importers,
   scene-file `model` references (meshes still bound by name in `SceneBindings`).
 

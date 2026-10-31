@@ -8,6 +8,8 @@ Usage (from anywhere; paths are relative to the current directory):
   zodar.py [--preset P | --build-dir DIR] shot APP [--frames N] [--out DIR] [-- APP_ARGS ...]
   zodar.py [--preset P | --build-dir DIR] bench [-- ZODARBENCH_ARGS ...]
   zodar.py report FILE.json
+  zodar.py [--preset P | --build-dir DIR] import FILE... [ZodarAssetTool import options]
+  zodar.py [--preset P | --build-dir DIR] assets list|check [ZodarAssetTool options]
 
 APP: game (LastlightExpanse), viewer (ModelViewer), bench (ZodarBench), runtime
 (ZodarRuntimeSmoke), or any executable name in <build>/bin.
@@ -34,6 +36,7 @@ APPS = {
     "viewer": "ModelViewer",
     "bench": "ZodarBench",
     "runtime": "ZodarRuntimeSmoke",
+    "assets": "ZodarAssetTool",
 }
 MAX_DIAGNOSTICS = 30
 
@@ -275,6 +278,14 @@ def cmd_report(args):
     return 0
 
 
+# --- asset registry (ZodarAssetTool) --------------------------------------------------------
+
+def cmd_assets(args):
+    exe = executable(args, "assets")
+    action = ["import"] if args.command == "import" else [args.action]
+    return subprocess.run([str(exe)] + action + args.rest + args.extra).returncode
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="zodar.py", description=__doc__.split("\n")[0])
     parser.add_argument("--preset", default=os.environ.get("ZODAR_PRESET", "gpu-tests"))
@@ -305,6 +316,15 @@ def main(argv=None):
     p = sub.add_parser("bench", help="run ZodarBench; prints the benchmark summary")
     p.add_argument("--timeout", type=float, default=1800, help="kill after S seconds (exit 124)")
     p.set_defaults(func=cmd_bench)
+
+    p = sub.add_parser("import", help="add/update assets in assets.json (ZodarAssetTool import)")
+    p.add_argument("rest", nargs=argparse.REMAINDER, help="FILE... [--registry F] [--id ID] [--compile] ...")
+    p.set_defaults(func=cmd_assets)
+
+    p = sub.add_parser("assets", help="list or check the asset registry (ZodarAssetTool)")
+    p.add_argument("action", choices=["list", "check"])
+    p.add_argument("rest", nargs=argparse.REMAINDER, help="[--registry F] [--json] [--report F] [--strict]")
+    p.set_defaults(func=cmd_assets)
 
     p = sub.add_parser("report", help="summarize a run report or ZodarBench report")
     p.add_argument("file")

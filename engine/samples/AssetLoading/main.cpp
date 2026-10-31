@@ -6,6 +6,7 @@
 // (fatal error) if an asset fails, is still loading at exit, or outlives its handles.
 //   ZodarAssetLoading [--assets DIR] [standard options, see --help]
 #include "AssetManager/AssetManager.h"
+#include "AssetManager/AssetRegistry.h"
 #include "Assets/Primitives.h"
 #include "Core/Error.h"
 #include "Core/Log.h"
@@ -46,7 +47,10 @@ protected:
         desc.jobs = &jobs();
         m_assets = std::make_unique<AssetManager>(renderer().context(), upload(), scene(), desc);
 
-        m_crate = m_assets->loadModelAsync("crate.gltf");
+        // The crate is loaded by registry id (assets.json, Phase C3) with its import settings.
+        const AssetRegistry registry = AssetRegistry::load(m_assetDir / AssetRegistry::kFileName);
+        const AssetEntry& crate = registry.at("crate");
+        m_crate = m_assets->loadModelAsync(registry.sourcePath(crate), modelLoadSettings(crate));
         {
             UploadBatch batch(upload());
             m_cube.emplace(batch, primitives::cube(1.0f));

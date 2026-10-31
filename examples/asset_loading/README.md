@@ -16,5 +16,10 @@ asynchronously, `--deterministic` waits for them before the first frame):
 ./build/bin/ZodarAssetLoading --headless --deterministic --frames 30 --screenshot asset_loading.png
 ```
 
+- `assets.json`: registry of all five assets (ids `crate`, `crate_texture`, `rune`,
+  `rune_texture`, `asset_loading`); the sample loads the crate by id. ctest
+  `tools.asset_check_example` fails when it is stale: after editing an asset run
+  `python3 tools/zodar.py import <file>` (from this folder, or pass `--registry`).
+
 `make_assets.py` regenerates the PNGs and the glTF (stdlib only, deterministic).
 GPU tests: `engine/tests/Gpu/AssetManagerTests.cpp`.

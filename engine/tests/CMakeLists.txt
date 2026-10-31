@@ -6,6 +6,7 @@ add_executable(ZodarTests
     Assets/EnvironmentMapTests.cpp
     Assets/MeshDataTests.cpp
     Assets/AssetCacheTests.cpp
+    Assets/AssetRegistryTests.cpp
     Core/LogTests.cpp
     Core/ProfilerTests.cpp
     Core/ErrorTests.cpp
@@ -43,13 +44,19 @@ add_executable(ZodarTests
     UI/ProgressBarTests.cpp
     UI/SvgFilterTests.cpp
     UI/LoadingScreenTests.cpp)
-target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::World Zodar::WorldRender Zodar::SceneFile Zodar::UI Zodar::stb doctest::doctest)
+target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::World Zodar::WorldRender Zodar::SceneFile Zodar::AssetManager Zodar::UI Zodar::stb doctest::doctest)
 # UI tests read the committed resources directly (fonts, original logos, manifest).
 target_compile_definitions(ZodarTests PRIVATE ZODAR_TEST_UI_DIR="${ZODAR_ENGINE_DIR}/ui/Resources/UI"
     ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples")
 zodar_set_warnings(ZodarTests)
 
 add_test(NAME unit COMMAND ZodarTests)
+# Asset registry CLI on the example (CPU only): fails if the committed assets.json is stale.
+if(TARGET ZodarAssetTool)
+    add_test(NAME tools.asset_check_example
+        COMMAND ZodarAssetTool check --strict --registry ${ZODAR_ENGINE_DIR}/../examples/asset_loading/assets.json
+                --report ${CMAKE_BINARY_DIR}/asset_check_example.json)
+endif()
 
 # Temporary UI sandbox (SDL3 software renderer, offscreen): renders the component gallery
 # and checks token colours at known pixels. Needs no GPU.

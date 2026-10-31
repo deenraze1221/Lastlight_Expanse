@@ -437,6 +437,16 @@ SceneDocument parseScene(std::string_view json, std::string_view file, const std
     return parseSceneImpl(json, std::string(file), baseDirectory, state);
 }
 
+std::filesystem::path sceneMaterialDirectory(const SceneMaterial& material, const std::filesystem::path& sceneDirectory) {
+    std::filesystem::path directory = sceneDirectory;
+    std::string_view id = material.id;
+    for (auto pos = id.find('#'); pos != std::string_view::npos; pos = id.find('#')) {
+        directory /= std::filesystem::path(std::string(id.substr(0, pos))).parent_path();
+        id.remove_prefix(pos + 1);
+    }
+    return directory.lexically_normal();
+}
+
 SceneDocument loadSceneFile(const std::filesystem::path& path) {
     ParseState state;
     state.prefabStack.push_back(normalisedKey(path));
