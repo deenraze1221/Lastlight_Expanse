@@ -107,7 +107,33 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase C3 complete (asset registry + CLI). Phases A, B, C1, C2 unchanged.
+- `main`: Phase C4 complete (scene model references) + texture standard and pixel-art
+  compression fixes. Phases A, B, C1-C3 unchanged otherwise.
+
+## Asset pipeline fixes + Phase C4 (done)
+- Texture standards: 32×32 default, 64×64 absolute maximum for all assets, 8/16 allowed
+  (`TextureSizeClass` Small/Default/Maximum/Oversized/NonStandard); warnings only, never
+  resized; texel density target 32 texels/m. Example crate texture regenerated at 32×32.
+  Reported violation: game procedural terrain textures 10 × 256² + 1 × 512²
+  (`game/src/Rendering/BlockTextures.h`), not changed (game art work).
+- Pixel-art compression audit: model compile used BC7 for every texture and the loader used any
+  matching cache. Now pixel-art textures compile to lossless RGBA8 KTX2 (`optionsFor(usage,
+  pixelArt)`, `ModelCompileOptions::pixelArt`, `ZodarAssetCompiler --pixel-art`,
+  `ZodarAssetTool --compile` from registry sampling); `compileTexture` refuses BCn for pixel
+  art; `loadGltf` rejects BCn caches of pixel-art textures (`lossyRejected`); compiler rewrites
+  them; `kTextureCompilerVersion` 2. BC7 kept for non-pixel-art.
+- C4: scene `modelRenderer {model, visible}` (registry id, or `.gltf`/`.glb` path relative to
+  the file; prefab paths rebased; parse checks paths exist, renderer exclusivity);
+  `ModelRenderer` component (`collectDraws`; CPU path only); `SceneBindings::models`,
+  `SceneCaptureNames::models`; `AssetManager::loadSceneModels[Async]` (+ `SceneModelAssets`);
+  registry hashes path-referenced models and checks ids; `Model::textures()` accessor.
+  Example scene: crate by id + small crate by path; sample spawns them from the scene.
+- Tests: texture standards (rewritten), `pixel art:*` (2 unit: byte-exact compile, lossy cache
+  rejection/recompile), GPU `asset manager: pixel-art textures reach the GPU byte-exact`
+  (readback of source and compiled KTX2), `model references:*` (4 unit), GPU `scene file:
+  modelRenderer ...`, registry oversized/density updates. Verified GCC 13 Debug, 0 warnings,
+  188/188 unit, 57/57 GPU cases, 22/22 ctest, 0 validation messages.
+  Not run: Release, Clang, MinGW, MSVC.
 
 ## Phase C3 — asset registry and CLI (done)
 - `AssetManager/AssetRegistry.h`: `assets.json` (`zodar.asset_registry` v1: id, type, source,
@@ -203,8 +229,8 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Remaining Phase C (when requested): C4 scene-file model references (`"model": "crate"`
-   by registry id or path), C5 hot reload, streaming budgets, palette check, audio/FBX importers. Optionally migrate game draws/terrain textures to assets.
+1. Remaining Phase C (when requested): C5 hot reload, streaming budgets, palette check,
+   audio/FBX importers. Game: re-author terrain textures to 32×32 (art direction). Optionally migrate game draws/terrain textures to assets.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.

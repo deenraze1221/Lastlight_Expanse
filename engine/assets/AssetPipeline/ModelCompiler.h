@@ -12,6 +12,9 @@ struct ModelCompileOptions {
     EncodeQuality quality = EncodeQuality::Normal;
     uint32_t threads = 0;
     bool force = false; // Recompile even if the cached file is up to date.
+    // Every texture is pixel art (lossless RGBA8). Textures with a NEAREST magnification
+    // sampler are pixel art anyway (GltfLoadOptions::pixelArt).
+    bool pixelArt = false;
 };
 
 struct CompiledTexture {

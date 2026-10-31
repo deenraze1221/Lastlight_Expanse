@@ -60,6 +60,7 @@ struct TextureLoadStats {
     uint32_t source = 0;      // decoded from the source image (PNG/JPEG)
     uint32_t runtimeMips = 0; // ... with mips generated at load time (fallback)
     uint32_t stale = 0;       // cache files ignored because the source changed
+    uint32_t lossyRejected = 0; // block-compressed caches ignored for pixel-art textures
 };
 
 // Source of one entry of ModelData::images (GltfLoadOptions::keepImageSources).
@@ -69,6 +70,7 @@ struct ModelImageSource {
     int gltfImage = -1;
     std::filesystem::path cachePath; // Where the compiled KTX2 belongs
     std::string sourceKey;           // textureSourceKey(bytes, usage)
+    bool pixelArt = false;           // must be compiled losslessly (see GltfLoadOptions::pixelArt)
 };
 
 // Imported static model: meshes (one submesh per primitive, materialIndex refers to
@@ -95,6 +97,11 @@ struct GltfLoadOptions {
     // textures carry baked mips).
     bool generateMips = true;
     bool keepImageSources = false; // Fill ModelData::imageSources (asset compiler)
+    // Pixel art: exact texel colours are required, so lossy block-compressed (BCn) compiled
+    // textures are never used (rejected caches count in TextureLoadStats::lossyRejected; the
+    // source image is decoded instead). Textures whose glTF sampler magnifies with NEAREST
+    // (Blockbench exports) are pixel art automatically; true marks every texture.
+    bool pixelArt = false;
 };
 
 // Loads .gltf (external or embedded buffers/images) and .glb files. Supports static

@@ -11,6 +11,8 @@ files with texture slots, deferred release, pixel-art sampler preset, texture si
 remaining Phase C items listed under Phase C). **Phase C2 done** (async loads: JobSystem
 decode, budgeted async uploads, ready on acquire, `update`/`waitAll`, cancellation). **Phase C3
 done** (`assets.json` registry, `ZodarAssetTool` / `zodar.py import|assets list|check`, JSON report).
+**Phase C4 done** (scene `modelRenderer` by registry id or path; texture standards 32 default /
+64 max; lossless pixel-art compilation).
 
 Goal: ZODAR is driven by Claude Code (code, CLI, files, logs, screenshots), not by a visual
 editor. Every engine capability must be reachable through documented C++ APIs, text data
@@ -100,7 +102,9 @@ Make every app start, run, capture and report the same way.
   messages, `SamplerDesc::pixelArt()`, texture size standards (32/64/128/256, warnings).
 - **C2 done:** async loads (`load*Async`, `createSceneMaterialsAsync`, `update`, `waitAll`).
 - **C3 done:** `AssetRegistry` + `ZodarAssetTool` (`zodar.py import`, `assets list|check`).
-  Remaining below: streaming, more importers, hot reload, scene-file model references.
+- **C4 done:** scene-file `modelRenderer` (registry id or `.gltf`/`.glb` path), `ModelRenderer`
+  component, `loadSceneModels[Async]`; revised texture standards; pixel art never BC7.
+  Remaining below: hot reload, streaming, more importers, palette check.
 - `AssetManager` with typed handles (`Handle<Mesh>`, `Handle<Texture>`, `Handle<Material>`,
   `Handle<AudioClip>`...), ref counting, async load on `JobSystem` + `UploadQueue`, unload via
   deletion queue, failure states with messages.

@@ -99,21 +99,28 @@ TEST_CASE("asset cache: handles outliving the cache still release safely") {
     CHECK(retired == 1);
 }
 
-TEST_CASE("texture standards: size classes and warnings") {
-    CHECK((classifyTextureSize(32, 32) == TextureSizeClass::Small));
-    CHECK((classifyTextureSize(64, 64) == TextureSizeClass::Primary));
-    CHECK((classifyTextureSize(128, 128) == TextureSizeClass::Large));
-    CHECK((classifyTextureSize(256, 256) == TextureSizeClass::Unique));
-    CHECK((classifyTextureSize(512, 512) == TextureSizeClass::NonStandard));
-    CHECK((classifyTextureSize(16, 16) == TextureSizeClass::NonStandard));
+TEST_CASE("texture standards: 32x32 default, 64x64 maximum, violations warn") {
+    CHECK((classifyTextureSize(32, 32) == TextureSizeClass::Default));
+    CHECK((classifyTextureSize(64, 64) == TextureSizeClass::Maximum));
+    CHECK((classifyTextureSize(16, 16) == TextureSizeClass::Small));
+    CHECK((classifyTextureSize(8, 8) == TextureSizeClass::Small));
+    CHECK((classifyTextureSize(128, 128) == TextureSizeClass::Oversized));
+    CHECK((classifyTextureSize(256, 256) == TextureSizeClass::Oversized));
+    CHECK((classifyTextureSize(4, 4) == TextureSizeClass::NonStandard));
     CHECK((classifyTextureSize(64, 32) == TextureSizeClass::NonStandard));
     CHECK((classifyTextureSize(48, 48) == TextureSizeClass::NonStandard));
+    CHECK(isTextureSizeAllowed(TextureSizeClass::Maximum));
+    CHECK_FALSE(isTextureSizeAllowed(TextureSizeClass::Oversized));
+    CHECK_FALSE(checkTextureSize("crate.png", 32, 32).has_value());
     CHECK_FALSE(checkTextureSize("crate.png", 64, 64).has_value());
-    const auto warning = checkTextureSize("crate.png", 100, 64);
-    REQUIRE(warning.has_value());
-    CHECK(warning->find("crate.png: 100x64") == 0);
-    CHECK(warning->find("64x64 primary") != std::string::npos);
-    CHECK(std::string(toString(TextureSizeClass::Primary)) == "primary (64x64)");
+    const auto big = checkTextureSize("hero.png", 128, 128);
+    REQUIRE(big.has_value());
+    CHECK(big->find("hero.png: 128x128 exceeds the 64x64 maximum") == 0);
+    CHECK(big->find("not resized") != std::string::npos);
+    const auto odd = checkTextureSize("crate.png", 100, 64);
+    REQUIRE(odd.has_value());
+    CHECK(odd->find("crate.png: 100x64 is not a standard texture size") == 0);
+    CHECK(std::string(toString(TextureSizeClass::Default)) == "default (32x32)");
 }
 
 TEST_CASE("asset cache: pending entries resolve or reject later (async loads)") {

@@ -308,7 +308,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
     equivalent C++ scene via both WorldRender paths and after capture/reload; mutable material
     updates match freshly created materials (CPU path and GpuScene, sync validation clean).
 
-## Asset manager (Phases C1-C3)
+## Asset manager (Phases C1-C4)
 
 - Module `Zodar::AssetManager` (`engine/rendering/AssetManager`, depends on Renderer + SceneFile).
   Guide: `docs/guide/ASSETS.md`; example `examples/asset_loading` + sample `ZodarAssetLoading`.
@@ -349,6 +349,20 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   `tools.asset_check_example` keeps the example registry current. The runtime loads by id via
   `registry.sourcePath(entry)` + `modelLoadSettings/textureLoadSettings`; the AssetManager
   itself stays path-based.
+- Texture standards (revised): 32×32 default, 64×64 maximum for all assets, 8/16 allowed;
+  classes Small/Default/Maximum (allowed), Oversized/NonStandard (warnings, never resized).
+  Texel density target 32 texels/m (±2×).
+- Pixel-art compression: pixel art (NEAREST glTF magnification, `GltfLoadOptions::pixelArt`,
+  `ModelCompileOptions::pixelArt`, `--pixel-art`) compiles to RGBA8 KTX2 only
+  (`compileTexture` throws for BCn + pixelArt); `loadGltf` rejects BCn caches for pixel-art
+  textures (`textureStats.lossyRejected`) and the compiler rewrites them;
+  `kTextureCompilerVersion` 2 invalidates v1 caches. BC7 remains for non-pixel-art textures.
+- Scene models (C4): `ModelRenderer {const gfx::Model*, visible}` in WorldRender
+  (`collectDraws` appends `Model::appendDraws`; CPU path only, like AssetManager models).
+  Scene files: `modelRenderer {model, visible}`; reference rule: `.gltf`/`.glb` suffix = path
+  (relative to the file, existence checked at parse, prefab-rebased), otherwise registry id
+  (resolved by `AssetManager::loadSceneModels[Async]` with an optional `AssetRegistry`).
+  Bound via `SceneBindings::models`; captured via `SceneCaptureNames::models`.
 - Not yet (later Phase C steps): palette deviation check,
   streaming budgets (`docs/ASSET_STREAMING.md`), hot reload, audio/FBX importers,
   scene-file `model` references (meshes still bound by name in `SceneBindings`).

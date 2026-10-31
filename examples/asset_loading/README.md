@@ -2,12 +2,12 @@
 
 Phase C1 example for `zodar::AssetManager` (guide: `docs/guide/ASSETS.md`).
 
-- `crate.gltf`: glTF 2.0 cube (embedded buffer) with `textures/crate.png` (64×64, primary size)
+- `crate.gltf`: glTF 2.0 cube (embedded buffer) with `textures/crate.png` (32×32, the default size)
   and a Blockbench-style nearest sampler.
-- `materials/rune.material.json`: base colour + emissive from `textures/rune.png` (32×32, small
-  prop) with the `pixelArt` filter.
+- `materials/rune.material.json`: base colour + emissive from `textures/rune.png` (32×32) with the `pixelArt` filter.
 - `asset_loading.scene.json`: the rune material (file) and an inline `crateLinear` material
-  (same crate PNG, `linear` filter) on two cubes, sun, sky, camera.
+  (same crate PNG, `linear` filter) on two cubes; two `modelRenderer` crates (Phase C4): one by
+  registry id (`"crate"`), a small one by path (`"crate.gltf"`); sun, sky, camera.
 
 Run (renders the glTF crate between the pixel-art and the linear cube; assets load
 asynchronously, `--deterministic` waits for them before the first frame):

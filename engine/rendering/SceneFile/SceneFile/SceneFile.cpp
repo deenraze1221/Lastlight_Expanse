@@ -162,6 +162,18 @@ void readMeshRenderer(const Json& object, const std::string& path, SceneMeshRend
     out = std::move(r);
 }
 
+void readModelRenderer(const Json& object, const std::string& path, SceneModelRenderer& out, bool partial,
+                       Issues& issues) {
+    if (!detail::requireObject(object, path, issues)) {
+        return;
+    }
+    detail::checkKeys(object, path, {"model", "visible"}, issues);
+    SceneModelRenderer r = out;
+    detail::readString(object, "model", path, r.model, issues, !partial);
+    detail::readBool(object, "visible", path, r.visible, issues);
+    out = std::move(r);
+}
+
 std::vector<std::string_view> componentKeys(std::initializer_list<std::string_view> base) {
     std::vector<std::string_view> keys(base);
     forEachReflected([&keys](auto member) { keys.push_back(ComponentReflection<ComponentOf<decltype(member)>>::key); });
@@ -196,6 +208,13 @@ void readEntityComponents(const Json& object, const std::string& path, SceneEnti
         if (!material.empty() && !materialIds.contains(material)) {
             issues.add(child(at, "material"), "unknown material '" + material + "' (not defined in /materials)");
         }
+    }
+    if (const auto r = object.find("modelRenderer"); r != object.end()) {
+        const bool partial = entity.modelRenderer.has_value();
+        if (!partial) {
+            entity.modelRenderer.emplace();
+        }
+        readModelRenderer(*r, child(path, "modelRenderer"), *entity.modelRenderer, partial, issues);
     }
     forEachReflected([&](auto member) {
         using T = ComponentOf<decltype(member)>;
@@ -283,13 +302,17 @@ void expandPrefab(std::size_t instance, const std::string& prefabPath, const Jso
         if (copy.meshRenderer) {
             copy.meshRenderer->material = prefix + entity.meshRenderer->material;
         }
+        if (copy.modelRenderer && isModelFileReference(copy.modelRenderer->model)) {
+            // Model files are relative to the prefab: rebase like material files.
+            copy.modelRenderer->model = (relativeDir / copy.modelRenderer->model).lexically_normal().generic_string();
+        }
         copies.push_back(std::move(copy));
     }
 
     if (overrides != nullptr) {
         const std::string overridesPath = child(path, "overrides");
         if (detail::requireObject(*overrides, overridesPath, issues)) {
-            static const std::vector<std::string_view> allowed = componentKeys({"name", "transform", "meshRenderer"});
+            static const std::vector<std::string_view> allowed = componentKeys({"name", "transform", "meshRenderer", "modelRenderer"});
             for (const auto& [id, value] : overrides->items()) {
                 const std::string entryPath = child(overridesPath, id);
                 const auto target = local.find(id);
@@ -362,7 +385,7 @@ SceneDocument parseSceneImpl(std::string_view json, const std::string& file, con
             issues.add("/entities", "expected an array, got " + detail::typeName(*it));
         } else {
             static const std::vector<std::string_view> allowed =
-                componentKeys({"id", "parent", "name", "transform", "meshRenderer", "prefab", "overrides"});
+                componentKeys({"id", "parent", "name", "transform", "meshRenderer", "modelRenderer", "prefab", "overrides"});
             for (std::size_t i = 0; i < it->size(); ++i) {
                 const Json& object = (*it)[i];
                 const std::string path = child("/entities", i);
@@ -426,6 +449,23 @@ SceneDocument parseSceneImpl(std::string_view json, const std::string& file, con
         }
     }
 
+    // Renderers: one kind per entity; model file references must exist (registry ids are
+    // resolved when models are loaded).
+    for (std::size_t i = 0; i < doc.entities.size(); ++i) {
+        const SceneEntity& entity = doc.entities[i];
+        if (!entity.modelRenderer) {
+            continue;
+        }
+        const std::string path = child(sourcePaths[i], "modelRenderer");
+        if (entity.meshRenderer) {
+            issues.add(path, "an entity has either a meshRenderer or a modelRenderer, not both");
+        }
+        const std::string& model = entity.modelRenderer->model;
+        if (!model.empty() && isModelFileReference(model) && !std::filesystem::exists(baseDir / model)) {
+            issues.add(child(path, "model"), "model file '" + model + "' not found (relative to the scene file)");
+        }
+    }
+
     issues.throwIfAny();
     return doc;
 }
@@ -435,6 +475,12 @@ SceneDocument parseSceneImpl(std::string_view json, const std::string& file, con
 SceneDocument parseScene(std::string_view json, std::string_view file, const std::filesystem::path& baseDirectory) {
     ParseState state;
     return parseSceneImpl(json, std::string(file), baseDirectory, state);
+}
+
+bool isModelFileReference(std::string_view reference) {
+    std::string lower(reference);
+    std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return lower.ends_with(".gltf") || lower.ends_with(".glb");
 }
 
 std::filesystem::path sceneMaterialDirectory(const SceneMaterial& material, const std::filesystem::path& sceneDirectory) {
@@ -489,6 +535,14 @@ std::string serializeScene(const SceneDocument& document) {
             }
             e["meshRenderer"] = std::move(renderer);
         }
+        if (entity.modelRenderer) {
+            Json renderer = Json::object();
+            renderer["model"] = entity.modelRenderer->model;
+            if (!entity.modelRenderer->visible) {
+                renderer["visible"] = false;
+            }
+            e["modelRenderer"] = std::move(renderer);
+        }
         forEachReflected([&](auto member) {
             using T = ComponentOf<decltype(member)>;
             if (const auto& component = entity.*member) {
@@ -531,6 +585,14 @@ SceneInstance instantiateScene(const SceneDocument& document, World& world, cons
         if (!entity.id.empty() && !ids.emplace(entity.id, i).second) {
             issues.add(child(path, "id"), "duplicate entity id '" + entity.id + "'");
         }
+        if (entity.modelRenderer) {
+            const std::string& model = entity.modelRenderer->model;
+            const auto bound = bindings.models.find(model);
+            if (bound == bindings.models.end() || bound->second == nullptr) {
+                issues.add(child(child(path, "modelRenderer"), "model"),
+                           "model '" + model + "' is not bound (SceneBindings::models)");
+            }
+        }
         if (!entity.meshRenderer) {
             continue;
         }
@@ -570,6 +632,10 @@ SceneInstance instantiateScene(const SceneDocument& document, World& world, cons
             const SceneMeshRenderer& r = *entity.meshRenderer;
             world.add<MeshRenderer>(e, MeshRenderer{bindings.meshes.at(r.mesh), r.submesh,
                                                     bindings.materials.at(r.material), r.visible});
+        }
+        if (entity.modelRenderer) {
+            world.add<ModelRenderer>(e, ModelRenderer{bindings.models.at(entity.modelRenderer->model),
+                                                      entity.modelRenderer->visible});
         }
         forEachReflected([&](auto member) {
             if (const auto& component = entity.*member) {
@@ -611,6 +677,12 @@ SceneCaptureNames invertBindings(const SceneDocument& document, const SceneBindi
         auto [it, inserted] = names.materials.emplace(handle, name);
         if (!inserted && name < it->second) {
             it->second = name;
+        }
+    }
+    for (const auto& [reference, model] : bindings.models) {
+        auto [it, inserted] = names.models.emplace(model, reference);
+        if (!inserted && reference < it->second) {
+            it->second = reference;
         }
     }
     names.materialDefinitions = document.materials;
@@ -669,6 +741,16 @@ SceneDocument captureScene(const World& world, const SceneCaptureNames& names, s
             }
             if (mesh != names.meshes.end() && material != names.materials.end()) {
                 s.meshRenderer = SceneMeshRenderer{mesh->second, r->submesh, material->second, r->visible};
+            }
+        }
+        if (const ModelRenderer* r = world.tryGet<ModelRenderer>(e)) {
+            const auto model = names.models.find(r->model);
+            if (model == names.models.end()) {
+                issues.add(child(child("/entities", i), "modelRenderer"),
+                           (s.name ? "entity '" + *s.name + "'" : "entity " + std::to_string(i)) +
+                               ": model has no reference (SceneCaptureNames::models)");
+            } else {
+                s.modelRenderer = SceneModelRenderer{model->second, r->visible};
             }
         }
         forEachReflected([&](auto member) {

@@ -139,7 +139,8 @@ TEST_CASE("asset registry: import records dependencies and hashes; checks find s
     importAsset(r, ws.dir / "materials" / "rune.material.json");
     importAsset(r, ws.dir / "asset_loading.scene.json");
     CHECK(r.at("asset_loading").dependencies ==
-          std::vector<std::string>{"materials/rune.material.json", "textures/crate.png", "textures/rune.png"});
+          std::vector<std::string>{"crate.gltf", "materials/rune.material.json", "textures/crate.png",
+                                   "textures/rune.png"}); // crate.gltf: modelRenderer by path
     // Default id collision (crate.png -> "crate") must be explicit.
     CHECK_THROWS_WITH_AS(importAsset(r, ws.dir / "textures" / "crate.png"), doctest::Contains("pass --id"), Error);
     AssetImportOptions texOptions;
@@ -166,13 +167,13 @@ TEST_CASE("asset registry: import records dependencies and hashes; checks find s
     const AssetCheckResult crateCheck = checkAsset(loaded, loaded.at("crate"));
     CHECK(crateCheck.triangles == 12);
     CHECK(crateCheck.vertices == 24);
-    CHECK(crateCheck.texelDensity == doctest::Approx(64.0));
+    CHECK(crateCheck.texelDensity == doctest::Approx(32.0));
     REQUIRE(crateCheck.textures.size() == 1);
-    CHECK((crateCheck.textures[0].sizeClass == TextureSizeClass::Primary));
+    CHECK((crateCheck.textures[0].sizeClass == TextureSizeClass::Default));
 
     // Editing a dependency makes every asset that uses it stale (warning, still usable).
-    std::vector<uint8_t> red(64 * 64 * 4, 200);
-    REQUIRE(writePng(ws.dir / "textures" / "crate.png", 64, 64, red));
+    std::vector<uint8_t> red(32 * 32 * 4, 200);
+    REQUIRE(writePng(ws.dir / "textures" / "crate.png", 32, 32, red));
     results = checkRegistry(loaded);
     CHECK(contains(checkAsset(loaded, loaded.at("crate")).warnings, "stale"));
     CHECK(contains(checkAsset(loaded, loaded.at("asset_loading")).warnings, "stale"));
@@ -187,10 +188,19 @@ TEST_CASE("asset registry: import records dependencies and hashes; checks find s
     REQUIRE(writePng(ws.dir / "textures" / "odd.png", 48, 48, odd));
     importAsset(r, ws.dir / "textures" / "odd.png");
     CHECK(contains(checkAsset(r, r.at("odd")).warnings, "48x48 is not a standard texture size"));
+    // Above the 64x64 maximum: reported, never resized.
+    std::vector<uint8_t> big(128 * 128 * 4, 50);
+    REQUIRE(writePng(ws.dir / "textures" / "big.png", 128, 128, big));
+    importAsset(r, ws.dir / "textures" / "big.png");
+    const AssetCheckResult bigCheck = checkAsset(r, r.at("big"));
+    CHECK(contains(bigCheck.warnings, "128x128 exceeds the 64x64 maximum"));
+    REQUIRE(bigCheck.textures.size() == 1);
+    CHECK(bigCheck.textures[0].width == 128);
+    CHECK((bigCheck.textures[0].sizeClass == TextureSizeClass::Oversized));
 
     const std::string report = assetReportJson(loaded, results);
     CHECK(report.find("\"schema\": \"zodar.asset_report\"") != std::string::npos);
-    CHECK(report.find("\"texelDensity\": 64.0") != std::string::npos);
+    CHECK(report.find("\"texelDensity\": 32.0") != std::string::npos);
     CHECK(report.find("\"warnings\": 3") != std::string::npos); // summary: crate, its texture, scene stale
 }
 
@@ -199,8 +209,8 @@ TEST_CASE("asset registry: texel density warnings and prefab material directorie
     AssetRegistry r(ws.dir);
     importAsset(r, ws.dir / "crate.gltf");
     AssetCheckOptions strict;
-    strict.texelDensityTarget = 256.0; // crate: 64 texels/m, outside 128..512
-    CHECK(contains(checkAsset(r, r.at("crate"), strict).warnings, "texel density 64.0 texels/m outside 128..512"));
+    strict.texelDensityTarget = 128.0; // crate: 32 texels/m, outside 64..256
+    CHECK(contains(checkAsset(r, r.at("crate"), strict).warnings, "texel density 32.0 texels/m outside 64..256"));
 
     // Inline materials of prefabs resolve their textures next to the prefab file.
     std::filesystem::create_directories(ws.dir / "props");

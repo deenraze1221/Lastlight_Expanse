@@ -70,9 +70,10 @@ struct Encoder {
 
 } // namespace
 
-TextureCompileOptions optionsFor(TextureUsage usage) {
+TextureCompileOptions optionsFor(TextureUsage usage, bool pixelArt) {
     TextureCompileOptions o;
-    o.format = PixelFormat::Bc7;
+    o.format = pixelArt ? PixelFormat::Rgba8 : PixelFormat::Bc7;
+    o.pixelArt = pixelArt;
     o.colorSpace = colorSpaceFor(usage);
     o.mipFilter = mipFilterFor(usage);
     return o;
@@ -125,6 +126,9 @@ ImageData encodeImage(const ImageData& rgba8, PixelFormat format, EncodeQuality 
 ImageData compileTexture(const ImageData& source, const TextureCompileOptions& options) {
     ZODAR_ENSURE(source.format == PixelFormat::Rgba8 && !source.levels.empty(),
                  "compileTexture: source '" + source.name + "' must be decoded RGBA8");
+    ZODAR_ENSURE(!(options.pixelArt && isBlockCompressed(options.format)),
+                 "compileTexture: '" + source.name + "' is pixel art; " + toString(options.format) +
+                     " is lossy (use rgba8)");
     ImageData image = source;
     image.colorSpace = options.colorSpace;
     image.levels.resize(1);

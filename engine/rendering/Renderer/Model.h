@@ -45,6 +45,7 @@ public:
     const Bounds& bounds() const { return m_bounds; }
     size_t meshCount() const { return m_meshes.size(); }
     size_t textureCount() const { return m_textures.size(); }
+    const std::vector<Texture>& textures() const { return m_textures; } // index = ModelData::images
     const std::vector<MaterialHandle>& materials() const { return m_materials; }
     // Material of primitives without one (glTF default material).
     MaterialHandle fallbackMaterial() const { return m_fallbackMaterial; }

@@ -139,7 +139,7 @@ struct AssetCheckResult {
 
 struct AssetCheckOptions {
     bool checkTextureSizes = true;    // TextureStandards warnings
-    double texelDensityTarget = 64.0; // docs/ART_DIRECTION.md: 64 texels per metre
+    double texelDensityTarget = 32.0; // docs/ART_DIRECTION.md: 32 texels per metre (32×32 per 1 m face)
     double texelDensityTolerance = 2.0; // warn outside [target / tol, target * tol]; <= 0 disables
 };
 

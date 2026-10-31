@@ -13,6 +13,7 @@ std::vector<CompiledTexture> compileModelTextures(const std::filesystem::path& m
     load.useCompiledTextures = false;
     load.generateMips = false;
     load.keepImageSources = true;
+    load.pixelArt = options.pixelArt;
     const ModelData data = loadGltf(model, load);
 
     std::vector<CompiledTexture> results;
@@ -20,13 +21,16 @@ std::vector<CompiledTexture> compileModelTextures(const std::filesystem::path& m
         const ModelImageSource& src = data.imageSources[i];
         const ImageData& image = data.images[i];
         const auto start = std::chrono::steady_clock::now();
-        CompiledTexture r{src.cachePath, src.usage, PixelFormat::Bc7, image.width, image.height, 0,
-                          src.bytes.size(), 0, 0, false, 0.0, 0.0};
+        const bool pixelArt = src.pixelArt;
+        CompiledTexture r{src.cachePath, src.usage, pixelArt ? PixelFormat::Rgba8 : PixelFormat::Bc7,
+                          image.width, image.height, 0, src.bytes.size(), 0, 0, false, 0.0, 0.0};
         if (!options.force && std::filesystem::exists(src.cachePath)) {
             try {
                 const Ktx2File existing = loadKtx2(src.cachePath);
                 const auto it = existing.keyValues.find(kTextureSourceKey);
-                if (it != existing.keyValues.end() && it->second == src.sourceKey) {
+                // A lossy cache of a pixel-art texture is never up to date.
+                if (it != existing.keyValues.end() && it->second == src.sourceKey &&
+                    !(pixelArt && isBlockCompressed(existing.image.format))) {
                     r.upToDate = true;
                     r.format = existing.image.format;
                     r.levels = static_cast<uint32_t>(existing.image.levels.size());
@@ -38,7 +42,7 @@ std::vector<CompiledTexture> compileModelTextures(const std::filesystem::path& m
                 ZODAR_LOG_WARN("Recompiling unreadable '{}': {}", src.cachePath.string(), e.what());
             }
         }
-        TextureCompileOptions texture = optionsFor(src.usage);
+        TextureCompileOptions texture = optionsFor(src.usage, pixelArt);
         texture.quality = options.quality;
         texture.threads = options.threads;
         const ImageData compiled = compileTexture(image, texture);

@@ -118,6 +118,19 @@ struct ModelLoadSettings {
     std::optional<gfx::ShaderHandle> unlitShader;
 };
 
+class AssetRegistry;
+
+// Models referenced by a scene's modelRenderer components (Phase C4), by reference string.
+struct SceneModelAssets {
+    std::unordered_map<std::string, ModelHandle> byReference;
+    std::vector<std::string> unresolved; // "<reference>: <why>" (unknown id, wrong asset type)
+    // For SceneBindings::models. Every model must be ready (throws zodar::Error otherwise).
+    std::unordered_map<std::string, const gfx::Model*> models() const;
+    bool loading() const;
+    // Unresolved references and failed loads ("<reference>: <error>"), sorted.
+    std::vector<std::string> errors() const;
+};
+
 // Materials of a scene document, created through the AssetManager (textures included).
 struct SceneMaterialAssets {
     std::unordered_map<std::string, MaterialAssetHandle> byId;
@@ -154,6 +167,16 @@ public:
     // (relative to the scene file's directory), inline ones via createMaterial. Throws
     // DataError (all failures listed) if any material fails; handles created so far are released.
     SceneMaterialAssets createSceneMaterials(const SceneDocument& document, const std::filesystem::path& sceneFile);
+
+    // Every modelRenderer reference of `document` (Phase C4): file references (.gltf/.glb)
+    // resolve against the scene file's directory with default ModelLoadSettings; other
+    // references are ids in `registry` (must be model entries; their import settings apply).
+    // Throws DataError listing every unresolved or failed reference.
+    SceneModelAssets loadSceneModels(const SceneDocument& document, const std::filesystem::path& sceneFile,
+                                     const AssetRegistry* registry = nullptr);
+    // Async variant; never throws: check result.loading() / result.errors() later.
+    SceneModelAssets loadSceneModelsAsync(const SceneDocument& document, const std::filesystem::path& sceneFile,
+                                          const AssetRegistry* registry = nullptr);
 
     // Asynchronous variants (same caching and keys; see the header comment). A blocking load
     // of an asset that is loading asynchronously waits for it (waitAll).

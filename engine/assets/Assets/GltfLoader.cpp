@@ -156,6 +156,8 @@ private:
         const std::string name = image->name ? image->name : (image->uri ? image->uri : "embedded");
         std::vector<uint8_t> bytes = sourceBytes(*image, name);
         const std::string sourceKey = textureSourceKey(bytes, usage);
+        const bool pixelArt =
+            m_options.pixelArt || (tex.sampler && tex.sampler->mag_filter == cgltf_filter_type_nearest);
         const std::filesystem::path cache = textureCachePath(m_path, sourceIndex, usage);
 
         ImageData loaded;
@@ -163,7 +165,12 @@ private:
         if (m_options.useCompiledTextures && std::filesystem::exists(cache)) {
             Ktx2File file = loadKtx2(cache);
             const auto it = file.keyValues.find(kTextureSourceKey);
-            if (it != file.keyValues.end() && it->second == sourceKey && file.image.colorSpace == colorSpaceFor(usage)) {
+            if (pixelArt && isBlockCompressed(file.image.format)) {
+                ++m_model.textureStats.lossyRejected;
+                warn("compiled texture '" + cache.filename().string() + "' is " + toString(file.image.format) +
+                     " (lossy) but the texture is pixel art; using the source image (recompile it losslessly)");
+            } else if (it != file.keyValues.end() && it->second == sourceKey &&
+                       file.image.colorSpace == colorSpaceFor(usage)) {
                 loaded = std::move(file.image);
                 loaded.name = name;
                 compiled = true;
@@ -184,7 +191,7 @@ private:
         ref.image = static_cast<int>(m_model.images.size());
         m_model.images.push_back(std::move(loaded));
         if (m_options.keepImageSources) {
-            m_model.imageSources.push_back({std::move(bytes), usage, sourceIndex, cache, sourceKey});
+            m_model.imageSources.push_back({std::move(bytes), usage, sourceIndex, cache, sourceKey, pixelArt});
         }
         m_imageIndex.emplace(key, ref.image);
         return ref;

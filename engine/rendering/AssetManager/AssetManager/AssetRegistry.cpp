@@ -367,27 +367,31 @@ void addPrefabs(const std::filesystem::path& file, std::set<std::filesystem::pat
     }
 }
 
+std::vector<std::filesystem::path> dependenciesOf(AssetType type, const std::filesystem::path& source);
+
+// External buffers/images of a .gltf/.glb file.
+void addGltfUris(const std::filesystem::path& model, std::vector<std::filesystem::path>& deps) {
+    const Json root = gltfJson(model);
+    for (const char* key : {"buffers", "images"}) {
+        const auto list = root.find(key);
+        if (list == root.end() || !list->is_array()) {
+            continue;
+        }
+        for (const Json& item : *list) {
+            const auto uri = item.is_object() ? item.find("uri") : item.end();
+            if (uri != item.end() && uri->is_string() && !uri->get<std::string>().starts_with("data:")) {
+                deps.push_back(model.parent_path() / percentDecode(uri->get<std::string>()));
+            }
+        }
+    }
+}
+
 std::vector<std::filesystem::path> dependenciesOf(AssetType type, const std::filesystem::path& source) {
     std::vector<std::filesystem::path> deps;
     const std::filesystem::path dir = source.parent_path();
     switch (type) {
     case AssetType::Texture: break;
-    case AssetType::Model: {
-        const Json root = gltfJson(source);
-        for (const char* key : {"buffers", "images"}) {
-            const auto list = root.find(key);
-            if (list == root.end() || !list->is_array()) {
-                continue;
-            }
-            for (const Json& item : *list) {
-                const auto uri = item.is_object() ? item.find("uri") : item.end();
-                if (uri != item.end() && uri->is_string() && !uri->get<std::string>().starts_with("data:")) {
-                    deps.push_back(dir / percentDecode(uri->get<std::string>()));
-                }
-            }
-        }
-        break;
-    }
+    case AssetType::Model: addGltfUris(source, deps); break;
     case AssetType::Material: addMaterialTextures(loadMaterialFile(source), dir, deps); break;
     case AssetType::Scene:
     case AssetType::Prefab: {
@@ -401,6 +405,16 @@ std::vector<std::filesystem::path> dependenciesOf(AssetType type, const std::fil
                 addMaterialTextures(m.data, file.parent_path(), deps);
             } else {
                 addMaterialTextures(m.data, sceneMaterialDirectory(m, dir), deps);
+            }
+        }
+        // Model files referenced by path (registry ids have their own entries and hashes).
+        for (const SceneEntity& e : doc.entities) {
+            if (e.modelRenderer && isModelFileReference(e.modelRenderer->model)) {
+                const std::filesystem::path model = dir / e.modelRenderer->model;
+                deps.push_back(model);
+                if (std::filesystem::exists(model)) {
+                    addGltfUris(model, deps);
+                }
             }
         }
         break;
@@ -669,6 +683,20 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
         case AssetType::Prefab: {
             const SceneDocument doc = loadSceneFile(file);
             r.materials = static_cast<uint32_t>(doc.materials.size());
+            std::set<std::string> models;
+            for (const SceneEntity& e : doc.entities) {
+                if (!e.modelRenderer || isModelFileReference(e.modelRenderer->model) ||
+                    !models.insert(e.modelRenderer->model).second) {
+                    continue;
+                }
+                const AssetEntry* m = registry.find(e.modelRenderer->model);
+                if (!m) {
+                    r.errors.push_back("modelRenderer: unknown asset id '" + e.modelRenderer->model + "'");
+                } else if (m->type != AssetType::Model) {
+                    r.errors.push_back("modelRenderer: asset '" + m->id + "' is a " + toString(m->type) +
+                                       ", not a model");
+                }
+            }
             std::set<std::filesystem::path> seen;
             for (const SceneMaterial& m : doc.materials) {
                 std::vector<std::filesystem::path> textures;

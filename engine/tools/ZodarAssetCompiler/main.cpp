@@ -2,11 +2,13 @@
 //
 //   ZodarAssetCompiler texture <input.png|jpg|tga|bmp> <output.ktx2>
 //       [--format bc7|bc1|bc3|bc4|bc5|rgba8] [--srgb|--linear] [--normal] [--no-mips]
-//       [--quality fast|normal|high] [--threads N]
+//       [--quality fast|normal|high] [--threads N] [--pixel-art]
 //   ZodarAssetCompiler model <model.gltf|glb> [--quality fast|normal|high] [--threads N] [--force]
-//       [--report report.json]
+//       [--report report.json] [--pixel-art]
 //       Compiles every texture of the model into <model>.zodar/ (loadGltf uses it automatically
 //       while the source images are unchanged).
+//   --pixel-art: lossless output only (RGBA8 KTX2; a BCn --format is an error). Model textures
+//       with a NEAREST magnification sampler are pixel art without the flag.
 //   ZodarAssetCompiler info <file.ktx2>
 //
 // Exit codes: 0 ok, 1 error.
@@ -33,7 +35,7 @@ namespace {
 struct Args {
     std::vector<std::string> positional;
     TextureCompileOptions texture;
-    bool srgbSet = false, normal = false;
+    bool srgbSet = false, normal = false, formatSet = false;
     ModelCompileOptions model;
     std::string report;
 };
@@ -53,7 +55,7 @@ Args parse(int argc, char** argv) {
             if (i + 1 >= argc) fail("Missing value for " + std::string(arg));
             return argv[++i];
         };
-        if (arg == "--format") a.texture.format = parsePixelFormat(next());
+        if (arg == "--format") { a.texture.format = parsePixelFormat(next()); a.formatSet = true; }
         else if (arg == "--srgb") { a.texture.colorSpace = ColorSpace::Srgb; a.srgbSet = true; }
         else if (arg == "--linear") { a.texture.colorSpace = ColorSpace::Linear; a.srgbSet = true; }
         else if (arg == "--normal") a.normal = true;
@@ -61,9 +63,13 @@ Args parse(int argc, char** argv) {
         else if (arg == "--quality") a.model.quality = a.texture.quality = parseQuality(next());
         else if (arg == "--threads") a.model.threads = a.texture.threads = static_cast<uint32_t>(std::stoul(next()));
         else if (arg == "--force") a.model.force = true;
+        else if (arg == "--pixel-art") { a.texture.pixelArt = a.model.pixelArt = true; }
         else if (arg == "--report") a.report = next();
         else if (arg.starts_with("--")) fail("Unknown option '" + std::string(arg) + "'");
         else a.positional.emplace_back(arg);
+    }
+    if (a.texture.pixelArt && !a.formatSet) {
+        a.texture.format = PixelFormat::Rgba8;
     }
     if (a.normal) {
         a.texture.mipFilter = MipFilter::NormalMap;

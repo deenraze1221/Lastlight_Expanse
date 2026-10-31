@@ -6,8 +6,9 @@
       "id": "asset_loading",
       "type": "scene",
       "source": "asset_loading.scene.json",
-      "hash": "fnv1a64:6b3a759afc80a981",
+      "hash": "fnv1a64:bb813616915bf3ff",
       "dependencies": [
+        "crate.gltf",
         "materials/rune.material.json",
         "textures/crate.png",
         "textures/rune.png"
@@ -19,7 +20,7 @@
       "source": "crate.gltf",
       "sampling": "file",
       "compile": false,
-      "hash": "fnv1a64:da26810eac1f9b88",
+      "hash": "fnv1a64:993d588503f86eab",
       "dependencies": [
         "textures/crate.png"
       ]
@@ -30,7 +31,7 @@
       "source": "textures/crate.png",
       "usage": "color",
       "mips": true,
-      "hash": "fnv1a64:57d397b3c582290e",
+      "hash": "fnv1a64:1d8420df3cd43371",
       "dependencies": []
     },
     {

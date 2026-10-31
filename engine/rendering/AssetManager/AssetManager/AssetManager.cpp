@@ -1,5 +1,7 @@
 #include "AssetManager/AssetManager.h"
 
+#include "AssetManager/AssetRegistry.h"
+
 #include "Core/Error.h"
 #include "Core/Log.h"
 #include "Renderer/Resources/UploadContext.h"
@@ -97,6 +99,29 @@ std::unordered_map<std::string, gfx::MaterialHandle> SceneMaterialAssets::handle
     for (const auto& [id, material] : byId) {
         result[id] = material->handle;
     }
+    return result;
+}
+
+std::unordered_map<std::string, const gfx::Model*> SceneModelAssets::models() const {
+    std::unordered_map<std::string, const gfx::Model*> result;
+    for (const auto& [reference, model] : byReference) {
+        result[reference] = &model->model;
+    }
+    return result;
+}
+
+bool SceneModelAssets::loading() const {
+    return std::ranges::any_of(byReference, [](const auto& entry) { return entry.second.loading(); });
+}
+
+std::vector<std::string> SceneModelAssets::errors() const {
+    std::vector<std::string> result = unresolved;
+    for (const auto& [reference, model] : byReference) {
+        if (model.failed()) {
+            result.push_back(reference + ": " + model.error());
+        }
+    }
+    std::ranges::sort(result);
     return result;
 }
 
@@ -221,6 +246,8 @@ Decoded decodeModelFile(const std::filesystem::path& file, const ModelLoadSettin
     Decoded d;
     GltfLoadOptions loadOptions;
     loadOptions.useCompiledTextures = settings.useCompiledTextures;
+    // A nearest-magnification override marks every texture as pixel art (no lossy caches).
+    loadOptions.pixelArt = settings.samplerOverride && settings.samplerOverride->magFilter == gfx::Filter::Nearest;
     d.data = loadGltf(file, loadOptions);
     d.warnings = d.data.warnings;
     if (checkSizes) {
@@ -355,6 +382,70 @@ SceneMaterialAssets AssetManager::createSceneMaterials(const SceneDocument& docu
         throw DataError(std::move(issues));
     }
     return result;
+}
+
+// --- Scene models (C4) --------------------------------------------------------------------
+
+namespace {
+
+template <class Load>
+SceneModelAssets sceneModels(const SceneDocument& document, const std::filesystem::path& directory,
+                             const AssetRegistry* registry, Load&& load) {
+    SceneModelAssets result;
+    for (const SceneEntity& entity : document.entities) {
+        if (!entity.modelRenderer) {
+            continue;
+        }
+        const std::string& reference = entity.modelRenderer->model;
+        if (result.byReference.contains(reference) ||
+            std::ranges::any_of(result.unresolved, [&](const std::string& u) { return u.starts_with(reference + ": "); })) {
+            continue;
+        }
+        if (isModelFileReference(reference)) {
+            result.byReference[reference] = load(directory / reference, ModelLoadSettings{});
+            continue;
+        }
+        const AssetEntry* entry = registry ? registry->find(reference) : nullptr;
+        if (!entry) {
+            result.unresolved.push_back(reference + ": " +
+                                        (registry ? "unknown asset id (not in " +
+                                                        (registry->directory() / AssetRegistry::kFileName).generic_string() + ")"
+                                                  : "not a model file (.gltf/.glb) and no asset registry given"));
+        } else if (entry->type != AssetType::Model) {
+            result.unresolved.push_back(reference + ": asset '" + reference + "' is a " + toString(entry->type) +
+                                        ", not a model");
+        } else {
+            result.byReference[reference] = load(registry->sourcePath(*entry), modelLoadSettings(*entry));
+        }
+    }
+    return result;
+}
+
+} // namespace
+
+SceneModelAssets AssetManager::loadSceneModels(const SceneDocument& document, const std::filesystem::path& sceneFile,
+                                               const AssetRegistry* registry) {
+    const std::filesystem::path scene = resolve(sceneFile);
+    SceneModelAssets result = sceneModels(document, scene.parent_path(), registry,
+                                          [&](const std::filesystem::path& p, const ModelLoadSettings& s) {
+                                              return loadModel(p, s);
+                                          });
+    if (const std::vector<std::string> errors = result.errors(); !errors.empty()) {
+        std::vector<DataIssue> issues;
+        for (const std::string& e : errors) {
+            issues.push_back({scene.generic_string(), 0, 0, "", "modelRenderer " + e});
+        }
+        throw DataError(std::move(issues));
+    }
+    return result;
+}
+
+SceneModelAssets AssetManager::loadSceneModelsAsync(const SceneDocument& document,
+                                                    const std::filesystem::path& sceneFile,
+                                                    const AssetRegistry* registry) {
+    const std::filesystem::path scene = resolve(sceneFile);
+    return sceneModels(document, scene.parent_path(), registry,
+                       [&](const std::filesystem::path& p, const ModelLoadSettings& s) { return loadModelAsync(p, s); });
 }
 
 // --- Async loads ------------------------------------------------------------------------

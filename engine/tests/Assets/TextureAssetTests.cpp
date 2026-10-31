@@ -255,3 +255,104 @@ TEST_CASE("model texture cache: compiled when fresh, ignored when the source cha
     std::filesystem::remove(dir / "albedo.png");
     std::filesystem::remove(dir / "normal.png");
 }
+
+// --- Pixel art: lossless compilation (exact texel colours) ----------------------------------
+
+namespace {
+
+// Like writeModel, with one base colour texture behind a NEAREST sampler when `nearest`.
+void writePixelArtModel(const std::filesystem::path& gltf, bool nearest) {
+    std::ofstream(gltf) << R"({
+  "asset": {"version": "2.0"},
+  "buffers": [{"byteLength": 36, "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"}],
+  "bufferViews": [{"buffer": 0, "byteLength": 36}],
+  "accessors": [{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0,0,0], "max": [1,1,0]}],
+  "images": [{"uri": "pixels.png"}],
+  "samplers": [)" << (nearest ? R"({"magFilter": 9728, "minFilter": 9986})" : R"({"magFilter": 9729})") << R"(],
+  "textures": [{"source": 0, "sampler": 0}],
+  "materials": [{"pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}}],
+  "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "material": 0}]}],
+  "nodes": [{"mesh": 0}], "scenes": [{"nodes": [0]}], "scene": 0
+})";
+}
+
+} // namespace
+
+TEST_CASE("pixel art: compileTexture keeps every level-0 texel and rejects lossy formats") {
+    const ImageData source = testImage(32, 32, ColorSpace::Srgb, 5);
+    const TextureCompileOptions options = optionsFor(TextureUsage::Color, true);
+    CHECK((options.format == PixelFormat::Rgba8));
+    CHECK(options.pixelArt);
+    const ImageData compiled = compileTexture(source, options);
+    CHECK((compiled.format == PixelFormat::Rgba8));
+    REQUIRE(compiled.levels.size() == 6);
+    CHECK(compiled.levels[0] == source.levels[0]); // byte-exact
+    const Ktx2File file = readKtx2(writeKtx2(compiled, compilerKeyValues(options)), "pixels.ktx2");
+    CHECK(file.image.levels[0] == source.levels[0]);
+
+    TextureCompileOptions lossy = options;
+    lossy.format = PixelFormat::Bc7;
+    CHECK_THROWS_WITH_AS(compileTexture(source, lossy), doctest::Contains("is lossy"), Error);
+    CHECK((optionsFor(TextureUsage::Color).format == PixelFormat::Bc7)); // non-pixel-art unchanged
+}
+
+TEST_CASE("pixel art: NEAREST model textures compile losslessly; lossy caches are rejected") {
+    const zodar::test::TempFile model("zodar_pixel_art_test.gltf");
+    const std::filesystem::path dir = model.path().parent_path();
+    const std::filesystem::path cache = textureCachePath(model.path(), 0, TextureUsage::Color);
+    std::filesystem::remove_all(textureCacheDirectory(model.path()));
+    writePixelArtModel(model.path(), true);
+    const std::vector<uint8_t> encoded = png(32, 32, 3);
+    writeBytes(dir / "pixels.png", encoded);
+    const ImageData reference = loadImageFromMemory(encoded, ColorSpace::Srgb, "pixels");
+
+    ModelCompileOptions co;
+    co.quality = EncodeQuality::Fast;
+    const auto results = compileModelTextures(model.path(), co);
+    REQUIRE(results.size() == 1);
+    CHECK((results[0].format == PixelFormat::Rgba8));
+    CHECK(results[0].psnr == doctest::Approx(99.0)); // identical
+    ModelData loaded = loadGltf(model.path());
+    CHECK(loaded.textureStats.compiled == 1);
+    REQUIRE(loaded.images.size() == 1);
+    CHECK((loaded.images[0].format == PixelFormat::Rgba8));
+    CHECK(loaded.images[0].levels[0] == reference.levels[0]); // exact colours through the cache
+
+    // A lossy BC7 cache (old compiler or wrong settings) is never used for pixel art...
+    const ModelData sources = [&] {
+        GltfLoadOptions o;
+        o.keepImageSources = true;
+        o.useCompiledTextures = false;
+        return loadGltf(model.path(), o);
+    }();
+    REQUIRE(sources.imageSources.size() == 1);
+    CHECK(sources.imageSources[0].pixelArt);
+    TextureCompileOptions bc7 = optionsFor(TextureUsage::Color);
+    bc7.quality = EncodeQuality::Fast;
+    auto keys = compilerKeyValues(bc7);
+    keys[kTextureSourceKey] = sources.imageSources[0].sourceKey;
+    saveKtx2(cache, compileTexture(reference, bc7), keys);
+    loaded = loadGltf(model.path());
+    CHECK(loaded.textureStats.lossyRejected == 1);
+    CHECK(loaded.textureStats.compiled == 0);
+    CHECK(loaded.images[0].levels[0] == reference.levels[0]);
+    CHECK(std::ranges::any_of(loaded.warnings, [](const std::string& w) { return w.find("lossy") != std::string::npos; }));
+    // ...and the compiler replaces it instead of calling it up to date.
+    const auto again = compileModelTextures(model.path(), co);
+    CHECK_FALSE(again[0].upToDate);
+    CHECK((again[0].format == PixelFormat::Rgba8));
+    CHECK(loadGltf(model.path()).images[0].levels[0] == reference.levels[0]);
+
+    // Linear-sampled textures stay BC7 unless pixel art is forced.
+    writePixelArtModel(model.path(), false);
+    co.force = true;
+    CHECK((compileModelTextures(model.path(), co)[0].format == PixelFormat::Bc7));
+    co.pixelArt = true;
+    CHECK((compileModelTextures(model.path(), co)[0].format == PixelFormat::Rgba8));
+    GltfLoadOptions forced;
+    forced.pixelArt = true;
+    CHECK(loadGltf(model.path(), forced).images[0].levels[0] == reference.levels[0]);
+
+    std::filesystem::remove_all(textureCacheDirectory(model.path()));
+    std::filesystem::remove(dir / "pixels.png");
+}

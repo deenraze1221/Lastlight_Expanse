@@ -3,6 +3,8 @@
 #include "GpuTestContext.h"
 
 #include "AssetManager/AssetManager.h"
+#include "AssetManager/AssetRegistry.h"
+#include "AssetPipeline/ModelCompiler.h"
 #include "Assets/Primitives.h"
 #include "Core/ImageIO.h"
 #include "Core/JobSystem.h"
@@ -12,12 +14,15 @@
 #include "Renderer/Resources/FrameAllocator.h"
 #include "Renderer/SceneRenderer.h"
 #include "SceneFile/SceneFile.h"
+#include "WorldRender/WorldRender.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
 #include <set>
+#include <tuple>
 #include <string>
 #include <vector>
 
@@ -170,7 +175,7 @@ TEST_CASE("asset manager: caching, shared textures and deferred release") {
     REQUIRE(texture.ready());
     CHECK(texture == a->textures.at(0)); // same file + usage: one GPU texture
     CHECK(texture->width == 32);
-    CHECK((texture->sizeClass == TextureSizeClass::Small));
+    CHECK((texture->sizeClass == TextureSizeClass::Default));
     CHECK(texture->mipLevels == 6);
     CHECK(texture->warnings.empty());
     MaterialAssetHandle c = assets.loadMaterial("materials/linear.material.json");
@@ -267,7 +272,7 @@ TEST_CASE("asset manager: glTF model and scene materials from the asset_loading 
 
     ModelHandle crate = assets.loadModel("crate.gltf");
     REQUIRE_MESSAGE(crate.ready(), (crate.failed() ? crate.error() : ""));
-    CHECK(crate->warnings.empty()); // 64x64 texture: standard size
+    CHECK(crate->warnings.empty()); // 32x32 texture: default size
     CHECK(crate->model.meshCount() == 1);
     CHECK(crate->model.textureCount() == 1);
     REQUIRE(crate->model.materials().size() == 1);
@@ -294,9 +299,9 @@ TEST_CASE("asset manager: glTF model and scene materials from the asset_loading 
     REQUIRE(rune.ready());
     REQUIRE(rune->textures.size() == 2);
     CHECK(rune->textures[0] == rune->textures[1]); // base colour + emissive share rune.png
-    CHECK((rune->textures[0]->sizeClass == TextureSizeClass::Small));
+    CHECK((rune->textures[0]->sizeClass == TextureSizeClass::Default));
     CHECK(materials.material(rune->handle).emissiveTexture.sampler == SamplerDesc::pixelArt());
-    CHECK((sceneMaterials.byId.at("crateLinear")->textures.at(0)->sizeClass == TextureSizeClass::Primary));
+    CHECK((sceneMaterials.byId.at("crateLinear")->textures.at(0)->sizeClass == TextureSizeClass::Default));
     CHECK(sceneMaterials.handles().size() == 2);
 
     // Draw the crate: something other than the clear colour is visible.
@@ -449,4 +454,129 @@ TEST_CASE("asset manager: async failures carry messages") {
     REQUIRE(scene.errors().size() == 1);
     CHECK(scene.errors()[0].starts_with("a: "));
     CHECK(scene.byId.at("b").ready());
+}
+
+TEST_CASE("asset manager: pixel-art textures reach the GPU byte-exact (source PNG and compiled KTX2)") {
+    zodar::test::ValidationGuard guard;
+    // Work on a copy so the compiled cache does not land in the repository.
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "zodar_pixel_integrity";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "textures");
+    std::filesystem::copy_file(kExampleDir / "crate.gltf", dir / "crate.gltf");
+    std::filesystem::copy_file(kExampleDir / "textures" / "crate.png", dir / "textures" / "crate.png");
+    const ImageData reference = loadImage(dir / "textures" / "crate.png", ColorSpace::Srgb);
+
+    Fixture f;
+    AssetManagerDesc desc;
+    desc.root = dir;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+    const auto readMip0 = [&](const ModelHandle& h) {
+        REQUIRE(h.ready());
+        REQUIRE(h->model.textures().size() == 1);
+        const Texture& t = h->model.textures()[0];
+        CHECK(t.format() == VK_FORMAT_R8G8B8A8_SRGB); // never block-compressed
+        return gpu().upload->readImage(t.image(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    };
+    {
+        const ModelHandle source = assets.loadModel("crate.gltf");
+        CHECK(readMip0(source) == reference.levels[0]);
+    }
+    // Compiled cache (crate.gltf uses a NEAREST sampler: lossless RGBA8 KTX2).
+    const auto compiled = assets::compileModelTextures(dir / "crate.gltf");
+    REQUIRE(compiled.size() == 1);
+    CHECK((compiled[0].format == PixelFormat::Rgba8));
+    CHECK(loadGltf(dir / "crate.gltf").textureStats.compiled == 1); // the cache is used
+    Fixture::collect();
+    ModelLoadSettings settings;
+    settings.samplerOverride = SamplerDesc::pixelArt(); // separate cache entry: loads the KTX2
+    const ModelHandle fromCache = assets.loadModel("crate.gltf", settings);
+    CHECK(readMip0(fromCache) == reference.levels[0]);
+    gpu().context->waitIdle();
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("scene file: modelRenderer by registry id and by path renders the loaded models") {
+    zodar::test::ValidationGuard guard;
+    Fixture f;
+    AssetManagerDesc desc;
+    desc.defaultSampler = SamplerDesc::pixelArt();
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+    const std::filesystem::path scenePath = kExampleDir / "asset_loading.scene.json";
+    const SceneDocument doc = loadSceneFile(scenePath);
+    const AssetRegistry registry = AssetRegistry::load(kExampleDir / "assets.json");
+
+    // Without a registry the id cannot be resolved; the error names the reference.
+    try {
+        (void)assets.loadSceneModels(doc, scenePath);
+        FAIL("expected DataError");
+    } catch (const DataError& e) {
+        REQUIRE(e.issues().size() == 1);
+        CHECK(e.issues()[0].message.find("modelRenderer crate: not a model file") == 0);
+    }
+    const SceneModelAssets models = assets.loadSceneModels(doc, scenePath, &registry);
+    REQUIRE(models.byReference.size() == 2);
+    const ModelHandle& byId = models.byReference.at("crate");
+    const ModelHandle& byPath = models.byReference.at("crate.gltf");
+    REQUIRE(byId.ready());
+    REQUIRE(byPath.ready());
+    CHECK(byId->path == byPath->path); // same file, different load settings (registry: compile=false)
+    // The async variant shares the cached models.
+    const SceneModelAssets again = assets.loadSceneModelsAsync(doc, scenePath, &registry);
+    CHECK(again.byReference.at("crate") == byId);
+    CHECK_FALSE(again.loading());
+
+    const SceneMaterialAssets materials = assets.createSceneMaterials(doc, scenePath);
+    std::optional<GpuMesh> cube;
+    {
+        UploadBatch batch(*gpu().upload);
+        cube.emplace(batch, primitives::cube(1.0f));
+        batch.submit();
+    }
+    SceneBindings bindings;
+    bindings.meshes = {{"cube", &*cube}};
+    bindings.materials = materials.handles();
+    bindings.models = models.models();
+    World world;
+    const SceneInstance instance = instantiateScene(doc, world, bindings);
+    const Entity crate = instance.byId.at("crate");
+    CHECK(world.get<ModelRenderer>(crate).model == &byId->model);
+
+    std::vector<MeshDraw> draws;
+    collectDraws(world, draws);
+    REQUIRE(draws.size() == 4); // 2 cubes (MeshRenderer) + 2 crates (1 submesh each)
+    std::vector<MeshDraw> expected(draws.begin(), draws.begin() + 2);
+    byId->model.appendDraws(expected, world.worldMatrix(crate));
+    for (const Entity e : instance.entities) {
+        if (const ModelRenderer* r = world.tryGet<ModelRenderer>(e); r && e != crate) {
+            byPath->model.appendDraws(expected, world.worldMatrix(e));
+        }
+    }
+    REQUIRE(expected.size() == 4);
+    // Same draws; order follows World::each, so compare sorted by position.
+    const auto byPosition = [](const MeshDraw& a, const MeshDraw& b) {
+        return std::tie(a.transform[3].x, a.transform[3].y, a.transform[3].z) <
+               std::tie(b.transform[3].x, b.transform[3].y, b.transform[3].z);
+    };
+    std::vector<MeshDraw> sortedDraws = draws;
+    std::ranges::sort(sortedDraws, byPosition);
+    std::ranges::sort(expected, byPosition);
+    draws = sortedDraws;
+    for (size_t i = 0; i < 4; ++i) {
+        CHECK(draws[i].mesh == expected[i].mesh);
+        CHECK(draws[i].material == expected[i].material);
+        CHECK(draws[i].transform == expected[i].transform);
+    }
+    SceneView view;
+    collectLighting(world, view);
+    collectCamera(world, view.camera);
+    view.draws = draws;
+    const auto image = f.render(view, {160, 90});
+    view.draws = expected;
+    CHECK(f.render(view, {160, 90}) == image);
+    // Hidden model entities draw nothing; GpuScene sync ignores ModelRenderer (CPU path only).
+    world.get<ModelRenderer>(crate).visible = false;
+    draws.clear();
+    collectDraws(world, draws);
+    CHECK(draws.size() == 3);
+    gpu().context->waitIdle();
 }

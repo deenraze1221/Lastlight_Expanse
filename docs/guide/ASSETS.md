@@ -1,4 +1,4 @@
-# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3)
+# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3, scene models C4)
 
 Module `Zodar::AssetManager` (`engine/rendering/AssetManager/AssetManager/AssetManager.h`).
 Working example: `examples/asset_loading` rendered by the sample `ZodarAssetLoading`
@@ -87,8 +87,8 @@ id and settings. Import fails if a dependency is missing.
 
 `check` exit code: 1 if any asset has errors (`--strict`: warnings too). Errors: missing
 source or dependency, unreadable/invalid file. Warnings: stale (source/dependency changed
-since import: re-import), non-standard texture size, texel density outside 32..128 texels/m
-(target 64, `--density-target N`), glTF importer notes, missing compiled outputs. The report
+since import: re-import), texture size violations (above 64×64, non-standard), texel density
+outside 16..64 texels/m (target 32, `--density-target N`), glTF importer notes, missing compiled outputs. The report
 (`zodar.asset_report` v1) has per asset: status, errors, warnings, textures (size + class),
 meshes, vertices, triangles, materials, texelDensity.
 
@@ -99,6 +99,24 @@ const zodar::AssetRegistry registry = zodar::AssetRegistry::load("assets/assets.
 const zodar::AssetEntry& crate = registry.at("crate");
 zodar::ModelHandle h = assets.loadModelAsync(registry.sourcePath(crate), zodar::modelLoadSettings(crate));
 ```
+
+## Scene model references (Phase C4)
+
+```json
+{ "name": "Crate", "transform": { "position": [0, 0.5, 0] }, "modelRenderer": { "model": "crate" } },
+{ "name": "Small crate", "modelRenderer": { "model": "props/crate.gltf", "visible": true } }
+```
+
+- A reference ending in `.gltf` / `.glb` (any case) is a file path relative to the scene file
+  (prefab paths are rebased like material files); anything else is an `assets.json` id (must be
+  a model entry; its import settings apply). Parsing checks that path references exist; an
+  entity has a meshRenderer or a modelRenderer, not both. Old scenes are unchanged.
+- `assets.loadSceneModels(doc, scenePath, &registry)` (throws DataError listing unresolved and
+  failed references) or `loadSceneModelsAsync` (check `loading()` / `errors()`); then
+  `bindings.models = models.models();` and `instantiateScene` adds `ModelRenderer` components.
+  `collectDraws` draws them (CPU path; `WorldRenderSync`/GpuScene skip them).
+- Registry: scenes hash path-referenced models (+ their images); `assets check` reports
+  unknown or non-model ids. `captureScene` writes modelRenderer back (`SceneCaptureNames::models`).
 
 ## Material texture slots
 
@@ -122,9 +140,23 @@ Use `linear` for smooth textures (sky, UI gradients, effects).
 
 ## Texture size standards
 
-Square 64×64 (primary), 32×32 (small props), 128×128 (characters, weapons), up to 256×256
-(unique assets). Other sizes load but add a warning to `TextureAsset::warnings` /
-`ModelAsset::warnings` and the log (`Assets/TextureStandards.h`, `checkTextureSizes`).
+32×32 is the default for every asset; 64×64 is the absolute maximum for all assets
+(characters, weapons and unique assets included); 8×8 and 16×16 are allowed for tiny details.
+Anything else (above 64, non-square, not a power of two) loads unchanged but adds a warning to
+`TextureAsset::warnings` / `ModelAsset::warnings`, the log and `zodar.py assets check`
+(`Assets/TextureStandards.h`, `checkTextureSizes`). Textures are never resized automatically.
+
+## Pixel-art compression
+
+Pixel-art textures are never block-compressed (BC7/BCn are lossy). `compileModelTextures` /
+`ZodarAssetCompiler model` / `zodar.py import --compile` write uncompressed RGBA8 KTX2 for pixel
+art (level 0 byte-identical to the PNG; mips are box-filtered) and BC7 only for other textures.
+Pixel art = a glTF sampler with NEAREST magnification (Blockbench exports), registry
+`sampling` pixelArt/nearest, a nearest `ModelLoadSettings::samplerOverride`, or `--pixel-art`.
+`loadGltf` ignores a block-compressed cache for pixel-art textures (`textureStats.lossyRejected`,
+warning) and decodes the source instead; the compiler replaces such caches. Compiled caches from
+compiler version 1 are ignored (key version 2). Tests: `pixel art:*` (unit) and
+`asset manager: pixel-art textures reach the GPU byte-exact` (GPU readback).
 
 ## Lifetime rules
 

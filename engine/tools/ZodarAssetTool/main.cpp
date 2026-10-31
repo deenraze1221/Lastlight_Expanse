@@ -4,6 +4,8 @@
 //       [--usage color|data|normal] [--no-mips] [--sampling file|pixelArt|nearest|linear] [--compile]
 //       Adds or updates registry entries (dependencies + hash). --compile (models) bakes the
 //       textures into <model>.zodar/*.ktx2 (ZodarAssetCompiler's cache) and records them.
+//       Pixel-art textures (NEAREST glTF sampler, or --sampling pixelArt|nearest) compile
+//       losslessly (RGBA8); others use BC7.
 //       Default registry: the nearest assets.json in the file's directory or a parent, else
 //       ./assets.json (created).
 //   ZodarAssetTool list [--registry FILE] [--json]
@@ -127,7 +129,9 @@ int cmdImport(const Args& a) {
     for (const std::string& file : a.files) {
         AssetEntry entry = importAsset(registry, file, a.import); // copy: upsert below may move entries
         if (entry.type == AssetType::Model && entry.compile) {
-            const auto compiled = assets::compileModelTextures(registry.sourcePath(entry));
+            assets::ModelCompileOptions compile;
+            compile.pixelArt = entry.sampling == ModelSampling::PixelArt || entry.sampling == ModelSampling::Nearest;
+            const auto compiled = assets::compileModelTextures(registry.sourcePath(entry), compile);
             entry.outputs.clear();
             const std::filesystem::path dir = std::filesystem::absolute(registry.directory()).lexically_normal();
             for (const auto& t : compiled) {

@@ -2,6 +2,7 @@
 
 #include "Renderer/GpuScene.h"
 #include "Renderer/Material.h"
+#include "Renderer/Model.h"
 #include "Renderer/SceneRenderer.h"
 #include "World/World.h"
 
@@ -27,7 +28,17 @@ struct MeshRenderer {
     bool visible = true;
 };
 
-// CPU path: appends one MeshDraw per renderable entity to `out` (in World::each order).
+// Renders a whole model (every node submesh with the model's own materials) at the entity's
+// world transform (Phase C4; scene files: "modelRenderer"). CPU draw path only: models from
+// the AssetManager use standalone meshes, so WorldRenderSync/GpuScene skip ModelRenderer.
+// The model must outlive every frame that draws it.
+struct ModelRenderer {
+    const gfx::Model* model = nullptr;
+    bool visible = true;
+};
+
+// CPU path: appends one MeshDraw per renderable MeshRenderer entity, then the draws of every
+// visible ModelRenderer entity (Model::appendDraws), to `out` (each in World::each order).
 // Stateless; call once per frame and pass the result as SceneView::draws.
 void collectDraws(const World& world, std::vector<gfx::MeshDraw>& out);
 

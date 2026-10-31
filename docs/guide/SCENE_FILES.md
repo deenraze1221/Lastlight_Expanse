@@ -64,6 +64,17 @@ cannot change (create a new material).
 | `.prefab` | string | `*.prefab.json` path relative to this file; the entity needs an `id` |
 | `.overrides` | object | Prefab entity id -> fields to patch (`name`, `transform`, `meshRenderer`, components) |
 
+### `modelRenderer` (Phase C4)
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `model` | string | required | `.gltf`/`.glb` path relative to the file (must exist), or an `assets.json` model id |
+| `visible` | bool | true | |
+
+Exclusive with `meshRenderer`. Bound through `SceneBindings::models` (by the reference as
+written; prefab paths are rebased to the scene). Loading: `AssetManager::loadSceneModels`
+(`docs/guide/ASSETS.md`). Overrides may patch it (`{"modelRenderer": {"visible": false}}`).
+
 ## Prefabs (`*.prefab.json`)
 
 Same format as a scene. They are expanded while parsing (the document is flat):

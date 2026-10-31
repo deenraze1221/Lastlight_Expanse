@@ -14,6 +14,11 @@ void collectDraws(const World& world, std::vector<gfx::MeshDraw>& out) {
     world.each<MeshRenderer>([&](Entity entity, const MeshRenderer& r) {
         if (renderable(r)) out.push_back({r.mesh, r.submesh, r.material, world.worldMatrix(entity)});
     });
+    world.each<ModelRenderer>([&](Entity entity, const ModelRenderer& r) {
+        if (r.visible && r.model != nullptr) {
+            r.model->appendDraws(out, world.worldMatrix(entity));
+        }
+    });
 }
 
 WorldRenderSync::Stats WorldRenderSync::sync(const World& world) {

@@ -22,10 +22,14 @@ struct TextureCompileOptions {
     bool mips = true;
     EncodeQuality quality = EncodeQuality::Normal;
     uint32_t threads = 0; // 0: hardware concurrency
+    // Pixel art: level 0 must keep every texel exactly, so only lossless formats (RGBA8) are
+    // allowed; compileTexture rejects a block-compressed format.
+    bool pixelArt = false;
 };
 
-// Default options for a model texture usage (BC7; sRGB for colour).
-TextureCompileOptions optionsFor(TextureUsage usage);
+// Default options for a model texture usage (BC7; sRGB for colour). Pixel art: RGBA8
+// (uncompressed, lossless KTX2).
+TextureCompileOptions optionsFor(TextureUsage usage, bool pixelArt = false);
 
 // Encodes every level of an RGBA8 image into `format` (block-parallel, deterministic: the
 // output does not depend on the thread count). Edge blocks replicate the last row/column.

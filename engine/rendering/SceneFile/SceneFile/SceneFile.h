@@ -51,12 +51,27 @@ struct SceneMeshRenderer {
     bool operator==(const SceneMeshRenderer&) const = default;
 };
 
+// ModelRenderer (Phase C4): renders a whole glTF model. `model` is either a file path (ends in
+// .gltf or .glb, any case; relative to the scene file, prefab paths are rebased like material
+// files) or an asset registry id (anything else; assets.json). Resolved through
+// SceneBindings::models; AssetManager::loadSceneModels loads every reference.
+struct SceneModelRenderer {
+    std::string model;
+    bool visible = true;
+
+    bool operator==(const SceneModelRenderer&) const = default;
+};
+
+// True if a modelRenderer reference is a file path (.gltf / .glb), false for a registry id.
+[[nodiscard]] bool isModelFileReference(std::string_view reference);
+
 struct SceneEntity {
     std::string id;     // Optional, unique; needed only to be referenced as a parent.
     std::string parent; // Id of the parent entity; empty for roots.
     std::optional<std::string> name;
     std::optional<Transform> transform;
     std::optional<SceneMeshRenderer> meshRenderer;
+    std::optional<SceneModelRenderer> modelRenderer; // exclusive with meshRenderer
     // Reflected components (WorldRender/SceneComponents.h); JSON keys = ComponentReflection::key.
     std::optional<CameraComponent> camera;
     std::optional<DirectionalLightComponent> directionalLight;
@@ -102,6 +117,8 @@ struct SceneDocument {
 struct SceneBindings {
     std::unordered_map<std::string, const gfx::GpuMesh*> meshes;
     std::unordered_map<std::string, gfx::MaterialHandle> materials;
+    // modelRenderer references (as written in the document) -> models (Phase C4).
+    std::unordered_map<std::string, const gfx::Model*> models;
 };
 
 // Creates every scene material in `materials` (file order); result maps material id ->
@@ -115,10 +132,10 @@ struct SceneInstance {
     std::unordered_map<std::string, Entity> byId; // Entities that have an id.
 };
 
-// Creates the document's entities in `world` (Name, Transform, MeshRenderer, reflected
+// Creates the document's entities in `world` (Name, Transform, MeshRenderer, ModelRenderer, reflected
 // components, hierarchy). Error paths use document indices ("/entities/<i>").
-// All mesh / material names and submesh indices are checked first: on DataError the world is
-// unchanged. Bound meshes must outlive the entities that use them.
+// All mesh / material / model names and submesh indices are checked first: on DataError the
+// world is unchanged. Bound meshes and models must outlive the entities that use them.
 SceneInstance instantiateScene(const SceneDocument& document, World& world, const SceneBindings& bindings,
                                std::string_view file = "<scene>");
 
@@ -127,6 +144,7 @@ SceneInstance instantiateScene(const SceneDocument& document, World& world, cons
 struct SceneCaptureNames {
     std::unordered_map<const gfx::GpuMesh*, std::string> meshes;
     std::unordered_map<gfx::MaterialHandle, std::string> materials; // Handle -> material id.
+    std::unordered_map<const gfx::Model*, std::string> models;      // Model -> reference.
     std::vector<SceneMaterial> materialDefinitions;                 // Written to "materials".
 };
 [[nodiscard]] SceneCaptureNames invertBindings(const SceneDocument& document, const SceneBindings& bindings);

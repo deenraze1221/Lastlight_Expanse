@@ -29,7 +29,8 @@ std::filesystem::path textureCachePath(const std::filesystem::path& model, int i
 
 inline constexpr const char* kTextureSourceKey = "zodar.source";
 // Bump when the compiler's output for the same input changes (filters, encoder settings).
-inline constexpr uint32_t kTextureCompilerVersion = 1;
+// 2: pixel-art textures compile losslessly (RGBA8 KTX2); v1 caches may hold lossy BC7 for them.
+inline constexpr uint32_t kTextureCompilerVersion = 2;
 std::string textureSourceKey(std::span<const uint8_t> sourceBytes, TextureUsage usage);
 
 } // namespace zodar

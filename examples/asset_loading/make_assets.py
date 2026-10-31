@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerates the asset_loading example data (deterministic, stdlib only).
 
-Outputs: textures/crate.png (64x64 primary), textures/rune.png (32x32 small prop) and
+Outputs: textures/crate.png and textures/rune.png (32x32, the default texture size) and
 crate.gltf (textured cube, embedded buffer, nearest glTF sampler). Run from any directory:
     python3 examples/asset_loading/make_assets.py
 """
@@ -35,20 +35,20 @@ GLOW = (90, 220, 255, 255)
 
 def crate():
     rows = []
-    for y in range(64):
+    for y in range(32):
         row = []
-        for x in range(64):
-            border = x < 4 or y < 4 or x >= 60 or y >= 60
-            diagonal = abs(x - y) < 3 or abs(x - (63 - y)) < 3
+        for x in range(32):
+            border = x < 2 or y < 2 or x >= 30 or y >= 30
+            diagonal = abs(x - y) < 2 or abs(x - (31 - y)) < 2
             if border:
-                c = DARK if (x in (0, 63) or y in (0, 63)) else WOOD
-                if (x in (1, 2) or x in (61, 62)) and (y in (1, 2) or y in (61, 62)):
+                c = DARK if (x in (0, 31) or y in (0, 31)) else WOOD
+                if x in (1, 30) and y in (1, 30):
                     c = NAIL
             elif diagonal:
                 c = LIGHT
             else:
-                c = WOOD if (y // 8) % 2 == 0 else LIGHT
-                if y % 8 == 0:
+                c = WOOD if (y // 4) % 2 == 0 else LIGHT
+                if y % 4 == 0:
                     c = DARK
             row.append(c)
         rows.append(row)
@@ -116,6 +116,6 @@ def cube_gltf():
     return json.dumps(gltf, indent=2) + "\n"
 
 
-write_png(HERE / "textures" / "crate.png", 64, 64, crate())
+write_png(HERE / "textures" / "crate.png", 32, 32, crate())
 write_png(HERE / "textures" / "rune.png", 32, 32, rune())
 (HERE / "crate.gltf").write_text(cube_gltf())
