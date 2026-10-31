@@ -1,6 +1,14 @@
 {
   "schema": "zodar.asset_registry",
   "version": 1,
+  "palette": {
+    "colors": "palette.png",
+    "subPalettes": {
+      "glow": [
+        "#5adcff"
+      ]
+    }
+  },
   "assets": [
     {
       "id": "asset_loading",
@@ -12,7 +20,8 @@
         "materials/rune.material.json",
         "textures/crate.png",
         "textures/rune.png"
-      ]
+      ],
+      "palette": "glow"
     },
     {
       "id": "crate",
@@ -41,7 +50,8 @@
       "hash": "fnv1a64:78e837e3cccbd56c",
       "dependencies": [
         "textures/rune.png"
-      ]
+      ],
+      "palette": "glow"
     },
     {
       "id": "rune_texture",
@@ -50,7 +60,8 @@
       "usage": "color",
       "mips": true,
       "hash": "fnv1a64:18e9e1f1c74e673f",
-      "dependencies": []
+      "dependencies": [],
+      "palette": "glow"
     }
   ]
 }

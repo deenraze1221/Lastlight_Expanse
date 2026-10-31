@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Regenerates the asset_loading example data (deterministic, stdlib only).
 
-Outputs: textures/crate.png and textures/rune.png (32x32, the default texture size) and
+Outputs: palette.png (master palette swatch, 6x1), textures/crate.png and textures/rune.png
+(32x32, the default texture size, drawn only with palette colours; the rune's glow colour is
+the "glow" sub-palette in assets.json) and
 crate.gltf (textured cube, embedded buffer, nearest glTF sampler). Run from any directory:
     python3 examples/asset_loading/make_assets.py
 """
@@ -116,6 +118,7 @@ def cube_gltf():
     return json.dumps(gltf, indent=2) + "\n"
 
 
+write_png(HERE / "palette.png", 6, 1, [[DARK, WOOD, LIGHT, NAIL, STONE, STONE_HI]])
 write_png(HERE / "textures" / "crate.png", 32, 32, crate())
 write_png(HERE / "textures" / "rune.png", 32, 32, rune())
 (HERE / "crate.gltf").write_text(cube_gltf())

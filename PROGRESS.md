@@ -107,8 +107,29 @@
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
 ## Current state
-- `main`: Phase C4 complete (scene model references) + texture standard and pixel-art
-  compression fixes. Phases A, B, C1-C3 unchanged otherwise.
+- `main`: Phase C7 complete (palette validation). Phases A, B, C1-C4 unchanged.
+
+## Phase C7 — palette validation (done)
+- `AssetRegistry`: optional `"palette"` (swatch PNG | `#rrggbb` list | `{colors, subPalettes}`),
+  entry `"palette": "<sub>"` (sub-palettes extend the master), validated parse, round-trip;
+  nothing written or checked without a palette. API: `PaletteSource`, `PaletteConfig`,
+  `Palette`, `loadPalette`, `parseHexColor`, `hexColor`, `parsePaletteArgument`,
+  `AssetCheckOptions::palette`, `AssetCheckResult::paletteDeviation`, texture palette counts,
+  `AssetImportOptions::palette`.
+- Checks: opaque level-0 texels of colour textures only (texture usage color, material base
+  colour/emissive, model base colour/emissive images); transparent texels ignored; warning with
+  count, percent and example colours; report `paletteDeviation` + per-texture counts.
+- Tool: `check --palette swatch.png|#rrggbb,...` (overrides master), palette summary line,
+  `--strict` fails on deviations; `import --sub-palette NAME`.
+- Example: `examples/asset_loading/palette.png` (master, 6 colours from make_assets.py) +
+  sub-palette `glow` (`#5adcff`) for the rune assets: 0 off-palette texels. ctests
+  `tools.asset_check_example` (strict, now palette-checked) and
+  `tools.asset_check_palette_strict` (override palette must fail --strict).
+- Tests: 4 `palette:*` unit cases (colours/swatches/argument; registry forms + validation +
+  round-trip + unchanged files without palette; counting incl. transparency, sub-palettes,
+  normal maps skipped, material slots, report keys, override, broken palette; example
+  registry clean). Verified GCC 13 Debug, 0 warnings, 192/192 unit, 57/57 GPU cases, 23/23
+  ctest, 0 validation messages. Not run: Release, Clang, MinGW, MSVC.
 
 ## Asset pipeline fixes + Phase C4 (done)
 - Texture standards: 32×32 default, 64×64 absolute maximum for all assets, 8/16 allowed
@@ -229,8 +250,9 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Remaining Phase C (when requested): C5 hot reload, streaming budgets, palette check,
-   audio/FBX importers. Game: re-author terrain textures to 32×32 (art direction). Optionally migrate game draws/terrain textures to assets.
+1. Remaining Phase C (when requested): C5 asset hot reload (textures, materials, models in
+   place), C6 shader + scene-file hot reload. Then close Phase C (move streaming budgets,
+   FBX/audio import, skins to later phases). Game: re-author terrain textures to 32×32. Optionally migrate game draws/terrain textures to assets.
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
    import checks, pixel-art texture rules, asset validation report; S5 shadows.

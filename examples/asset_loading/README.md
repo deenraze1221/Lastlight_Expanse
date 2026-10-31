@@ -21,5 +21,8 @@ asynchronously, `--deterministic` waits for them before the first frame):
   `tools.asset_check_example` fails when it is stale: after editing an asset run
   `python3 tools/zodar.py import <file>` (from this folder, or pass `--registry`).
 
+- `palette.png`: master palette swatch (6 colours); `assets.json` adds the sub-palette `glow`
+  (`#5adcff`) for the rune assets. `zodar.py assets check` reports 0 off-palette texels.
+
 `make_assets.py` regenerates the PNGs and the glTF (stdlib only, deterministic).
 GPU tests: `engine/tests/Gpu/AssetManagerTests.cpp`.

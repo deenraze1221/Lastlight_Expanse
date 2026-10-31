@@ -7,6 +7,7 @@ add_executable(ZodarTests
     Assets/MeshDataTests.cpp
     Assets/AssetCacheTests.cpp
     Assets/AssetRegistryTests.cpp
+    Assets/PaletteTests.cpp
     Core/LogTests.cpp
     Core/ProfilerTests.cpp
     Core/ErrorTests.cpp
@@ -57,6 +58,11 @@ if(TARGET ZodarAssetTool)
     add_test(NAME tools.asset_check_example
         COMMAND ZodarAssetTool check --strict --registry ${ZODAR_ENGINE_DIR}/../examples/asset_loading/assets.json
                 --report ${CMAKE_BINARY_DIR}/asset_check_example.json)
+    # --palette override with colours the example does not use: --strict must fail (exit 1).
+    add_test(NAME tools.asset_check_palette_strict
+        COMMAND ZodarAssetTool check --strict --palette "#000000,#ffffff"
+                --registry ${ZODAR_ENGINE_DIR}/../examples/asset_loading/assets.json)
+    set_tests_properties(tools.asset_check_palette_strict PROPERTIES WILL_FAIL TRUE)
 endif()
 
 # Temporary UI sandbox (SDL3 software renderer, offscreen): renders the component gallery

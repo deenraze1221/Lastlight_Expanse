@@ -12,7 +12,7 @@ remaining Phase C items listed under Phase C). **Phase C2 done** (async loads: J
 decode, budgeted async uploads, ready on acquire, `update`/`waitAll`, cancellation). **Phase C3
 done** (`assets.json` registry, `ZodarAssetTool` / `zodar.py import|assets list|check`, JSON report).
 **Phase C4 done** (scene `modelRenderer` by registry id or path; texture standards 32 default /
-64 max; lossless pixel-art compilation).
+64 max; lossless pixel-art compilation). **Phase C7 done** (palette validation).
 
 Goal: ZODAR is driven by Claude Code (code, CLI, files, logs, screenshots), not by a visual
 editor. Every engine capability must be reachable through documented C++ APIs, text data
@@ -104,7 +104,10 @@ Make every app start, run, capture and report the same way.
 - **C3 done:** `AssetRegistry` + `ZodarAssetTool` (`zodar.py import`, `assets list|check`).
 - **C4 done:** scene-file `modelRenderer` (registry id or `.gltf`/`.glb` path), `ModelRenderer`
   component, `loadSceneModels[Async]`; revised texture standards; pixel art never BC7.
-  Remaining below: hot reload, streaming, more importers, palette check.
+- **C7 done:** palette validation (`assets.json` master palette + sub-palettes, off-palette
+  texel counts, `paletteDeviation` in reports, `--palette`, `--sub-palette`).
+  Remaining Phase C: C5/C6 hot reload. Streaming budgets, FBX/audio import and skins move to
+  later phases (audit: PROGRESS.md).
 - `AssetManager` with typed handles (`Handle<Mesh>`, `Handle<Texture>`, `Handle<Material>`,
   `Handle<AudioClip>`...), ref counting, async load on `JobSystem` + `UploadQueue`, unload via
   deletion queue, failure states with messages.

@@ -33,7 +33,8 @@ resized automatically, violations are reported.
 - Sizes are powers of two and square. Anything above 64×64, non-square or not a power of two is
   a violation (warning: re-author the texture; nothing is resized).
 - **Consistent palette.** Each game keeps one master palette. All textures are quantised to it, or
-  to documented sub-palettes per biome or faction.
+  to documented sub-palettes per biome or faction. Declare them in the game's `assets.json`
+  (`"palette"`, `"subPalettes"`); `zodar.py assets check` reports off-palette texels.
 - **Consistent texel density.** One art pixel should cover about the same world size on every
   asset. Reference: 32² per 1 m voxel face, one texel per art pixel, so one art pixel is 1/32 m
   (2 texels per Blockbench unit at 16 units/m). Assets stay within 2× of that (16..64
@@ -107,8 +108,9 @@ Required work, to be scheduled:
 3. **Asset validation report** (engine tool). Texture size class, texel density per mesh
    (texels per metre, from UV area against world area), palette deviation against a
    game-supplied palette, and triangle counts. Output is JSON, so agents can check assets
-   without looking at them. *Done in Phase C3* (`zodar.py assets check --report`: size class,
-   texel density per model, triangle counts), except the palette deviation check.
+   without looking at them. *Done in Phases C3 and C7* (`zodar.py assets check --report`: size
+   class, texel density per model, triangle counts, palette deviation against the master palette
+   and sub-palettes in `assets.json`).
 4. **Lighting features** (rendering roadmap): S5 dynamic shadows (cascaded sun shadows in
    `pbr.frag` and `voxel.frag`), ambient occlusion beyond the mesher's voxel AO (S7), and
    weather (rain/snow) plus the day–night cycle (backlog).

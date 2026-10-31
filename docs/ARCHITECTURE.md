@@ -308,7 +308,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
     equivalent C++ scene via both WorldRender paths and after capture/reload; mutable material
     updates match freshly created materials (CPU path and GpuScene, sync validation clean).
 
-## Asset manager (Phases C1-C4)
+## Asset manager (Phases C1-C4, C7)
 
 - Module `Zodar::AssetManager` (`engine/rendering/AssetManager`, depends on Renderer + SceneFile).
   Guide: `docs/guide/ASSETS.md`; example `examples/asset_loading` + sample `ZodarAssetLoading`.
@@ -363,7 +363,13 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   (relative to the file, existence checked at parse, prefab-rebased), otherwise registry id
   (resolved by `AssetManager::loadSceneModels[Async]` with an optional `AssetRegistry`).
   Bound via `SceneBindings::models`; captured via `SceneCaptureNames::models`.
-- Not yet (later Phase C steps): palette deviation check,
+- Palettes (C7, `AssetRegistry.h`): optional `PaletteConfig` (master + named sub-palettes,
+  each a PNG swatch or `#rrggbb` list) in `assets.json`; entries name a sub-palette
+  (`AssetEntry::palette`, extends the master). `checkAsset` counts opaque level-0 texels of
+  colour textures (texture usage color, material base colour/emissive, model images used as
+  base colour/emissive) not in the palette: warning + `PaletteDeviation` + report keys, all
+  absent without a palette (no behaviour change). Swatches are not hash dependencies. CPU only.
+- Not yet (later Phase C steps):
   streaming budgets (`docs/ASSET_STREAMING.md`), hot reload, audio/FBX importers,
   scene-file `model` references (meshes still bound by name in `SceneBindings`).
 

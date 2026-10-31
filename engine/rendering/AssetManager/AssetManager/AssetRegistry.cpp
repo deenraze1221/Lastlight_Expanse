@@ -102,6 +102,111 @@ std::string defaultAssetId(const std::filesystem::path& file) {
     return file.stem().string();
 }
 
+// --- Palettes ----------------------------------------------------------------------------
+
+bool Palette::contains(uint32_t rgb) const {
+    return std::ranges::binary_search(colors, rgb);
+}
+
+std::optional<uint32_t> parseHexColor(std::string_view text) {
+    if (text.size() != 7 || text[0] != '#') {
+        return std::nullopt;
+    }
+    uint32_t value = 0;
+    for (const char c : text.substr(1)) {
+        uint32_t digit = 0;
+        if (c >= '0' && c <= '9') digit = uint32_t(c - '0');
+        else if (c >= 'a' && c <= 'f') digit = uint32_t(c - 'a' + 10);
+        else if (c >= 'A' && c <= 'F') digit = uint32_t(c - 'A' + 10);
+        else return std::nullopt;
+        value = value * 16 + digit;
+    }
+    return value;
+}
+
+std::string hexColor(uint32_t rgb) {
+    char text[8];
+    std::snprintf(text, sizeof(text), "#%06x", rgb & 0xFFFFFFu);
+    return text;
+}
+
+Palette loadPalette(const PaletteSource& source, const std::filesystem::path& directory, std::string name) {
+    Palette p;
+    p.name = std::move(name);
+    if (!source.swatch.empty()) {
+        const std::filesystem::path file =
+            std::filesystem::path(source.swatch).is_absolute() ? std::filesystem::path(source.swatch)
+                                                               : directory / source.swatch;
+        const ImageData image = loadImage(file, ColorSpace::Srgb); // throws with the file name
+        const std::vector<uint8_t>& px = image.levels.at(0);
+        for (size_t i = 0; i + 3 < px.size(); i += 4) {
+            if (px[i + 3] != 0) {
+                p.colors.push_back(uint32_t(px[i]) << 16 | uint32_t(px[i + 1]) << 8 | px[i + 2]);
+            }
+        }
+    }
+    for (const std::string& c : source.colors) {
+        const auto rgb = parseHexColor(c);
+        if (!rgb) {
+            throw Error("palette '" + p.name + "': malformed colour '" + c + "' (expected #rrggbb)");
+        }
+        p.colors.push_back(*rgb);
+    }
+    std::ranges::sort(p.colors);
+    p.colors.erase(std::unique(p.colors.begin(), p.colors.end()), p.colors.end());
+    if (p.colors.empty()) {
+        throw Error("palette '" + p.name + "' has no colours");
+    }
+    return p;
+}
+
+PaletteSource parsePaletteArgument(std::string_view text) {
+    PaletteSource s;
+    if (text.starts_with('#')) {
+        std::size_t start = 0;
+        while (start <= text.size()) {
+            const std::size_t end = std::min(text.find(',', start), text.size());
+            s.colors.emplace_back(text.substr(start, end - start));
+            start = end + 1;
+        }
+    } else {
+        s.swatch = std::string(text);
+    }
+    return s;
+}
+
+namespace {
+
+// "palette" values: "file.png" | ["#rrggbb", ...].
+bool readPaletteSource(const Json& value, const std::string& path, PaletteSource& out, detail::Issues& issues) {
+    PaletteSource s;
+    if (value.is_string() && !value.get<std::string>().empty()) {
+        s.swatch = value.get<std::string>();
+    } else if (value.is_array() && !value.empty()) {
+        for (std::size_t i = 0; i < value.size(); ++i) {
+            const Json& c = value[i];
+            if (!c.is_string() || !parseHexColor(c.get<std::string>())) {
+                issues.add(detail::child(path, i), "expected a colour \"#rrggbb\", got " +
+                                                       (c.is_string() ? "\"" + c.get<std::string>() + "\""
+                                                                      : detail::typeName(c)));
+                continue;
+            }
+            s.colors.push_back(c.get<std::string>());
+        }
+    } else {
+        issues.add(path, "expected a PNG swatch path or a non-empty array of \"#rrggbb\" colours");
+        return false;
+    }
+    out = std::move(s);
+    return true;
+}
+
+Json paletteSourceJson(const PaletteSource& s) {
+    return s.swatch.empty() ? Json(s.colors) : Json(s.swatch);
+}
+
+} // namespace
+
 TextureLoadSettings textureLoadSettings(const AssetEntry& entry) {
     return {entry.usage, entry.mips};
 }
@@ -129,7 +234,37 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
     if (!detail::requireObject(root, "", issues)) {
         issues.throwIfAny();
     }
-    detail::checkKeys(root, "", {"schema", "version", "assets"}, issues);
+    detail::checkKeys(root, "", {"schema", "version", "palette", "assets"}, issues);
+    if (const auto palette = root.find("palette"); palette != root.end()) {
+        PaletteConfig config;
+        bool ok = true;
+        if (palette->is_object()) {
+            detail::checkKeys(*palette, "/palette", {"colors", "subPalettes"}, issues);
+            if (const auto colors = palette->find("colors"); colors != palette->end()) {
+                ok = readPaletteSource(*colors, "/palette/colors", config.master, issues);
+            } else {
+                issues.add("/palette/colors", "required field is missing");
+                ok = false;
+            }
+            if (const auto subs = palette->find("subPalettes"); subs != palette->end()) {
+                if (!subs->is_object()) {
+                    issues.add("/palette/subPalettes", "expected an object of named sub-palettes");
+                } else {
+                    for (const auto& [name, value] : subs->items()) {
+                        PaletteSource sub;
+                        if (readPaletteSource(value, detail::child("/palette/subPalettes", name), sub, issues)) {
+                            config.subPalettes[name] = std::move(sub);
+                        }
+                    }
+                }
+            }
+        } else {
+            ok = readPaletteSource(*palette, "/palette", config.master, issues);
+        }
+        if (ok) {
+            registry.m_palette = std::move(config);
+        }
+    }
     std::string schema;
     if (detail::readString(root, "schema", "", schema, issues, true) && schema != kSchema) {
         issues.add("/schema", "expected \"" + std::string(kSchema) + "\", got \"" + schema + "\"");
@@ -162,13 +297,23 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
             }
         }
         if (e.type == AssetType::Texture) {
-            detail::checkKeys(a, path, {"id", "type", "source", "usage", "mips", "hash", "dependencies", "outputs"},
+            detail::checkKeys(a, path,
+                              {"id", "type", "source", "usage", "mips", "hash", "dependencies", "outputs", "palette"},
                               issues);
         } else if (e.type == AssetType::Model) {
-            detail::checkKeys(a, path,
-                              {"id", "type", "source", "sampling", "compile", "hash", "dependencies", "outputs"}, issues);
+            detail::checkKeys(
+                a, path, {"id", "type", "source", "sampling", "compile", "hash", "dependencies", "outputs", "palette"},
+                issues);
         } else {
-            detail::checkKeys(a, path, {"id", "type", "source", "hash", "dependencies", "outputs"}, issues);
+            detail::checkKeys(a, path, {"id", "type", "source", "hash", "dependencies", "outputs", "palette"}, issues);
+        }
+        if (detail::readString(a, "palette", path, e.palette, issues)) {
+            if (!registry.m_palette) {
+                issues.add(detail::child(path, "palette"),
+                           "sub-palette '" + e.palette + "' but the registry has no \"palette\"");
+            } else if (!registry.m_palette->subPalettes.contains(e.palette)) {
+                issues.add(detail::child(path, "palette"), "unknown sub-palette '" + e.palette + "'");
+            }
         }
         detail::readString(a, "source", path, e.source, issues, true);
         std::string usage;
@@ -227,6 +372,18 @@ std::string AssetRegistry::serialize() const {
     Json root = Json::object();
     root["schema"] = kSchema;
     root["version"] = kVersion;
+    if (m_palette) {
+        Json palette = Json::object();
+        palette["colors"] = paletteSourceJson(m_palette->master);
+        if (!m_palette->subPalettes.empty()) {
+            Json subs = Json::object();
+            for (const auto& [name, sub] : m_palette->subPalettes) {
+                subs[name] = paletteSourceJson(sub);
+            }
+            palette["subPalettes"] = std::move(subs);
+        }
+        root["palette"] = std::move(palette);
+    }
     Json assets = Json::array();
     for (const AssetEntry& e : m_entries) {
         Json a = Json::object();
@@ -246,6 +403,9 @@ std::string AssetRegistry::serialize() const {
         a["dependencies"] = e.dependencies;
         if (!e.outputs.empty()) {
             a["outputs"] = e.outputs;
+        }
+        if (!e.palette.empty()) {
+            a["palette"] = e.palette;
         }
         assets.push_back(std::move(a));
     }
@@ -520,6 +680,13 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
     if (options.mips) entry.mips = *options.mips;
     if (options.sampling) entry.sampling = *options.sampling;
     if (options.compile) entry.compile = *options.compile;
+    if (options.palette) {
+        if (!options.palette->empty() &&
+            (!registry.palette() || !registry.palette()->subPalettes.contains(*options.palette))) {
+            throw Error("unknown sub-palette '" + *options.palette + "' (define it in the registry's \"palette\")");
+        }
+        entry.palette = *options.palette;
+    }
 
     const AssetFingerprint f = fingerprintAsset(*type, abs);
     if (!f.missing.empty()) {
@@ -552,13 +719,61 @@ void addTexture(AssetCheckResult& r, const AssetCheckOptions& options, std::stri
     }
 }
 
+// Counts level-0 texels of an RGBA8 colour texture against `palette` (transparent skipped).
+void countPalette(const ImageData& image, const Palette& palette, AssetTextureInfo& info, PaletteDeviation& dev) {
+    if (image.format != PixelFormat::Rgba8 || image.levels.empty()) {
+        return;
+    }
+    info.paletteChecked = true;
+    const std::vector<uint8_t>& px = image.levels[0];
+    for (size_t i = 0; i + 3 < px.size(); i += 4) {
+        if (px[i + 3] == 0) {
+            continue;
+        }
+        ++info.paletteTexels;
+        const uint32_t rgb = uint32_t(px[i]) << 16 | uint32_t(px[i + 1]) << 8 | px[i + 2];
+        if (!palette.contains(rgb)) {
+            ++info.offPaletteTexels;
+            if (dev.examples.size() < 4 && std::ranges::find(dev.examples, rgb) == dev.examples.end()) {
+                dev.examples.push_back(rgb);
+            }
+        }
+    }
+    dev.texels += info.paletteTexels;
+    dev.offPalette += info.offPaletteTexels;
+}
+
+// Active palette of a check: nullptr when none applies.
+struct PaletteCheck {
+    std::optional<Palette> palette;
+    PaletteDeviation deviation;
+    bool used = false;
+};
+
+// `palette` is null for non-colour textures (normal, data maps) or without a palette.
 void checkImageFile(AssetCheckResult& r, const AssetCheckOptions& options, const std::filesystem::path& file,
-                    const std::filesystem::path& registryDir) {
+                    const std::filesystem::path& registryDir, PaletteCheck* palette = nullptr) {
     if (!std::filesystem::exists(file)) {
         return; // reported as a missing dependency
     }
     const ImageData image = loadImage(file, ColorSpace::Srgb);
     addTexture(r, options, relativePath(file, registryDir), image.width, image.height);
+    if (palette && palette->palette) {
+        countPalette(image, *palette->palette, r.textures.back(), palette->deviation);
+        palette->used = true;
+    }
+}
+
+// Base colour and emissive textures (colour data) of a material.
+std::set<std::filesystem::path> colourTextures(const MaterialData& m, const std::filesystem::path& directory) {
+    std::set<std::filesystem::path> out;
+    for (const MaterialTextureData* t : {&m.baseColorTexture, &m.emissiveTexture}) {
+        if (!t->empty()) {
+            const std::filesystem::path p(t->path);
+            out.insert(normal(p.is_absolute() ? p : directory / p));
+        }
+    }
+    return out;
 }
 
 double texelDensity(const ModelData& data) {
@@ -622,9 +837,34 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
         r.errors.push_back(e.what());
         return r;
     }
+    // Palette: --palette / options override the master palette; entries may add a sub-palette.
+    PaletteCheck palette;
+    try {
+        const std::optional<PaletteConfig>& config = registry.palette();
+        const PaletteSource* master = options.palette ? &*options.palette : config ? &config->master : nullptr;
+        if (!entry.palette.empty() && !(config && config->subPalettes.contains(entry.palette))) {
+            throw Error("unknown sub-palette '" + entry.palette + "'");
+        }
+        if (master && !master->empty()) {
+            Palette p = loadPalette(*master, dir, "master");
+            if (!entry.palette.empty()) {
+                const Palette sub = loadPalette(config->subPalettes.at(entry.palette), dir, entry.palette);
+                p.colors.insert(p.colors.end(), sub.colors.begin(), sub.colors.end());
+                std::ranges::sort(p.colors);
+                p.colors.erase(std::unique(p.colors.begin(), p.colors.end()), p.colors.end());
+                p.name = "master+" + entry.palette;
+            }
+            palette.deviation.palette = p.name;
+            palette.palette = std::move(p);
+        }
+    } catch (const std::exception& e) {
+        r.errors.push_back(std::string("palette: ") + e.what());
+    }
     try {
         switch (entry.type) {
-        case AssetType::Texture: checkImageFile(r, options, file, dir); break;
+        case AssetType::Texture:
+            checkImageFile(r, options, file, dir, entry.usage == TextureUsage::Color ? &palette : nullptr);
+            break;
         case AssetType::Model: {
             GltfLoadOptions load;
             load.useCompiledTextures = false;
@@ -639,11 +879,20 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
                 r.vertices += static_cast<uint32_t>(m.vertices.size());
                 r.triangles += static_cast<uint32_t>(m.indices.size() / 3);
             }
+            std::set<int> colourImages; // base colour + emissive images
+            for (const ModelMaterial& m : data.materials) {
+                colourImages.insert(m.baseColor.image);
+                colourImages.insert(m.emissiveTexture.image);
+            }
             for (size_t i = 0; i < data.images.size(); ++i) {
                 const ImageData& image = data.images[i];
                 addTexture(r, options,
                            entry.source + "/" + (image.name.empty() ? "image" + std::to_string(i) : image.name),
                            image.width, image.height);
+                if (palette.palette && colourImages.contains(static_cast<int>(i))) {
+                    countPalette(image, *palette.palette, r.textures.back(), palette.deviation);
+                    palette.used = true;
+                }
             }
             r.texelDensity = texelDensity(data);
             const double target = options.texelDensityTarget;
@@ -671,10 +920,11 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
             r.materials = 1;
             std::vector<std::filesystem::path> textures;
             addMaterialTextures(m, file.parent_path(), textures);
+            const std::set<std::filesystem::path> colour = colourTextures(m, file.parent_path());
             std::set<std::filesystem::path> seen;
             for (const auto& t : textures) {
                 if (seen.insert(normal(t)).second) {
-                    checkImageFile(r, options, normal(t), dir);
+                    checkImageFile(r, options, normal(t), dir, colour.contains(normal(t)) ? &palette : nullptr);
                 }
             }
             break;
@@ -700,14 +950,13 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
             std::set<std::filesystem::path> seen;
             for (const SceneMaterial& m : doc.materials) {
                 std::vector<std::filesystem::path> textures;
-                if (!m.source.empty()) {
-                    addMaterialTextures(m.data, (file.parent_path() / m.source).parent_path(), textures);
-                } else {
-                    addMaterialTextures(m.data, sceneMaterialDirectory(m, file.parent_path()), textures);
-                }
+                const std::filesystem::path base = !m.source.empty() ? (file.parent_path() / m.source).parent_path()
+                                                                     : sceneMaterialDirectory(m, file.parent_path());
+                addMaterialTextures(m.data, base, textures);
+                const std::set<std::filesystem::path> colour = colourTextures(m.data, base);
                 for (const auto& t : textures) {
                     if (seen.insert(normal(t)).second) {
-                        checkImageFile(r, options, normal(t), dir);
+                        checkImageFile(r, options, normal(t), dir, colour.contains(normal(t)) ? &palette : nullptr);
                     }
                 }
             }
@@ -716,6 +965,21 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
         }
     } catch (const std::exception& e) {
         r.errors.push_back(e.what());
+    }
+    if (palette.used) {
+        const PaletteDeviation& d = palette.deviation;
+        if (d.offPalette > 0) {
+            char text[160];
+            std::snprintf(text, sizeof(text), "palette: %llu of %llu texels (%.2f%%) not in palette '%s' (e.g. ",
+                          static_cast<unsigned long long>(d.offPalette), static_cast<unsigned long long>(d.texels),
+                          d.percent(), d.palette.c_str());
+            std::string message = text;
+            for (size_t i = 0; i < d.examples.size(); ++i) {
+                message += (i ? ", " : "") + hexColor(d.examples[i]);
+            }
+            r.warnings.push_back(message + ")");
+        }
+        r.paletteDeviation = d;
     }
     return r;
 }
@@ -750,8 +1014,13 @@ std::string assetReportJson(const AssetRegistry& registry, const std::vector<Ass
         a["warnings"] = r.warnings;
         Json textures = Json::array();
         for (const AssetTextureInfo& t : r.textures) {
-            textures.push_back(Json{{"name", t.name}, {"width", t.width}, {"height", t.height},
-                                    {"sizeClass", toString(t.sizeClass)}});
+            Json tj = Json{{"name", t.name}, {"width", t.width}, {"height", t.height},
+                           {"sizeClass", toString(t.sizeClass)}};
+            if (t.paletteChecked) {
+                tj["paletteTexels"] = t.paletteTexels;
+                tj["offPaletteTexels"] = t.offPaletteTexels;
+            }
+            textures.push_back(std::move(tj));
         }
         a["textures"] = std::move(textures);
         a["meshes"] = r.meshes;
@@ -759,6 +1028,18 @@ std::string assetReportJson(const AssetRegistry& registry, const std::vector<Ass
         a["triangles"] = r.triangles;
         a["materials"] = r.materials;
         a["texelDensity"] = std::round(r.texelDensity * 100.0) / 100.0;
+        if (r.paletteDeviation) {
+            const PaletteDeviation& d = *r.paletteDeviation;
+            Json examples = Json::array();
+            for (const uint32_t c : d.examples) {
+                examples.push_back(hexColor(c));
+            }
+            a["paletteDeviation"] = Json{{"palette", d.palette},
+                                         {"texels", d.texels},
+                                         {"offPalette", d.offPalette},
+                                         {"percent", std::round(d.percent() * 100.0) / 100.0},
+                                         {"examples", std::move(examples)}};
+        }
         assets.push_back(std::move(a));
     }
     root["summary"] = Json{{"assets", results.size()}, {"ok", ok}, {"warnings", warnings}, {"errors", errors}};

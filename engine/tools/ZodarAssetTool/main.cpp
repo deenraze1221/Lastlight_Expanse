@@ -2,6 +2,7 @@
 //
 //   ZodarAssetTool import <file>... [--registry FILE] [--id ID] [--type texture|model|material|scene|prefab]
 //       [--usage color|data|normal] [--no-mips] [--sampling file|pixelArt|nearest|linear] [--compile]
+//       [--sub-palette NAME]
 //       Adds or updates registry entries (dependencies + hash). --compile (models) bakes the
 //       textures into <model>.zodar/*.ktx2 (ZodarAssetCompiler's cache) and records them.
 //       Pixel-art textures (NEAREST glTF sampler, or --sampling pixelArt|nearest) compile
@@ -10,8 +11,11 @@
 //       ./assets.json (created).
 //   ZodarAssetTool list [--registry FILE] [--json]
 //   ZodarAssetTool check [--registry FILE] [--report FILE.json] [--strict] [--density-target N]
-//       Validates every entry (missing/stale/invalid, texture sizes, texel density). Prints one
-//       line per asset with problems and a summary; --report writes zodar.asset_report JSON.
+//       [--palette swatch.png|#rrggbb,#rrggbb...]
+//       Validates every entry (missing/stale/invalid, texture sizes, texel density, palette).
+//       Prints one line per asset with problems and a summary; --report writes
+//       zodar.asset_report JSON. --palette replaces the registry's master palette for this run
+//       (entries' sub-palettes still apply); off-palette texels are warnings (--strict: errors).
 //
 // Exit codes: 0 ok, 1 errors (check: any asset error; --strict: warnings too), 2 usage.
 // Guide: docs/guide/ASSETS.md.
@@ -35,9 +39,10 @@ namespace {
 
 constexpr const char* kUsage =
     "usage: ZodarAssetTool import <file>... [--registry FILE] [--id ID] [--type T] [--usage color|data|normal]\n"
-    "                   [--no-mips] [--sampling file|pixelArt|nearest|linear] [--compile]\n"
+    "                   [--no-mips] [--sampling file|pixelArt|nearest|linear] [--compile] [--sub-palette NAME]\n"
     "       ZodarAssetTool list [--registry FILE] [--json]\n"
-    "       ZodarAssetTool check [--registry FILE] [--report FILE.json] [--strict] [--density-target N]\n";
+    "       ZodarAssetTool check [--registry FILE] [--report FILE.json] [--strict] [--density-target N]\n"
+    "                   [--palette swatch.png|#rrggbb,#rrggbb...]\n";
 
 struct Args {
     std::string command;
@@ -92,6 +97,14 @@ Args parse(int argc, char** argv) {
         else if (arg == "--strict") a.strict = true;
         else if (arg == "--report") a.report = next();
         else if (arg == "--density-target") a.check.texelDensityTarget = std::stod(next());
+        else if (arg == "--palette") {
+            PaletteSource palette = parsePaletteArgument(next());
+            for (const std::string& c : palette.colors) {
+                if (!parseHexColor(c)) usage("malformed --palette colour '" + c + "' (expected #rrggbb)");
+            }
+            if (!palette.swatch.empty()) palette.swatch = std::filesystem::absolute(palette.swatch).generic_string();
+            a.check.palette = std::move(palette);
+        } else if (arg == "--sub-palette") a.import.palette = next();
         else if (arg == "--help" || arg == "-h") {
             std::fputs(kUsage, stdout);
             std::exit(0);
@@ -182,6 +195,20 @@ int cmdCheck(const Args& a) {
     if (!a.report.empty()) {
         std::ofstream(a.report, std::ios::binary) << assetReportJson(registry, results);
         std::printf("report: %s\n", a.report.c_str());
+    }
+    uint64_t paletteTexels = 0, offPalette = 0;
+    size_t paletteAssets = 0;
+    for (const AssetCheckResult& r : results) {
+        if (r.paletteDeviation) {
+            ++paletteAssets;
+            paletteTexels += r.paletteDeviation->texels;
+            offPalette += r.paletteDeviation->offPalette;
+        }
+    }
+    if (paletteAssets > 0) {
+        std::printf("palette: %zu assets, %llu texels checked, %llu off-palette (%.2f%%)\n", paletteAssets,
+                    static_cast<unsigned long long>(paletteTexels), static_cast<unsigned long long>(offPalette),
+                    paletteTexels ? 100.0 * double(offPalette) / double(paletteTexels) : 0.0);
     }
     std::printf("checked %zu assets: %zu ok, %zu with warnings, %zu with errors\n", results.size(),
                 results.size() - errors - warnings, warnings, errors);

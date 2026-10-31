@@ -1,4 +1,4 @@
-# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3, scene models C4)
+# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3, scene models C4, palettes C7)
 
 Module `Zodar::AssetManager` (`engine/rendering/AssetManager/AssetManager/AssetManager.h`).
 Working example: `examples/asset_loading` rendered by the sample `ZodarAssetLoading`
@@ -91,6 +91,29 @@ since import: re-import), texture size violations (above 64×64, non-standard), 
 outside 16..64 texels/m (target 32, `--density-target N`), glTF importer notes, missing compiled outputs. The report
 (`zodar.asset_report` v1) has per asset: status, errors, warnings, textures (size + class),
 meshes, vertices, triangles, materials, texelDensity.
+
+### Palette validation (Phase C7)
+
+Optional `"palette"` at the top of `assets.json` (no palette: checks and reports are unchanged):
+
+```json
+"palette": "palette.png"                                   // PNG swatch, or
+"palette": ["#3a2618", "#966234"]                          // hex list, or
+"palette": { "colors": "palette.png", "subPalettes": { "glow": ["#5adcff"], "ash": "palettes/ash.png" } }
+```
+
+- Swatch: every RGB colour of its non-transparent texels (any layout/size). Hex: `#rrggbb`.
+- Sub-palettes extend the master palette: an entry with `"palette": "glow"` may use master +
+  glow colours (`zodar.py import FILE --sub-palette glow` sets it; unknown names are errors).
+- `check` counts the level-0 texels of colour textures (texture entries with usage `color`,
+  material base colour + emissive slots, model images used as base colour/emissive) that are
+  not in the palette. Fully transparent texels are ignored; normal/data maps are not checked.
+- Any off-palette texel is a warning: `palette: 4 of 60 texels (6.67%) not in palette 'master'
+  (e.g. #ff00ff)`; `--strict` turns it into exit code 1. The tool prints a palette summary line.
+- Report: `"paletteDeviation": {palette, texels, offPalette, percent, examples}` per asset and
+  `paletteTexels` / `offPaletteTexels` per texture (only when a palette applies).
+- `--palette swatch.png` or `--palette "#rrggbb,#rrggbb"` replaces the master palette for one
+  run (sub-palettes still apply). A missing swatch or malformed colour is an asset error.
 
 Loading by id:
 
