@@ -106,6 +106,18 @@ public:
         return isAlive(entity) && m_registry.remove<T>(toEntt(entity)) > 0;
     }
 
+    // Calls fn(Entity, const T&...) for every live entity that has all components T, in the
+    // backend's storage order (deterministic for the same sequence of operations). fn must not
+    // add or remove components of the iterated types or create/destroy entities.
+    template <typename... T, typename Fn>
+    void each(Fn&& fn) const {
+        static_assert(sizeof...(T) > 0, "each needs at least one component type");
+        static_assert((!std::is_empty_v<T> && ...), "each does not support empty (tag) components");
+        m_registry.view<const T...>().each([&fn](entt::entity handle, const T&... components) {
+            fn(Entity(static_cast<Entity::Id>(handle)), components...);
+        });
+    }
+
     // --- Hierarchy ----------------------------------------------------------------------
 
     // Makes `parent` the parent of `child` (appended as its last child). Entity::null()

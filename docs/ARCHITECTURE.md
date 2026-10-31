@@ -16,6 +16,7 @@ Engine code never includes game headers or links game targets.
 | `engine/assets/AssetPipeline` | `Zodar::AssetPipeline` | Offline BCn encoding, mip baking |
 | `engine/scene/Scene` | `Zodar::Scene` | Noise, voxel chunks, greedy mesher, LOD, chunk streaming (no GPU) |
 | `engine/world/World` | `Zodar::World` | Entities over EnTT: `zodar::World` / `zodar::Entity`, components, `Name`/`Transform`, hierarchy (B1.1-B1.2; no GPU) |
+| `engine/rendering/WorldRender` | `Zodar::WorldRender` | World -> renderer bridge: `MeshRenderer`, `collectDraws` (CPU path), `WorldRenderSync` (GpuScene) (B1.3) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
 | `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON. Used by the game, ModelViewer and ZodarBench |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarUISandbox |
@@ -230,7 +231,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
 | `CMakePresets.json` (debug, release, gpu-tests, ci + `ci` workflow), trees in `build/<preset>` (git-ignored) | One documented way to configure; each preset has its own `_deps` |
 | `tools/zodar.py`: Python stdlib only, prints failures/summaries, full logs to files, returns the underlying exit code | Agents spend few tokens per build/test/run; no extra install |
 
-## Entity world (Phases B1.1-B1.2)
+## Entity world (Phases B1.1-B1.3)
 
 - Module `Zodar::World` (`engine/world/World`), depends on `Core` + `Zodar::EnTT` only (EnTT
   v3.15.0, header-only, MIT, pinned in `cmake/ZodarDependencies.cmake`). No GPU, no Renderer.
@@ -255,7 +256,23 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
 - `localMatrix(e)` / `worldMatrix(e)`: computed on demand, O(depth), identity for entities
   without `Transform` or dead. No cached world matrix / dirty flags yet: add when the renderer
   bridge (B1.3) needs per-frame bulk updates.
-- Planned: B1.3 renderer bridge (components -> `SceneView` / `GpuScene`).
+- `each<T...>(fn(Entity, const T&...))` (B1.3): read-only iteration over entities with all T
+  (non-empty components only), in EnTT storage order (deterministic, newest-first; not
+  insertion order).
+- Renderer bridge (B1.3): module `Zodar::WorldRender` (`engine/rendering/WorldRender`, depends
+  on World + Renderer; World stays GPU-free). Component `MeshRenderer { mesh, submesh,
+  material, visible }` (raw `GpuMesh*`; asset handles come with Phase C).
+  - `collectDraws(world, out)`: stateless CPU path, one `MeshDraw` per renderable entity at
+    `worldMatrix(e)`; pass as `SceneView::draws`.
+  - `WorldRenderSync(sink)`: persistent path. `sync(world)` diffs against the last sync: adds
+    new renderables, `setTransform`/`setMaterial` on change, re-creates on mesh/submesh change
+    (GpuScene has no setMesh), removes destroyed/hidden/component-less entities in entity-id
+    order. Keyed by full entity id (index + version), so recycled ids get fresh instances.
+    `RenderInstanceSink` interface; `GpuSceneSink` adapts `GpuScene` (fakes in unit tests).
+  - World matrices recomputed every sync (O(entities x depth)); cached world matrix + dirty
+    propagation deferred until profiling needs it.
+  - Verified: GPU test renders a World hierarchy pixel-identical to hand-built `MeshDraw`s via
+    both paths, before and after update/destroy.
 
 ## Frame flow (Milestone 1)
 
