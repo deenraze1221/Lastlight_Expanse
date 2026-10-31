@@ -1,0 +1,127 @@
+add_executable(ZodarTests
+    main.cpp
+    Assets/GltfLoaderTests.cpp
+    Assets/ImageDataTests.cpp
+    Assets/TextureAssetTests.cpp
+    Assets/EnvironmentMapTests.cpp
+    Assets/MeshDataTests.cpp
+    Core/LogTests.cpp
+    Core/ProfilerTests.cpp
+    Core/ErrorTests.cpp
+    Core/ImageIOTests.cpp
+    Renderer/CameraTests.cpp
+    Renderer/DeletionQueueTests.cpp
+    Renderer/FrustumTests.cpp
+    Renderer/GraphPlannerTests.cpp
+    Renderer/PipelineCacheTests.cpp
+    Renderer/DeviceSelectionTests.cpp
+    Renderer/SwapchainSupportTests.cpp
+    Renderer/VulkanCheckTests.cpp
+    Renderer/UploadQueueTests.cpp
+    Renderer/ClusterMathTests.cpp
+    Scene/VoxelTests.cpp
+    UI/ThemeTests.cpp
+    UI/DrawListTests.cpp
+    UI/LayoutTests.cpp
+    UI/ScaleTests.cpp
+    UI/FontTests.cpp
+    UI/SvgTests.cpp
+    UI/AssetIntegrityTests.cpp
+    UI/StartupTests.cpp
+    UI/LogBufferTests.cpp
+    UI/WindowPlanTests.cpp
+    UI/ProgressBarTests.cpp
+    UI/SvgFilterTests.cpp
+    UI/LoadingScreenTests.cpp)
+target_link_libraries(ZodarTests PRIVATE Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::UI Zodar::stb doctest::doctest)
+# UI tests read the committed resources directly (fonts, original logos, manifest).
+target_compile_definitions(ZodarTests PRIVATE ZODAR_TEST_UI_DIR="${ZODAR_ENGINE_DIR}/ui/Resources/UI")
+zodar_set_warnings(ZodarTests)
+
+add_test(NAME unit COMMAND ZodarTests)
+
+# Temporary UI sandbox (SDL3 software renderer, offscreen): renders the component gallery
+# and checks token colours at known pixels. Needs no GPU.
+if(TARGET ZodarUISandbox)
+    add_test(NAME ui.sandbox_smoke
+        COMMAND ZodarUISandbox --frames 3 --check --software --scale 1.33
+                --screenshot ${CMAKE_BINARY_DIR}/ui_sandbox_smoke.png)
+    set_tests_properties(ui.sandbox_smoke PROPERTIES TIMEOUT 120 ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
+
+    # Loading window (Stage UI-2) with MOCK startup data, one test per scenario and monitor
+    # profile, plus the live single-window flow (loading -> resize + re-centre -> launcher).
+    set(_ui_loading
+        "normal|normal|8|2560x1440|"
+        "slow_shaders|slow-shaders|36.5|1920x1080|"
+        "failure|failure|3.6|3840x2160|--open-log"
+        "indeterminate|indeterminate|5|2560x1440|")
+    foreach(_case IN LISTS _ui_loading)
+        string(REPLACE "|" ";" _f "${_case}")
+        list(GET _f 0 _name)
+        list(GET _f 1 _scenario)
+        list(GET _f 2 _at)
+        list(GET _f 3 _monitor)
+        list(LENGTH _f _n)
+        set(_extra)
+        if(_n GREATER 4)
+            list(GET _f 4 _extra)
+        endif()
+        add_test(NAME ui.loading_${_name}
+            COMMAND ZodarUISandbox --screen loading --scenario ${_scenario} --at ${_at} --monitor ${_monitor}
+                    ${_extra} --frames 3 --check --software --screenshot ${CMAKE_BINARY_DIR}/ui_loading_${_name}.png)
+        set_tests_properties(ui.loading_${_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
+    endforeach()
+    add_test(NAME ui.loading_flow
+        COMMAND ZodarUISandbox --screen loading --scenario normal --speed 25 --monitor 2560x1440
+                --exit-after-launcher --software --screenshot ${CMAKE_BINARY_DIR}/ui_loading_flow_launcher.png)
+    set_tests_properties(ui.loading_flow PROPERTIES TIMEOUT 120 ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
+endif()
+
+# Runs the real sample on whatever Vulkan device and video driver are available
+# (a GPU locally; lavapipe + SDL offscreen or Xvfb in the cloud). Fails on any
+# validation error or if the frame cannot be read back.
+if(ZODAR_GPU_TESTS)
+    # Engine subsystems on a headless Vulkan device (no window), validation enforced.
+    add_executable(ZodarGpuTests
+        Gpu/main.cpp
+        Gpu/ResourceTests.cpp
+        Gpu/TextureTests.cpp
+        Gpu/SceneRendererTests.cpp
+        Gpu/RenderGraphTests.cpp
+        Gpu/DebugOverlayTests.cpp
+        Gpu/GpuSceneTests.cpp
+        Gpu/UploadQueueTests.cpp
+        Gpu/LightingTests.cpp
+        Gpu/IblTests.cpp)
+    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::Debug Zodar::AssetPipeline doctest::doctest)
+    zodar_set_warnings(ZodarGpuTests)
+    target_compile_definitions(ZodarGpuTests PRIVATE ZODAR_TEST_SHADER_DIR="${ZODAR_OUTPUT_DIR}/shaders")
+    zodar_compile_shaders(ZodarGpuTests SOURCES
+        Gpu/Shaders/test_sample.vert
+        Gpu/Shaders/test_sample.frag)
+    add_test(NAME gpu.subsystems COMMAND ZodarGpuTests)
+    set_tests_properties(gpu.subsystems PROPERTIES TIMEOUT 300)
+
+    add_test(NAME gpu.hello_triangle
+        COMMAND HelloTriangle --frames 120 --screenshot ${CMAKE_BINARY_DIR}/hello_triangle.ppm)
+    set_tests_properties(gpu.hello_triangle PROPERTIES TIMEOUT 120)
+    add_test(NAME gpu.model_viewer_demo
+        COMMAND ModelViewer --frames 30 --width 640 --height 360 --screenshot ${CMAKE_BINARY_DIR}/model_viewer_demo.ppm)
+    set_tests_properties(gpu.model_viewer_demo PROPERTIES TIMEOUT 300)
+    add_test(NAME gpu.zodarbench_smoke
+        COMMAND ZodarBench --objects 256 --lights 8 --width 640 --height 360 --warmup 5 --frames 20
+                --output ${CMAKE_BINARY_DIR}/zodarbench_smoke.json)
+    set_tests_properties(gpu.zodarbench_smoke PROPERTIES TIMEOUT 300)
+    add_test(NAME gpu.zodarbench_unique_smoke
+        COMMAND ZodarBench --scene unique --objects 256 --width 640 --height 360 --warmup 3 --frames 10
+                --sync-validation --output ${CMAKE_BINARY_DIR}/zodarbench_unique_smoke.json)
+    add_test(NAME gpu.zodarbench_city_smoke
+        COMMAND ZodarBench --scene city --blocks 6 --width 640 --height 360 --warmup 3 --frames 10
+                --sync-validation --output ${CMAKE_BINARY_DIR}/zodarbench_city_smoke.json)
+    # The CPU-driven fallback path stays covered too.
+    add_test(NAME gpu.zodarbench_city_cpu_path_smoke
+        COMMAND ZodarBench --scene city --blocks 6 --path graph --width 640 --height 360 --warmup 3 --frames 10
+                --sync-validation --output ${CMAKE_BINARY_DIR}/zodarbench_city_cpu_smoke.json)
+    set_tests_properties(gpu.zodarbench_unique_smoke gpu.zodarbench_city_smoke gpu.zodarbench_city_cpu_path_smoke
+                         PROPERTIES TIMEOUT 300)
+endif()

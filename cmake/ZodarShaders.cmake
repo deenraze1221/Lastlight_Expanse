@@ -10,7 +10,7 @@ endif()
 # zodar_compile_shaders(<target> SOURCES <files...>)
 # Compiles each source to ${ZODAR_OUTPUT_DIR}/shaders/<name>.spv and makes <target> depend on it.
 # Engine shader library: #include "zodar/<file>.glsl" from any engine or game shader.
-set(ZODAR_SHADER_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/Shaders/Include)
+set(ZODAR_SHADER_INCLUDE_DIR ${ZODAR_ENGINE_DIR}/rendering/Shaders/Include)
 
 function(zodar_compile_shaders target)
     cmake_parse_arguments(ARG "" "" "SOURCES;INCLUDE_DIRS" ${ARGN})

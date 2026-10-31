@@ -1,4 +1,4 @@
-# Building ZODAR Engine
+# Building Lastlight Expanse (ZODAR Engine + game)
 
 ## Requirements
 
@@ -32,13 +32,13 @@ No Vulkan SDK library is linked; the loader is resolved at runtime.
 | nanosvg (UI: SVG parse + rasterize) | — | 239e102ec2c6 |
 
 stb_truetype (UI fonts) comes from the existing `stb` pin. UI fonts are committed under
-`Resources/UI/Fonts` with their OFL licences: Michroma Regular and Rajdhani Light/Regular/Bold,
+`engine/ui/Resources/UI/Fonts` with their OFL licences: Michroma Regular and Rajdhani Light/Regular/Bold,
 taken from [google/fonts](https://github.com/google/fonts) at commit `6c1dbe27dcf7`.
-`Resources/UI/MANIFEST.sha256` pins every font and original logo file; the unit tests fail if
+`engine/ui/Resources/UI/MANIFEST.sha256` pins every font and original logo file; the unit tests fail if
 any of them changes. Resources are copied to `bin/ui` at build time.
 
 Headers are 1.4.304 because volk's tags follow header versions; the engine requests and
-requires **API 1.3** plus the baseline in ARCHITECTURE.md (descriptor indexing, timeline semaphores, buffer device address, indirect count). KTX2 is implemented in the engine (S3); later stages add meshoptimizer, FSR, Jolt, miniaudio and ufbx.
+requires **API 1.3** plus the baseline in docs/ARCHITECTURE.md (descriptor indexing, timeline semaphores, buffer device address, indirect count). KTX2 is implemented in the engine (S3); later stages add meshoptimizer, FSR, Jolt, miniaudio and ufbx.
 
 ## Windows 10/11
 
@@ -86,9 +86,10 @@ Wayland is supported by SDL when `libwayland-dev`/`libxkbcommon-dev` are install
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `ZODAR_BUILD_SAMPLES` | ON | Build `Samples/` |
+| `ZODAR_BUILD_SAMPLES` | ON | Build `engine/samples/` |
+| `LASTLIGHT_BUILD_GAME` | ON | Build the `LastlightExpanse` game (`game/`) |
 | `ZODAR_BUILD_TESTS` | ON | Build `ZodarTests` (doctest) |
-| `ZODAR_BUILD_TOOLS` | ON | Build `Tools/` (ZodarBench, ZodarAssetCompiler) |
+| `ZODAR_BUILD_TOOLS` | ON | Build `engine/tools/` (ZodarBench, ZodarAssetCompiler, ZodarUISandbox) |
 | `ZODAR_GPU_TESTS` | OFF | Register GPU tests: `gpu.subsystems` (headless, synchronization validation), `gpu.hello_triangle`, `gpu.model_viewer_demo`, `gpu.zodarbench_smoke` (need a video driver) |
 | `ZODAR_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` for engine code |
 
