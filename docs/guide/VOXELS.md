@@ -488,7 +488,7 @@ and become main-thread failures, including inline mode and exceptions with empty
 
 Saves retain immutable revision snapshots. Completing an older save cannot clear newer dirty
 state. Dirty regions stay pinned until saved.
-Region and CLI writers share Core::writeFileAtomically: a newly created exclusive sibling file
+Region and CLI writers share zodar::writeFileAtomically: a newly created exclusive sibling file
 is written and closed before replacement. Existing predictable .tmp files/symlinks are neither
 opened nor removed; cleanup removes only the new owned file. POSIX files start owner-only (0600).
 This prevents temporary-path symlink following; it does not add fsync or cross-file transactions. `flush()` waits and checks persistence; it throws

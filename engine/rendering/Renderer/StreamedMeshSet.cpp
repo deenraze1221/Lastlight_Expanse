@@ -37,11 +37,10 @@ StreamedMeshSet::Stats StreamedMeshSet::stats() const {
 }
 bool StreamedMeshSet::tryUpsert(uint64_t key,const MeshData& mesh,const glm::mat4& transform,
                               MaterialHandle material,uint64_t budgetBytes) {
-    recountStats();
     const auto current=stats();
     const uint64_t bytes=mesh.vertices.size()*sizeof(Vertex)+mesh.indices.size()*4;
     if(budgetBytes && current.gpuBytes+current.stagingBytes+2*bytes>budgetBytes) return false;
-    upsert(key,mesh,transform,material); recountStats(); return true;
+    upsert(key,mesh,transform,material); return true;
 }
 void StreamedMeshSet::upsert(uint64_t key, const MeshData& mesh, const glm::mat4& transform, MaterialHandle material) {
     if (mesh.indices.empty()) {
@@ -54,14 +53,16 @@ void StreamedMeshSet::upsert(uint64_t key, const MeshData& mesh, const glm::mat4
     Slot& slot = m_slots[key];
     // A pending mesh that is superseded has never been drawn. If its upload is still in the
     // open batch the batch references its buffers, so it is retired like any other mesh.
+    accountSlot(slot,false);
     retire(std::move(slot.pending));
-    slot.pending = std::make_shared<GpuMesh>(*m_batch, mesh);
+    try { slot.pending = std::make_shared<GpuMesh>(*m_batch, mesh); }
+    catch(...) { accountSlot(slot,true); throw; }
     slot.pendingTransform = transform;
     slot.pendingMaterial = material;
     slot.ticket = {};
     m_inBatch.push_back(key);
     m_stats.uploadedBytes += mesh.vertices.size() * sizeof(Vertex) + mesh.indices.size() * sizeof(uint32_t);
-    recountStats();
+    accountSlot(slot,true);
 }
 
 void StreamedMeshSet::remove(uint64_t key) {
@@ -69,10 +70,10 @@ void StreamedMeshSet::remove(uint64_t key) {
     if (it == m_slots.end()) {
         return;
     }
+    accountSlot(it->second,false);
     retire(std::move(it->second.live));
     retire(std::move(it->second.pending));
     m_slots.erase(it);
-    recountStats();
 }
 
 void StreamedMeshSet::update() {
@@ -90,33 +91,29 @@ void StreamedMeshSet::update() {
     const UploadQueue& queue = m_upload.queue();
     for (auto& [key, slot] : m_slots) {
         if (slot.pending && slot.ticket.valid() && queue.isReady(slot.ticket)) {
+            accountSlot(slot,false);
             retire(std::move(slot.live));
             slot.live = std::move(slot.pending);
             slot.liveTransform = slot.pendingTransform;
             slot.liveMaterial = slot.pendingMaterial;
             slot.ticket = {};
+            accountSlot(slot,true);
         }
     }
-    recountStats();
 }
 
-void StreamedMeshSet::recountStats() {
-    m_stats.meshes = 0;
-    m_stats.pendingUploads = 0;
-    m_stats.triangles = 0;
-    m_stats.gpuBytes = 0;
-    m_stats.stagingBytes=0;
-    for (const auto& [key, slot] : m_slots) {
-        if (slot.live) {
-            ++m_stats.meshes;
-            m_stats.triangles += slot.live->indexCount() / 3;
-            m_stats.gpuBytes += uint64_t(slot.live->vertexCount()) * sizeof(Vertex) + uint64_t(slot.live->indexCount()) * 4;
-        }
-        if (slot.pending) {
-            ++m_stats.pendingUploads;
-            m_stats.stagingBytes+=uint64_t(slot.pending->vertexCount())*sizeof(Vertex)+uint64_t(slot.pending->indexCount())*4;
-            m_stats.gpuBytes += uint64_t(slot.pending->vertexCount()) * sizeof(Vertex) + uint64_t(slot.pending->indexCount()) * 4;
-        }
+void StreamedMeshSet::accountSlot(const Slot& slot, bool add) {
+    const auto adjust=[add](auto& total,auto value) { if(add) total+=value; else total-=value; };
+    if(slot.live) {
+        adjust(m_stats.meshes,uint32_t(1));
+        adjust(m_stats.triangles,uint64_t(slot.live->indexCount()/3));
+        adjust(m_stats.gpuBytes,uint64_t(slot.live->vertexCount())*sizeof(Vertex)+uint64_t(slot.live->indexCount())*4);
+    }
+    if(slot.pending) {
+        const uint64_t bytes=uint64_t(slot.pending->vertexCount())*sizeof(Vertex)+uint64_t(slot.pending->indexCount())*4;
+        adjust(m_stats.pendingUploads,uint32_t(1));
+        adjust(m_stats.stagingBytes,bytes);
+        adjust(m_stats.gpuBytes,bytes);
     }
 }
 

@@ -808,4 +808,23 @@
   generation/mesh outcomes (including empty exception messages), and secure exclusive sibling
   file creation shared by region and CLI writers. Predictable temporary paths remain untouched.
 - Focused regressions: 14 CPU cases / 146 assertions and real CLI capture/stamp passed;
-  GPU validation clean. Full gate pending below. No game/ changes.
+  GPU validation clean. Full gate verified below. No game/ changes.
+- Slot recount measurement (Release, CPU-only rejected admission, 4,000 calls each):
+  256/1,024 slots took 1.556/5.993 us before the fix. Replaced per-operation full scans with
+  incremental slot counters; after: 0.033/0.033 us. Upload completion still scans slots once
+  per update. These are admission CPU timings, not graphics throughput or hardware GPU claims.
+  GPU counter regression + admission regression + opt-in benchmark: 3 cases / 8,033 assertions,
+  validation 0 errors / 0 warnings. The benchmark remains skipped by the ordinary gate.
+
+- Final verification: tools/gate.sh passed Debug 37/37 and Release 37/37, warnings-as-errors.
+  V1–V3 goldens and both Highlands images match the full local 5ddd23b4…045776 baseline;
+  both run reports contain zero Vulkan validation errors/warnings. Code tested at 17342c7;
+  subsequent amendment changes documentation only. No game/ changes or merge.
+- Gate wrapper diagnosis: first run printed GATE OK with all checks passed, but its wrapper
+  reported exit 1. Preserved that log; reran unchanged with explicit shell status capture and
+  trace. Gate exit 0 verified, no checks disabled and no failing tests retried to green.
+  Evidence: /workspace/toolchain/v4-fixes-gate-verified.log, v4-fixes-gate-trace.log and
+  v4-fixes-gate.status (0); first log remains v4-fixes-gate.log.
+- Remaining limits unchanged: single writer per save directory, no fsync/cross-file durability,
+  explicit provider flush before destruction, managed byte estimates rather than RSS/driver
+  padding. Windows exclusive creation/replacement implemented but not validated this session.

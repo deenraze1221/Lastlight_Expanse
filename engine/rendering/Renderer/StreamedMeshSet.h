@@ -73,7 +73,7 @@ private:
     };
 
     void retire(std::shared_ptr<GpuMesh> mesh);
-    void recountStats();
+    void accountSlot(const Slot& slot, bool add);
 
     VulkanContext& m_context;
     UploadContext& m_upload;

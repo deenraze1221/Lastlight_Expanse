@@ -194,3 +194,43 @@ TEST_CASE("streamed meshes: pressure preserves old meshes and counts deferred re
     gpu().context->waitIdle(); gpu().context->deletionQueue().flushAll();
     CHECK(meshes.stats().deferredBytes==0); CHECK(meshes.stats().gpuBytes==0);
 }
+
+TEST_CASE("streamed meshes timing: rejected admission scales with slot count" * doctest::skip()) {
+    zodar::test::ValidationGuard guard;
+    for(uint32_t count : {256u,1024u}) {
+        StreamedMeshSet meshes(*gpu().context,*gpu().upload);
+        zodar::MeshData mesh; mesh.vertices.resize(3); mesh.indices={0,1,2};
+        mesh.vertices[1].position={1,0,0}; mesh.vertices[2].position={0,1,0}; mesh.computeBounds();
+        for(uint32_t i=0;i<count;++i) meshes.upsert(i,mesh,glm::mat4(1),0);
+        meshes.update(); gpu().upload->queue().waitIdle(); acquireInFrame(*gpu().upload); meshes.update();
+        constexpr unsigned attempts=4000;
+        const auto start=std::chrono::steady_clock::now();
+        for(unsigned i=0;i<attempts;++i) REQUIRE_FALSE(meshes.tryUpsert(count,mesh,glm::mat4(1),0,1));
+        const auto elapsed=std::chrono::duration<double,std::micro>(std::chrono::steady_clock::now()-start).count();
+        MESSAGE("slots="<<count<<" rejected admission us="<<elapsed/attempts);
+    }
+    gpu().context->waitIdle(); gpu().context->deletionQueue().flushAll();
+}
+TEST_CASE("streamed meshes: incremental counters track pending replacement promotion and removal") {
+    zodar::test::ValidationGuard guard;
+    StreamedMeshSet meshes(*gpu().context,*gpu().upload);
+    zodar::MeshData small; small.vertices.resize(3); small.indices={0,1,2};
+    small.vertices[1].position={1,0,0}; small.vertices[2].position={0,1,0}; small.computeBounds();
+    auto large=small; large.indices={0,1,2,0,1,2};
+    const uint64_t a=3*sizeof(zodar::Vertex)+3*4, b=a+3*4;
+    meshes.upsert(1,small,glm::mat4(1),0); meshes.upsert(1,large,glm::mat4(1),0);
+    meshes.upsert(2,small,glm::mat4(1),0);
+    auto stats=meshes.stats(); CHECK(stats.pendingUploads==2); CHECK(stats.meshes==0);
+    CHECK(stats.gpuBytes-stats.deferredBytes==a+b); CHECK(stats.uploadedBytes==2*a+b);
+    auto promote=[&] { meshes.update(); gpu().upload->queue().waitIdle(); acquireInFrame(*gpu().upload); meshes.update(); };
+    promote(); stats=meshes.stats(); CHECK(stats.meshes==2); CHECK(stats.pendingUploads==0); CHECK(stats.triangles==3);
+    CHECK(stats.gpuBytes-stats.deferredBytes==a+b);
+    meshes.upsert(1,small,glm::mat4(1),0); stats=meshes.stats();
+    CHECK(stats.meshes==2); CHECK(stats.pendingUploads==1); CHECK(stats.gpuBytes-stats.deferredBytes==2*a+b);
+    promote(); CHECK(meshes.stats().triangles==2);
+    zodar::MeshData empty; meshes.upsert(2,empty,glm::mat4(1),0); meshes.remove(1); meshes.remove(1);
+    stats=meshes.stats(); CHECK(stats.meshes==0); CHECK(stats.pendingUploads==0); CHECK(stats.triangles==0);
+    CHECK(stats.gpuBytes==stats.deferredBytes);
+    gpu().context->waitIdle(); gpu().context->deletionQueue().flushAll();
+    CHECK(meshes.stats().gpuBytes==0); CHECK(meshes.stats().stagingBytes==0);
+}
