@@ -102,7 +102,7 @@ void RegionStreamer::updateStreaming(const glm::vec3& observer) const {
     saveDirty();
     if (!m_requests.empty()) return;
     for (auto it=m_entries.begin(); it!=m_entries.end();) {
-        if (!m_wanted.contains(it->first) && !it->second.pending && it->second.revision == it->second.saved)
+        if (!m_wanted.contains(it->first) && !it->second.pending && it->second.revision == it->second.saved && it->second.ownership.use_count()==1)
             { std::lock_guard lock(m_mutex); m_resident.erase(it->first); it=m_entries.erase(it); }
         else ++it;
     }
@@ -122,6 +122,9 @@ void RegionStreamer::updateStreaming(const glm::vec3& observer) const {
 bool RegionStreamer::ready(const ChunkCoord& coord) const {
     for(const auto& wanted:m_wanted) { const auto e=m_entries.find(wanted); if(e==m_entries.end() || !e->second.data) return false; }
     const auto it=m_entries.find(m_layout.regionOf(coord)); return it!=m_entries.end() && bool(it->second.data);
+}
+std::shared_ptr<const void> RegionStreamer::retainChunk(const ChunkCoord& coord) const {
+    return m_entries.at(m_layout.regionOf(coord)).ownership;
 }
 std::shared_ptr<const IVoxelGenerator> RegionStreamer::generatorFor(const ChunkCoord& coord) const {
     struct Snapshot final : IVoxelGenerator {

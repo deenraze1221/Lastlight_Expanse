@@ -27,6 +27,8 @@ public:
     virtual ~IVoxelGenerator() = default;
     virtual void generate(const ChunkCoord& coord, VoxelChunk& out) const = 0;
     virtual void updateStreaming(const glm::vec3&) const {}
+    // Keeps provider ownership alive while chunk data/jobs remain resident.
+    virtual std::shared_ptr<const void> retainChunk(const ChunkCoord&) const { return {}; }
     virtual std::shared_ptr<const IVoxelGenerator> generatorFor(const ChunkCoord&) const { return {}; }
     virtual bool deterministicStreaming() const { return false; }
     virtual bool ready(const ChunkCoord&) const { return true; }
@@ -202,7 +204,9 @@ public:
     VoxelWorldStats stats() const;
 
 private:
+    enum class WorkOutcome { Success, Cancelled, Failure };
     struct Entry {
+        std::shared_ptr<const void> ownership;
         std::shared_ptr<const VoxelChunk> data; // null while generating
         bool generating = false;
         uint64_t inputsVersion = 0; // bumped when this chunk or a neighbour it reads is edited
@@ -230,6 +234,7 @@ private:
         std::array<uint8_t, 6> solidDepth;
         bool structural;
         std::string error;
+        WorkOutcome outcome = WorkOutcome::Success;
     };
     struct MeshResult {
         ChunkCoord coord;
@@ -238,6 +243,7 @@ private:
         uint64_t inputsVersion;
         MeshData mesh;
         std::string error;
+        WorkOutcome outcome = WorkOutcome::Success;
     };
 
     void integrateResults();

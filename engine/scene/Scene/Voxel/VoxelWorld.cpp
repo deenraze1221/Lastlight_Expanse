@@ -168,6 +168,7 @@ void VoxelWorld::update(const glm::vec3& observer) {
             const ChunkCoord coord = c.coord;
             auto generator=m_generator->generatorFor(coord);
             if (!generator) generator=m_generator;
+            entry.ownership=m_generator->retainChunk(coord);
             entry.generating = true;
             ++m_generateInFlight;
             {
@@ -180,8 +181,8 @@ void VoxelWorld::update(const glm::vec3& observer) {
                         result.solidDepth=computeSolidDepth(*data,*m_table);
                         result.structural=computeStructural(*data,*m_table);
                         result.data=std::move(data);
-                    } catch (const std::exception& e) { result.error=e.what(); }
-                      catch (...) { result.error="unknown generation failure"; }
+                    } catch (const std::exception& e) { result.outcome=WorkOutcome::Failure; result.error=e.what(); }
+                      catch (...) { result.outcome=WorkOutcome::Failure; result.error="unknown generation failure"; }
                     std::lock_guard lock(m_resultMutex);
                     m_generateResults.push_back(std::move(result));
                 };
@@ -269,8 +270,8 @@ void VoxelWorld::scheduleMesh(const ChunkCoord& coord, Entry& entry, int lod, ui
         }
         MeshResult result{coord, options.lod, options.sealFaces, version, {}, {}};
         try { result.mesh=meshChunk(nb,*m_table,options); }
-        catch (const std::exception& e) { result.error=e.what(); }
-        catch (...) { result.error="unknown mesh failure"; }
+        catch (const std::exception& e) { result.outcome=WorkOutcome::Failure; result.error=e.what(); }
+        catch (...) { result.outcome=WorkOutcome::Failure; result.error="unknown mesh failure"; }
         std::lock_guard lock(m_resultMutex);
         m_meshResults.push_back(std::move(result));
     };
@@ -301,7 +302,8 @@ void VoxelWorld::integrateResults() {
             continue; // unloaded while generating
         }
         it->second.generating = false;
-        if (!r.error.empty()) { m_failure=r.error; continue; }
+        if (r.outcome==WorkOutcome::Failure) { m_failure=r.error.empty() ? "voxel work failed without an error message" : r.error; continue; }
+        if (r.outcome==WorkOutcome::Cancelled) { ++m_staleDropped; continue; }
         it->second.data = std::move(r.data);
         it->second.solidDepth = r.solidDepth;
         it->second.structural = r.structural;
@@ -316,7 +318,8 @@ void VoxelWorld::integrateResults() {
         }
         Entry& entry = it->second;
         entry.meshPending = false;
-        if (!r.error.empty()) { m_failure=r.error; continue; }
+        if (r.outcome==WorkOutcome::Failure) { m_failure=r.error.empty() ? "voxel work failed without an error message" : r.error; continue; }
+        if (r.outcome==WorkOutcome::Cancelled) { ++m_staleDropped; continue; }
         if (r.inputsVersion != entry.inputsVersion || !m_wantedLod.contains(r.coord)) {
             ++m_staleDropped; // edited or left the view meanwhile; rescheduled if still wanted
             continue;

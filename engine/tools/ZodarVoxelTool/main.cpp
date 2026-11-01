@@ -1,6 +1,7 @@
 #include "Scene/Voxel/Structure.h"
 #include "SceneFile/BlockFile.h"
 #include "Core/Error.h"
+#include "Core/AtomicFile.h"
 #include <charconv>
 #include <fstream>
 #include <iostream>
@@ -16,13 +17,7 @@ int number(const char* text) {
     auto [end,error]=std::from_chars(s.data(),s.data()+s.size(),value);
     ZODAR_ENSURE(error==std::errc{} && end==s.data()+s.size(),"invalid integer"); return value;
 }
-void write(const std::filesystem::path& p,const std::string& bytes) {
-    auto tmp=p; tmp+=".tmp";
-    try {
-        std::ofstream out(tmp,std::ios::binary|std::ios::trunc); out<<bytes; out.close();
-        ZODAR_ENSURE(bool(out),"cannot write structure"); std::filesystem::rename(tmp,p);
-    } catch(...) { std::error_code ec; std::filesystem::remove(tmp,ec); throw; }
-}
+
 }
 int main(int argc,char** argv) {
     try {
@@ -43,7 +38,7 @@ int main(int argc,char** argv) {
                 const auto p=c.originVoxel()+glm::ivec3(int(i&31),int(i>>10),int((i>>5)&31))-min;
                 if(glm::all(glm::greaterThanEqual(p,glm::ivec3(0))) && glm::all(glm::lessThan(p,s.size))) s.cells[{p.x,p.y,p.z}]=name;
             }
-            write(argv[3],serializeStructure(s)); std::cout<<"captured "<<s.cells.size()<<" stored overrides (inherited cells omitted)\n";
+            zodar::writeFileAtomically(argv[3],serializeStructure(s)); std::cout<<"captured "<<s.cells.size()<<" stored overrides (inherited cells omitted)\n";
         } else if(action=="stamp" && argc==10) {
             auto d=loadRegion(argv[2]); const auto s=parseStructure(read(argv[3]));
             const auto yaw=number(argv[8]); ZODAR_ENSURE(yaw>=0 && yaw<4,"invalid yaw");

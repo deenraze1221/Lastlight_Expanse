@@ -1,4 +1,5 @@
 """Exercise the real voxel CLI in an isolated temporary directory."""
+import os
 import pathlib
 import subprocess
 import sys
@@ -28,6 +29,16 @@ with tempfile.TemporaryDirectory(prefix="zodar-voxel-cli-") as directory:
     output = root / "stamped.zregion"
     run("stamp", region, structure, output, 32, 0, 0, 1, blocks)
     assert "authored chunks 2" in run("info", output)
+    # Neither CLI writer may open a pre-existing predictable temporary symlink.
+    if os.name != "nt":
+        output.with_name(output.name + ".tmp").symlink_to(output)
+        run("stamp", region, structure, output, 32, 0, 0, 1, blocks)
+        assert not output.is_symlink()
+        assert "authored chunks 2" in run("info", output)
+        structure.with_name(structure.name + ".tmp").symlink_to(structure)
+        run("capture", region, structure, 0, 0, 0, 2, 1, 1)
+        assert not structure.is_symlink()
+        assert "cells 1" in run("info", structure)
     before = output.read_bytes()
     run("stamp", region, structure, output, "bad", 0, 0, 1, blocks, success=False)
     assert output.read_bytes() == before

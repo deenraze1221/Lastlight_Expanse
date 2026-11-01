@@ -4,7 +4,8 @@ add_library(ZodarCore STATIC
     ImageIO.cpp
     Profiler.cpp
     JobSystem.cpp
-    FileWatcher.cpp)
+    FileWatcher.cpp
+    AtomicFile.cpp)
 add_library(Zodar::Core ALIAS ZodarCore)
 
 # engine/core holds both Core/ and Platform/; headers are included as "Core/<File>.h".

@@ -436,6 +436,8 @@ Regions cover 64×64 m and the complete configured Y range. `RegionLayout` accep
 with 1..1024 integral chunk columns per region (4 at 0.5 m, 2 at 1 m). Floor division handles
 negative coordinates. Chunks remain 32³ cells. The provider requests regions covering the
 chunk view plus meshing neighbors. It admits data nearest-first with coordinate tie-breaks.
+World entries retain region ownership through generation, meshing and unload hysteresis.
+Clean regions release only after the last retained chunk releases its ownership token.
 All requested region data must be ready before chunk generation begins; insufficient budgets
 report pressure instead of producing incomplete collision geometry. Collision queries retain
 V3's `MissingChunks` contract during loading. Collision always reads full-resolution cells.
@@ -453,6 +455,12 @@ runtime chunk records. Each chunk has a local palette indexing that name table a
 `first,length,palette-index` runs. Cell order is x-fastest, then z, then y, matching VoxelChunk.
 A full uniform override is one run. Absent cells/chunks inherit. Parsing bounds file size,
 counts, allocation estimates, coordinates, overlapping runs, palette references and names.
+The region reader scans borrowed input without an allocating stream. It charges input storage,
+strings (after a length-only scan), palette vectors/sets, chunk metadata and cell nodes before
+allocating them. File loads reserve I/O overhead and the sized input buffer before opening it;
+a size change during reading fails. Scratch remains conservatively charged until parsing ends,
+so a file may require a larger budget than its final RegionData footprint. Canonical strings
+must be quoted. Allocator padding/RSS and error-reporting machinery are outside these estimates.
 
 `.zstruct` version 1 stores dimensions, origin, a name palette and sparse RLE in the same
 x/z/y order, named cell anchors and model asset descriptors. `captureStructure` requires loaded
@@ -475,10 +483,15 @@ logical batches; generation/meshing batches use fixed coordinate order. Worker c
 and worker count do not select content or reorder a batch. Frame visibility is not deterministic.
 Observer motion may cancel obsolete loads; completed logical events already published remain valid.
 Every region request yields Success, Cancelled or Failure in `takeEvents()`. Voxel generation
-and mesh exceptions drain counters and become main-thread failures, including inline mode.
+and mesh results carry explicit Success/Cancelled/Failure outcomes. Exceptions drain counters
+and become main-thread failures, including inline mode and exceptions with empty messages.
 
 Saves retain immutable revision snapshots. Completing an older save cannot clear newer dirty
-state. Dirty regions stay pinned until saved. `flush()` waits and checks persistence; it throws
+state. Dirty regions stay pinned until saved.
+Region and CLI writers share Core::writeFileAtomically: a newly created exclusive sibling file
+is written and closed before replacement. Existing predictable .tmp files/symlinks are neither
+opened nor removed; cleanup removes only the new owned file. POSIX files start owner-only (0600).
+This prevents temporary-path symlink following; it does not add fsync or cross-file transactions. `flush()` waits and checks persistence; it throws
 on failure or budget pressure. Repair the reported cause before `retryFailures()` and another
 flush. Destruction waits for submitted requests but does not implicitly flush unscheduled dirty
 edits. Owners must successfully flush before dropping edited worlds.

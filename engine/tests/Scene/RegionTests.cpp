@@ -215,3 +215,80 @@ TEST_CASE("region: extreme structure translations reject before integer overflow
     CHECK_THROWS_AS(stampStructure(region,s,{2000000000,0,0}),zodar::Error);
     CHECK(region.authored.empty());
 }
+TEST_CASE("region regression: retained hysteresis chunks keep editable region ownership") {
+    struct Base : IVoxelGenerator { void generate(const ChunkCoord&,VoxelChunk& out) const override { out=VoxelChunk(1); } };
+    const auto root=std::filesystem::temp_directory_path()/"zodar-region-retained";
+    std::filesystem::remove_all(root);
+    RegionStreamer::Settings s; s.directory=root; s.names={"","stone"};
+    s.world.voxelSize=0.5f; s.world.viewRadius=1; s.world.minChunkY=0; s.world.maxChunkY=0;
+    auto provider=std::make_shared<RegionStreamer>(std::make_shared<Base>(),s);
+    {
+        VoxelWorld world(provider,{},s.world);
+        auto settle=[&](glm::vec3 observer) {
+            for(int i=0;i<100;++i) { world.update(observer); world.finishPendingWork(); world.takeMeshEvents(); if(world.isSettled()) return; }
+            FAIL("retention world did not settle");
+        };
+        settle({8,1,8}); settle({56,1,8});
+        REQUIRE(world.hasChunkData({-1,0,0})); REQUIRE(provider->ready({-1,0,0}));
+        REQUIRE(world.setVoxel({-1,0,0},0)); provider->flush();
+        CHECK(loadRegion(root/"-1_0.zregion").runtime.at({-1,0,0}).at(31).empty());
+        settle({1024,1,1024}); provider->updateStreaming({1024,1,1024});
+        CHECK_FALSE(world.hasChunkData({-1,0,0})); CHECK_FALSE(provider->ready({-1,0,0}));
+        settle({8,1,8}); CHECK(world.getVoxel({-1,0,0})==kEmpty);
+    }
+    provider->flush(); provider.reset(); std::filesystem::remove_all(root);
+}
+TEST_CASE("region regression: empty exception messages remain terminal failures") {
+    struct Broken : IVoxelGenerator { void generate(const ChunkCoord&,VoxelChunk&) const override { throw std::runtime_error(""); } };
+    StreamingSettings s; s.viewRadius=0; s.minChunkY=0; s.maxChunkY=0; s.maxJobsPerUpdate=1;
+    for(unsigned workers:{0u,2u}) {
+        zodar::JobSystem jobs(workers); VoxelWorld world(std::make_shared<Broken>(),{},s,&jobs);
+        if(workers==0) CHECK_THROWS_AS(world.update({0,0,0}),zodar::Error);
+        else { world.update({0,0,0}); CHECK_THROWS_AS(world.finishPendingWork(),zodar::Error); }
+        CHECK(world.stats().generateInFlight==0);
+        CHECK_THROWS_AS(world.update({0,0,0}),zodar::Error);
+        CHECK(world.stats().generated==1);
+    }
+}
+TEST_CASE("region regression: input palettes and metadata consume the decode budget") {
+    std::string bytes="zodar.region 1\n0 0 0.5 0 0 \"base\"\n10001\n\"\"\n";
+    for(int i=0;i<10000;++i) bytes+="\"unused"+std::to_string(i)+"\"\n";
+    bytes+="0\n0\n";
+    CHECK_THROWS_AS(parseRegion(bytes,512),zodar::Error); // reject input allocation footprint first
+    CHECK_THROWS_AS(parseRegion(bytes,bytes.size()+1024),zodar::Error); // palette vector, before allocating it
+    CHECK_NOTHROW(parseRegion(bytes,8*1024*1024));
+    const std::string longName="zodar.region 1\n0 0 0.5 0 0 \"base\"\n2\n\"\"\n\""+std::string(1024,'x')+"\"\n0\n0\n";
+    CHECK_THROWS_AS(parseRegion(longName,longName.size()+sizeof(RegionData)+1024),zodar::Error);
+    CHECK_NOTHROW(parseRegion(longName,16384));
+    RegionData data; data.runtime[{0,0,0}][0]="stone";
+    const auto encoded=serializeRegion(data);
+    CHECK_THROWS_AS(parseRegion(encoded,encoded.size()+sizeof(RegionData)+1),zodar::Error);
+    const auto path=std::filesystem::temp_directory_path()/"zodar-region-budget-input.zregion";
+    saveRegion(path,data);
+    CHECK_THROWS_AS(loadRegion(path,encoded.size()+sizeof(RegionData)+1),zodar::Error);
+    CHECK(loadRegion(path)==data); std::filesystem::remove(path);
+}
+#include "Core/AtomicFile.h"
+#include <fstream>
+TEST_CASE("region regression: exclusive temporary files preserve aliases and previous destinations") {
+    const auto root=std::filesystem::temp_directory_path()/"zodar-region-secure-save";
+    std::filesystem::remove_all(root); std::filesystem::create_directory(root);
+    const auto path=root/"saved.zregion"; const auto oldTemporary=root/"saved.zregion.tmp";
+    RegionData data; data.runtime[{0,0,0}][0]="stone"; saveRegion(path,data);
+    { std::ofstream out(oldTemporary); out<<"unrelated temporary content"; }
+    data.runtime[{0,0,0}][0]=""; saveRegion(path,data);
+    { std::ifstream in(oldTemporary); std::string line; std::getline(in,line); CHECK(line=="unrelated temporary content"); }
+#ifndef _WIN32
+    std::filesystem::remove(oldTemporary); std::filesystem::create_symlink(path,oldTemporary);
+    data.runtime[{0,0,0}][1]="stone"; saveRegion(path,data);
+    CHECK_FALSE(std::filesystem::is_symlink(path)); CHECK(std::filesystem::is_symlink(oldTemporary));
+    CHECK(loadRegion(path)==data); // audit repro previously returned a self-referencing symlink
+#endif
+    const auto blocked=root/"blocked"; std::filesystem::create_directory(blocked);
+    { std::ofstream out(blocked/"previous"); out<<"keep"; }
+    const auto before=std::distance(std::filesystem::directory_iterator(root),std::filesystem::directory_iterator{});
+    CHECK_THROWS(zodar::writeFileAtomically(blocked,"replacement"));
+    CHECK(std::filesystem::exists(blocked/"previous"));
+    CHECK(std::distance(std::filesystem::directory_iterator(root),std::filesystem::directory_iterator{})==before);
+    std::filesystem::remove_all(root);
+}

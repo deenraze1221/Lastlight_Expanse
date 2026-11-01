@@ -801,3 +801,11 @@
   reduction). Disk capture includes stored overrides only; live capture includes generated
   voxels. Model descriptors remain caller-instantiated. No Windows/MSVC validation this session.
   No V5 work, large-scale V6 benchmark, packed vertices or GPU-driven voxel renderer.
+
+
+## V4 audit fixes (from fe48827)
+- Fixed retained-chunk region ownership, pre-allocation region decoding budgets, explicit
+  generation/mesh outcomes (including empty exception messages), and secure exclusive sibling
+  file creation shared by region and CLI writers. Predictable temporary paths remain untouched.
+- Focused regressions: 14 CPU cases / 146 assertions and real CLI capture/stamp passed;
+  GPU validation clean. Full gate pending below. No game/ changes.

@@ -19,6 +19,7 @@ public:
     struct Event { uint64_t request; RegionCoord coord; bool save; Outcome outcome; std::string error; };
     RegionStreamer(std::shared_ptr<const IVoxelGenerator> base, Settings settings, JobSystem* jobs = nullptr);
     ~RegionStreamer() override;
+    std::shared_ptr<const void> retainChunk(const ChunkCoord& coord) const override;
     std::shared_ptr<const IVoxelGenerator> generatorFor(const ChunkCoord& coord) const override;
     bool deterministicStreaming() const override { return true; }
     void updateStreaming(const glm::vec3& observer) const override;
@@ -34,7 +35,7 @@ public:
     size_t residentRegions() const;
     bool pressured() const { return m_pressure; }
 private:
-    struct Entry { std::shared_ptr<const RegionData> data; uint64_t revision=0, saved=0; bool pending=false; };
+    struct Entry { std::shared_ptr<const int> ownership = std::make_shared<const int>(0); std::shared_ptr<const RegionData> data; uint64_t revision=0, saved=0; bool pending=false; };
     struct Result { Event event; uint64_t revision=0; std::shared_ptr<const RegionData> data; };
     struct Request { uint64_t id; RegionCoord coord; bool save; uint64_t revision; std::shared_ptr<std::atomic_bool> cancel; std::shared_ptr<const RegionData> snapshot; };
     void integrate() const;

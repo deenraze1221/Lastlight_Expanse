@@ -693,3 +693,8 @@ immutable snapshots; ordered batches publish terminal outcomes and revision-chec
 Budgets apply backpressure before admission; dirty saves remain pinned. StreamedMeshSet adds
 optional upload admission and deferred payload accounting without changing legacy upsert callers.
 See VOXELS "V4 region API and storage" for format, lifecycle and failure contracts.
+
+V4 audit fixes: retained chunk entries hold provider ownership tokens through unload hysteresis.
+Generation/mesh results use explicit outcomes, independent of diagnostic message text. Region
+parsing charges input and metadata before allocation. Region and CLI output share the Core
+exclusive sibling-file replacement helper; existing temporary paths are never reused.
