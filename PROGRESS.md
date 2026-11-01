@@ -733,3 +733,7 @@
 - Step 1: CPU-only region coordinates and separate sparse named authored/runtime layers.
   Region layout validates integral chunk columns per 64 m, including negative coordinates.
   Focused test: 1 case / 7 assertions passed. Existing world path unchanged.
+- Step 2: bounded versioned name-palette/RLE region codec; sparse layers retain explicit air.
+  Validated temporary-file replacement; unknown names resolve before mutation.
+  Focused tests: 2 cases / 20 assertions passed, including reordered ids and failed saves.
+  Storage currently uses canonical text RLE; durable fsync and concurrent external writers unsupported.

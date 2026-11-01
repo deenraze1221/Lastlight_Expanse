@@ -26,4 +26,12 @@ struct RegionData {
     RegionLayer authored, runtime;
     bool operator==(const RegionData&) const = default;
 };
+// Canonical versioned palette/RLE format; all decode allocations are bounded.
+std::string serializeRegion(const RegionData& data);
+RegionData parseRegion(std::string_view bytes);
+RegionData loadRegion(const std::filesystem::path& path);
+void saveRegion(const std::filesystem::path& path, const RegionData& data);
+// Resolve the entire layer before publishing any data. Unknown names are errors.
+using BlockNames = std::vector<std::string>; // id -> stable name, id 0 must be empty
+void applyRegionLayer(const RegionLayer& layer, ChunkCoord coord, VoxelChunk& chunk, const BlockNames& names);
 } // namespace zodar::voxel
