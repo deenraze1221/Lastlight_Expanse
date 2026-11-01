@@ -88,7 +88,7 @@ game art work, to be scheduled separately.
   (registry defaults: pixel-art sampling, lossless compile) → `zodar.py assets check --strict`
   (size, palette, texel density, triangle budget, bounds, importer warnings) → prefabs/scenes
   reference the registry id → hot reload in the game. Sources are versioned next to the
-  exports so assets can be re-exported: `.bbmodel` (plain JSON) in Git, `.blend` in Git LFS.
+  exports so assets can be re-exported: `.bbmodel` (plain JSON) and `.blend` (compressed, ≤ 20 MB) both in regular Git.
 
 ## 4. Technical requirements
 
@@ -144,4 +144,5 @@ Required work, to be scheduled:
       export scale).
 - [ ] Exported with the settings in `docs/guide/MODELING.md` (Blender: no Draco, no WebP,
       transforms applied, "Closest" interpolation).
-- [ ] Source (`.bbmodel`, or `.blend` via Git LFS) committed next to the `.glb` export.
+- [ ] Source (`.bbmodel`, or a compressed `.blend` ≤ 20 MB in regular Git) committed next to
+      the `.glb` export.

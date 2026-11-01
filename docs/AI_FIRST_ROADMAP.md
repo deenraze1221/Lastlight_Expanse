@@ -130,8 +130,8 @@ Make every app start, run, capture and report the same way.
 read lists, tests, acceptance criteria). Approved decisions: script-generated greybox bunker
 kit first, later replaced by real exports; temporary game-side AABB collision behind a
 replaceable `CollisionWorld` interface (Jolt in Phase E); `bunker` is the default level,
-`highlands` stays as the regression scene; Git LFS for `.blend` sources after a support and
-quota check.
+`highlands` stays as the regression scene; `.blend` sources in regular Git (no Git LFS;
+compressed, ≤ 20 MB each).
 - Asset pipeline: Blockbench (primary) and Blender (secondary, complex architecture and
   organic models) both export `.glb` into one pipeline (registry defaults, budgets, palette,
   texel density, hot reload) with one art standard; the engine stays tool-agnostic.

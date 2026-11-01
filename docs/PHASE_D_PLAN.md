@@ -27,8 +27,10 @@ Expanse gameplay, world, art direction and features.
 3. **Default level:** `bunker`. `--level highlands` stays and is the regression scene
    (byte-identical screenshot tests keep using it).
 4. **Phase D size:** 8 sessions (D1–D8), roadmap updated.
-5. **`.blend` sources:** Git LFS, enabled only after checking repository support and storage
-   limits (D2 step 0, see below).
+5. **`.blend` sources:** regular Git, no Git LFS in Phase D (revised 2026-11-01, user
+   decision). Every project file, `.blend` included, is a normal Git file; no LFS
+   configuration or tracking. Repository growth is limited by the source-file policy in D2
+   step 0 (compressed saves, unpacked textures, 20 MB per `.blend`, no backup files).
 
 ## GDD alignment (approved 2026-11-01)
 
@@ -68,7 +70,7 @@ part of the binding plan.
 | | Blockbench (primary) | Blender (secondary) |
 | --- | --- | --- |
 | Use | Props, items, weapons, characters, mutants, modular bunker kit | Complex architecture (curved or large structures), organic models |
-| Source | `game/assets/sources/blockbench/*.bbmodel` (plain JSON, normal Git) | `game/assets/sources/blender/*.blend` (Git LFS) |
+| Source | `game/assets/sources/blockbench/*.bbmodel` (plain JSON, normal Git) | `game/assets/sources/blender/*.blend` (regular Git, compressed, ≤ 20 MB each) |
 | Export | `.glb`; 16 Blockbench units = 1 block = 1 m | `.glb`; 1 unit = 1 m, +Y up, transforms applied, Draco off, image interpolation "Closest", no WebP |
 
 Shared pipeline: export `.glb` to `game/assets/models/` → `zodar.py import` (registry defaults:
@@ -141,13 +143,24 @@ handoff block described under "Session workflow".
 ### D2 — Game asset layout + static bunker (game)
 - Read: `docs/guide/MODELING.md`, `docs/guide/SCENE_FILES.md`, `game/src/main.cpp`,
   `game/CMakeLists.txt`.
-- Step 0 (Git LFS check, decision 5): confirm `git lfs` in the toolchain (container has
-  git-lfs 3.4.1), confirm the remote accepts LFS pushes through the session proxy, and have
-  the user confirm the GitHub account's LFS storage/bandwidth quota (Settings → Billing; not
-  visible from the session). Only then add `.gitattributes`:
-  `game/assets/sources/blender/*.blend filter=lfs diff=lfs merge=lfs -text`, plus
-  `game/assets/** -text` (registry hashes cover exact bytes). If LFS is not usable, stop and
-  report; no `.blend` is committed without LFS. Document the setup in `MODELING.md`.
+- Step 0 (source-file policy, decision 5; no Git LFS, nothing to confirm):
+  - `.gitattributes` (plain Git rules, no LFS filters): `game/assets/** -text` (registry
+    hashes cover exact bytes) and `*.blend binary` (no text diff or merge).
+  - `.gitignore`: `*.blend1`, `*.blend2` (Blender backups) and `game/assets/**/*.zodar/`
+    (compiled texture caches, rebuilt by `zodar.py import --compile`).
+  - `.blend` rules: save with *File > Save > Compress*; textures stay separate PNGs in
+    `sources/blender/textures/` (not packed); at most 20 MB per `.blend` (GitHub warns at
+    50 MB and rejects files above 100 MB).
+  - ctest `tools.game_source_sizes` (stdlib Python): fails if any `.blend` under
+    `game/assets/` exceeds 20 MB, or if any `.blend1`/`.blend2` backup exists there. It
+    applies no size limit to `.glb`, PNG or other assets: their limits come from the asset
+    checks where applicable (texture size standards, triangle budgets per class, bounds).
+  - Document the policy in `MODELING.md`.
+- Source-file preservation: every `.glb` in `models/` has its source committed next to it
+  under the same base name (`sources/blockbench/<name>.bbmodel` or
+  `sources/blender/<name>.blend`); script-generated greybox modules have the committed
+  generator script as their source; real exports replace modules under the same file names,
+  together with their sources.
 - Read also: GDD §1, §3, §9, §10.
 - Layout: `game/assets/{assets.json, palette.png, sources/blockbench/, sources/blender/,
   models/, materials/, prefabs/, levels/bunker.scene.json}`; `assets.json` holds defaults,
@@ -164,9 +177,11 @@ handoff block described under "Session workflow".
 - Game: `--level bunker|highlands` (default `bunker`); loads through `LiveScene` +
   `AssetManager` (async, hot reload in Debug); existing fly camera. Existing highlands tests
   pass `--level highlands`.
-- New ctests: `tools.game_assets_check` (strict), `gpu.lastlight_bunker_smoke`.
+- New ctests: `tools.game_assets_check` (strict), `tools.game_source_sizes`,
+  `gpu.lastlight_bunker_smoke`.
 - Acceptance: readable bunker PNG; editing a `.glb`, material or scene in Debug reloads live;
-  highlands screenshot byte-identical; checks clean for both tool paths.
+  highlands screenshot byte-identical; checks clean for both tool paths;
+  `tools.game_source_sizes` passes.
 
 ### D3 — Input action maps (engine)
 - Read: `engine/runtime/Runtime/Application.h`, `CommandLine.h`, game input code.
@@ -309,5 +324,6 @@ Executed in order D1..D8, one session each. No parallel agents edit code.
 - Point lights bleed through walls without shadows: light range ≤ room size, thick walls.
 - The AABB collision is temporary; it stays in `game/` behind `CollisionWorld`.
 - Determinism breaks if a system reads frame time or SDL state directly; replay tests detect it.
-- Git LFS quota is account-specific and cannot be checked from a session; D2 step 0 blocks on
-  user confirmation.
+- Repository growth: every `.blend` revision stays in Git history (no LFS). Kept small by
+  compressed saves, unpacked textures, the 20 MB cap per `.blend` and ignored backups; Git LFS
+  can be reconsidered after Phase D if sources grow.

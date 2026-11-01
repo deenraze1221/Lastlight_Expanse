@@ -17,7 +17,7 @@ a real export in this repository.
 | --- | --- | --- |
 | Use | Props, items, weapons, characters, creatures, modular kit pieces | Large or curved architecture, organic shapes |
 | Units | 16 Blockbench units = 1 block = 1 m | 1 unit = 1 m |
-| Source files | `.bbmodel` (plain JSON, normal Git) | `.blend` (Git LFS, see the game's setup) |
+| Source files | `.bbmodel` (plain JSON, normal Git) | `.blend` (regular Git: compressed, ≤ 20 MB, textures not packed) |
 
 ## Folders (recommended game layout)
 
@@ -31,6 +31,12 @@ game/assets/
 ```
 
 Mark the asset folder `-text` in `.gitattributes`: registry hashes cover exact file bytes.
+All sources are regular Git files (no Git LFS). For `.blend` files: mark them `binary`, save
+with *File > Save > Compress*, keep textures as separate PNGs in `sources/blender/textures/`
+(not packed), stay at or below 20 MB per file and never commit Blender backups (`*.blend1`,
+`*.blend2`; ignore them in `.gitignore`). A game can enforce this with a test (Lastlight:
+`tools.game_source_sizes`); other assets have no file-size cap, their limits are the asset
+checks (texture sizes, triangle budgets, bounds).
 
 ## Export settings
 
@@ -117,7 +123,8 @@ registry hash is current (`check` reports stale entries).
 - [ ] Texel density about 32 texels/m (16..64).
 - [ ] Triangle count within the class budget; `class` set at import.
 - [ ] `zodar.py import` done; `zodar.py assets check --strict` passes (notes are fine).
-- [ ] Source file (`.bbmodel` / `.blend`) committed next to the export.
+- [ ] Source file (`.bbmodel` / `.blend`) committed next to the export under the same base
+      name; `.blend` saved compressed, ≤ 20 MB, no packed textures, no `.blend1` backups.
 
 ## Test fixtures
 

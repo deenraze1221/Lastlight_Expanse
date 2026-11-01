@@ -124,8 +124,8 @@
   (user supplies one export per tool). See the D1 handoff below.
 
 ## Current task
-- **Next session: D2 — game asset layout + static bunker (game).** Step 0 (Git LFS check)
-  blocks on the user confirming the GitHub LFS quota.
+- **Next session: D2 — game asset layout + static bunker (game).** Not started; waits for
+  the user's go. Git LFS dropped (user decision 2026-11-01): all files in regular Git.
 
 ## Handoff (Phase D1 session, 2026-11-01)
 - Done:
@@ -170,8 +170,9 @@
 - **D2 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/PHASE_D_PLAN.md` (D2, GDD alignment),
   `docs/guide/MODELING.md`, `docs/guide/SCENE_FILES.md`, GDD §1, §3, §9, §10,
   `game/src/main.cpp`, `game/CMakeLists.txt`.
-- **D2 first step:** step 0 Git LFS check (git-lfs present, remote accepts LFS pushes through
-  the proxy, user confirms the quota); stop and report if LFS is not usable.
+- **D2 first step:** step 0 source-file policy (`.gitattributes` `-text` + `*.blend binary`,
+  `.gitignore` for `.blend1`/`.blend2` and `*.zodar/`, ctest `tools.game_source_sizes`: 20 MB
+  limit on `.blend` only, rejects `.blend1`/`.blend2`). No Git LFS.
 
 ## Handoff (Phase D planning session, 2026-11-01)
 - Done: Phase D planned and approved; `docs/PHASE_D_PLAN.md` written; roadmap Phase D
@@ -181,8 +182,8 @@
   the user supplies one real Blockbench `.glb` and one real Blender `.glb` for D1 validation;
   (2) temporary game-side AABB collision behind `CollisionWorld` (Jolt in Phase E);
   (3) `bunker` default level, `highlands` kept as regression scene; (4) Phase D = 8 sessions;
-  (5) Git LFS for `.blend` after a support + quota check (D2 step 0; container has git-lfs
-  3.4.1, no LFS files yet; GitHub quota must be confirmed by the user).
+  (5) Git LFS for `.blend` after a support + quota check. *Superseded 2026-11-01:* no Git
+  LFS; `.blend` in regular Git under the D2 source-file policy (`docs/PHASE_D_PLAN.md`).
 - Workflow: Caveman for chat only; docs/code/commits in normal prose; one session per D-step;
   handoff block here at the end of each session.
 - Open: real exports not yet provided (D1 can finish with generated fixtures; real-export test

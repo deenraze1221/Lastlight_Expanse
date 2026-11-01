@@ -416,8 +416,10 @@ Binding plan: `docs/PHASE_D_PLAN.md`.
   glTF `asset.generator` only for reporting and never parses `.bbmodel`/`.blend`.
 - Collision until Phase E: game-side static AABBs behind `CollisionWorld` (replaceable by Jolt).
 - `bunker` is the game's default level; `highlands` is the regression scene.
-- `.blend` sources use Git LFS (after a support/quota check); `.bbmodel` is plain JSON in Git;
-  `game/assets/**` is `-text` (registry hashes cover exact bytes).
+- All sources are regular Git files, no Git LFS (revised 2026-11-01): `.bbmodel` (plain JSON)
+  and `.blend` (`binary`, compressed saves, ≤ 20 MB each, enforced by ctest
+  `tools.game_source_sizes`, which also rejects `.blend1`/`.blend2` backups; no blanket size
+  limit on other assets). `game/assets/**` is `-text` (registry hashes cover exact bytes).
 
 ## Phase D1 decisions (implemented)
 
