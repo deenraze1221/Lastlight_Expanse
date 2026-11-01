@@ -16,7 +16,7 @@ and gameplay are never requirements until approved.
 | Level | Meaning |
 | --- | --- |
 | **Engine Complete** | Every generic ZODAR system the game needs exists, is documented and tested, and meets performance targets on the reference hardware: runtime, ECS, assets, voxels (Phase V), input/replay/scheduler/save (Phase D), rendering S5–S8 and weather rendering, physics/audio/animation (Phase E), navigation/AI framework, networking, UI, tooling. No Lastlight content. |
-| **Area Production Complete** | One area passes the full checklist (§4), **including its required co-op behaviour** [Approved]. An area may first reach a separate **Single-Player Complete** milestone (checklist minus co-op); final sign-off stays pending until networking is done and tested. |
+| **Area Production Complete** | One area passes the full checklist (§4.2), **including its required co-op behaviour** [Approved]. An area first reaches the separate **Single-Player Complete** milestone (§4.1, not blocked by networking); Production Complete stays pending until its co-op behaviour is implemented and tested. |
 | **Game Complete** | Every area Production Complete, plus cross-area systems (story arc §5, progression and economy balance §9, 48 h rotation §4, world map and Fog of War §2/§12, saves and co-op stability §11) and release checks on the target hardware (§13). |
 
 ## 2. Order (approved; unchanged)
@@ -43,9 +43,14 @@ Further tracks after D8 (order [Proposed], see §6): E, G1-G4, N1, W0, B, M, the
 | A2 Systems | Gameplay, NPCs, enemies, loot and events wired through input actions, systems, events and saves | Replay test of the area's core loop |
 | A3 Content | Final models, textures, audio, storytelling items | **Asset gate** (§5) for every asset |
 | A4 Presentation | Lighting, shadows, AO, fog/volumetrics, weather (outdoor), audio mix | Project owner approves screenshots/captures |
-| A5 Sign-off | Performance, regression, checklist (§4); co-op tests when networking exists | Single-Player Complete, then Production Complete |
+| A5 Sign-off | Performance, regression, checklist §4.1; later co-op tests (§4.2) | Single-Player Complete (§4.1), then Production Complete (§4.2) |
 
 ## 4. Area completion checklist
+
+Two sign-off levels. Networking is **not** a blocker for Single-Player Complete.
+
+### 4.1 Single-Player Complete
+All single-player gameplay, content, presentation and tests are complete:
 
 1. Brief approved; all content traceable to the GDD or an approved decision.
 2. Architecture entirely voxel geometry at final scale; no greybox modules.
@@ -59,22 +64,33 @@ Further tracks after D8 (order [Proposed], see §6): E, G1-G4, N1, W0, B, M, the
 7. Traversal: collision, AI navigation, full player traversal; walkthrough test or replay.
 8. Audio: ambience, surface footsteps, reverb, occlusion, interaction sounds.
 9. Persistence: area state survives save/load (§11).
-10. Co-op behaviour implemented and tested (required for Production Complete).
-11. Quality: Debug + Release 0 warnings, 0 validation messages, golden captures, replay,
+10. Quality: Debug + Release 0 warnings, 0 validation messages, golden captures, replay,
     performance budget on RTX 4070-class and a weaker reference PC (owner hardware), Highlands
     regression byte-identical.
-12. No temporary or placeholder asset or system unless the owner approved it in writing
+11. No temporary or placeholder asset or system unless the owner approved it in writing
     (recorded in the area's sign-off).
-13. Docs: area guide, handoff, signed checklist.
+12. Docs: area guide, handoff, signed checklist (Single-Player Complete).
+
+### 4.2 Production Complete
+Single-Player Complete (4.1) **plus**:
+
+13. The area's co-op behaviour required by the GDD (§11: host-based, server-authoritative,
+    shared world state, individual inventories/lockers/levels as applicable) implemented and
+    tested, including co-op runs of the area's replay/walkthrough and the quality gates of
+    item 10.
+14. Docs: co-op notes added to the area guide; checklist signed for Production Complete.
 
 ## 5. Asset gates and sourcing
 
 - **Tools [Approved]:** Blockbench primary (voxel/low-poly models); Blender for complex and
   organic models; unified glTF pipeline (D1).
-- **Gate [Approved]:** generated 64×64 voxel textures become final only after the owner's
-  visual approval. Placeholder or generated models are never used as final assets.
-- **Gate per asset:** source file committed (`.bbmodel`/`.blend`), strict check clean, visual
-  approval recorded in the area's asset list.
+- **Gate [Approved]:** generated assets (64×64 voxel textures and generated models alike)
+  become final only after the owner's explicit visual approval. Placeholder assets never
+  silently become final assets: every asset's status (placeholder / candidate / approved
+  final) is recorded in the area's asset list.
+- **Gate per asset:** source committed (`.bbmodel`/`.blend`, or the generator script for a
+  generated asset), strict check clean, explicit visual approval recorded in the area's asset
+  list.
 
 External asset requirements for the bunker and **proposed** sources:
 
@@ -175,9 +191,9 @@ placement:
 | Personal diary | Dormitory locker | Emotional note |
 
 ### 7.5 Bunker milestones
-1. **Single-Player Complete** [Approved concept]: checklist §4 without item 10.
-2. **Production Complete**: after M; co-op behaviour (shared bunker, private lockers per
-   player, synchronized merchants/missions, host save) implemented and tested.
+1. **Single-Player Complete** [Approved concept]: checklist §4.1; does not wait for M.
+2. **Production Complete**: checklist §4.2 after M; co-op behaviour (shared bunker, private
+   lockers per player, synchronized merchants/missions, host save) implemented and tested.
 
 ## 8. Proposed area inventory [Proposed — candidates only, not approved]
 
