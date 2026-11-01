@@ -34,11 +34,14 @@ struct BlockMaterialOptions {
 // (Vec4Table: roughness, metallic, emissive; exact float32) and a material referencing both.
 // Chunks meshed with catalogue.palette (and MeshOptions::uvPerMetre = catalogue.uvPerMetre)
 // render with material(). Destruction retires everything through the deletion queue.
+// Lifetime: like AssetManager, a BlockMaterials must be destroyed before the SceneRenderer
+// it was created with (the retired cleanup releases the material through it).
 class BlockMaterials {
 public:
-    // Loads every layer texture (sRGB colour), checks the texture-array dimensions
-    // (DataError naming each offending layer's JSON path, see checkBlockLayerSizes), uploads
-    // and creates the material. `file` names the catalogue's source in errors.
+    // Checks the layer count against the device's maxImageArrayLayers (checkBlockLayerCount),
+    // loads every layer texture (sRGB colour), checks the texture-array dimensions (DataError
+    // naming each offending layer's JSON path, see checkBlockLayerSizes), uploads and creates
+    // the material. `file` names the catalogue's source in errors.
     BlockMaterials(gfx::VulkanContext& context, gfx::UploadContext& upload, gfx::SceneRenderer& scene,
                    const BlockCatalogue& catalogue, std::string_view file = "<memory>",
                    const BlockMaterialOptions& options = {});

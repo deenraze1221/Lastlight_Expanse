@@ -146,7 +146,15 @@
 - **V1 merged:** `main` fast-forwarded `ad2283d..620ad40` (2026-11-01, no history rewrite)
   after the final V1 review (no critical issues). Minor review findings are recorded as
   follow-ups under V2 and V3 in `docs/PHASE_D_PLAN.md`.
-- **V2 done** on `claude/v2-block-format` (from `main` `620ad40`); awaits review and merge.
+- **V2 done** on `claude/v2-block-format` (from `main` `620ad40`); final audit verdict
+  CHANGES REQUIRED, addressed by the V2 follow-up commit (see V2 handoff); awaits review and
+  merge.
+- V2 follow-up verification (2026-11-01): `tools/gate.sh` on fresh build trees (Debug +
+  Release, `-DZODAR_WARNINGS_AS_ERRORS=ON`, GPU tests on): 36/36 + 36/36, Highlands sha256
+  `61ab33fa…` in both with 0 validation messages, equal to the pre-V2 baseline `7226731`
+  built and run in the same container (Release, `61ab33fa…`). Flake counts: see the V2
+  handoff. The gate's first run failed at configure because I seeded the FetchContent cache
+  incorrectly (environment, recorded in its failure log); the second run passed.
 - **Next session: V3 — voxel collision, raycasts, conservative LOD (engine)**; waits for the
   user's go (and the V2 review/merge). Order: V3–V5 → D3–D6 → D7 → V6 → D8.
 - World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`) approved in principle
@@ -181,8 +189,12 @@
   precision reduction: RGBA8 (0.3 → 0.302, emissive > 1 impossible) and RGBA16F (0.3 →
   0.2998) are shown insufficient in a test; the table reads back bit-exact.
 - **V2 verification** (lavapipe Mesa 25.2.8, validation on): GCC 13 Debug + Release 36/36
-  ctest, 0 warnings, 0 validation messages after every step (gate script: build both, ctest
-  both, Highlands screenshot); Clang 18 Release 36/36 ctest, engine/catalogue/Highlands golden
+  ctest, 0 warnings, 0 validation messages on the commit of every step **except step 3**:
+  step 3 (`437af7f`) was committed and pushed by a combined command after a Debug run in which
+  `gpu.subsystems` failed (the gate was not run; the failure log was overwritten, so which
+  test case failed is unknown); later reruns passed. At step 6 the manual gate script failed
+  once (`gpu.subsystems`, deletion-queue case) and was re-run until green before pushing. The
+  script used then (`scratchpad/gate.sh`) was run by hand, not enforced. Clang 18 Release 36/36 ctest, engine/catalogue/Highlands golden
   hashes green, Highlands screenshot identical (Clang build: 3 pre-existing
   `-Wunused-result` warnings in `engine/tests/Assets/PaletteTests.cpp`, untouched by V2).
   Highlands screenshot (640×360, 90 frames) sha256 `61ab33fa…` in Debug, Release and Clang,
@@ -192,13 +204,32 @@
   texture standards, registry standards ×3, blocks assets ×2, block file ×5), 5 GPU cases (runtime standard, parameter precision, emissive vs
   unlit, lit + fog vs pbr, layer-size errors). New golden hash: catalogue mesh
   `0x2444B9C0D80D2BD6` (GCC + Clang).
-- Known issues (not V2): `gpu.subsystems` failed 2 of ~25 full `ctest -j4` runs in
-  `ResourceTests.cpp:156` ("deletion queue": `completedValue() == lastSubmitted()` 417 vs 418
-  right after `UploadContext::immediate`); not reproducible in 10 sequential runs under load.
-  Seen at step 3 too (no GPU code changed), so pre-existing: likely the timeline value lags
-  the fence on lavapipe under load. Not fixed (unrelated system). Recorded Highlands sha256
+- Intermittent `gpu.subsystems` failure (`ResourceTests.cpp:156/157`, "deletion queue":
+  `destroyed` false and `completedValue() == lastSubmitted()` off by one, e.g. 417 vs 418,
+  right after `UploadContext::immediate`). Facts (this container, lavapipe, full Release
+  `ctest -j4`, interleaved runs, V2 follow-up session): pre-V2 baseline `7226731` failed **1 of
+  32** runs (416 vs 417), the V2 + follow-up tree failed **1 of 32** (417 vs 418), same
+  signature. An earlier audit claim "0/15 baseline failures" was invalid (that baseline build
+  had failed to configure, so no tests ran). Isolated runs of the case: 0 of 150 under load.
+  Conclusion: the failure exists before V2 (reproduced on the baseline); its cause is
+  **unproven**. Hypothesis from the code (not verified): `immediate()` waits on a fence and the
+  test then reads the timeline semaphore counter, which can lag the fence on lavapipe. Not
+  fixed (outside V2). Recorded Highlands sha256
   `1e6b461a…` came from another container's Mesa; in this container (Mesa 25.2.8, LLVM 20)
   the pre-V2 baseline (`7226731`) is `61ab33fa…` and stays identical after every V2 step.
+- **V2 follow-up (audit fixes, one commit):** bindless slot registered before uploads are
+  recorded (`Texture`, `TextureArray`, `Vec4Table`; tested with a full bindless table);
+  `maxImageArrayLayers` checks (`TextureArray`, `BlockMaterials` DataError at `/materials`,
+  asset checks with `AssetCheckOptions::maxTextureArrayLayers` = 2048); `zodar/voxel` bounds-
+  checks the table index (fallback parameters; tested) and reads the table with a dedicated
+  nearest sampler; `buildBlockCatalogue` re-validates code-built data (rotations, names, NaN,
+  ranges, empty textures, id limit now 65534 so id 0xFFFF stays out of range; `BlockTable`
+  rejects larger registries); `checkBlockLayerSizes` uses the first square layer as reference
+  and validates its inputs; blocks checks continue after an unreadable texture; density
+  values in `textureStandards` are float-precision (engine JSON); prohibited model textures
+  are logged as errors; star-shape test is relative; engine test fixture renamed (no
+  "bunker"). Gate: `tools/gate.sh` + `tools/hooks/pre-push` (opt-in local hook, limitations
+  in RUNNING.md "Test gate"). Verification: see the follow-up handoff in "Current task".
 - Open: MinGW and MSVC golden-hash verification; the game's Highlands test still has its own
   FNV helper (moving it to `Support/MeshHash.h` needs a `game/` change, deferred).
 - **V3 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/guide/VOXELS.md` §3–6,

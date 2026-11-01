@@ -349,3 +349,115 @@ TEST_CASE("voxel material: texture-array dimension errors name the layer's JSON 
     }
     gpu().context->waitIdle();
 }
+
+TEST_CASE("voxel material: a full bindless table fails before any upload is recorded") {
+    // Texture, TextureArray and Vec4Table register their bindless slot before recording the
+    // upload: when registration throws, the batch holds no copy into the destroyed image.
+    zodar::test::ValidationGuard guard;
+    Fixture f;
+    ImageData pixel;
+    pixel.width = pixel.height = 1;
+    pixel.name = "pixel";
+    pixel.levels = {{255, 255, 255, 255}};
+    std::optional<Texture> keep;
+    {
+        UploadBatch batch(*gpu().upload);
+        keep.emplace(batch, f.scene.bindless(), pixel);
+        batch.submit();
+    }
+    std::vector<uint32_t> filler;
+    try {
+        for (;;) filler.push_back(f.scene.bindless().registerTexture(keep->image().view()));
+    } catch (const Error&) {
+    }
+    REQUIRE(!filler.empty());
+    {
+        UploadBatch batch(*gpu().upload);
+        CHECK_THROWS_AS(Texture(batch, f.scene.bindless(), pixel), Error);
+        const std::vector<ImageData> layers{pixel, pixel};
+        CHECK_THROWS_AS(TextureArray(batch, f.scene.bindless(), layers, "Full"), Error);
+        const std::vector<glm::vec4> values{glm::vec4(1.0f)};
+        CHECK_THROWS_AS(Vec4Table(batch, f.scene.bindless(), values, "Full"), Error);
+        batch.submit(); // nothing pending: no copy into a destroyed image (validation guard)
+    }
+    for (uint32_t slot : filler) f.scene.bindless().releaseTexture(slot);
+    gpu().context->waitIdle();
+}
+
+TEST_CASE("voxel material: catalogues above maxImageArrayLayers are rejected before loading") {
+    zodar::test::ValidationGuard guard;
+    VkPhysicalDeviceProperties device{};
+    vkGetPhysicalDeviceProperties(gpu().context->physicalDevice(), &device);
+    const uint32_t limit = device.limits.maxImageArrayLayers;
+    if (limit >= 65534) {
+        MESSAGE("maxImageArrayLayers " << limit << ": no catalogue can exceed it");
+        return;
+    }
+    // One texture, limit + 1 layers (each material has its own parameters, so its own layer).
+    BlockFileData data;
+    for (uint32_t i = 0; i <= limit; ++i) {
+        BlockMaterialData m;
+        m.name = "m" + std::to_string(i);
+        m.textures = {"missing.png", "missing.png", "missing.png"}; // never loaded: the count fails first
+        m.roughness = static_cast<float>(i) / static_cast<float>(limit + 1);
+        data.materials.push_back(std::move(m));
+    }
+    data.blocks.push_back({"b", "m0", "cube", 1, true});
+    const BlockCatalogue c = buildBlockCatalogue(data, "dir");
+    REQUIRE(c.layers.size() == limit + 1);
+    Fixture f;
+    try {
+        BlockMaterials blocks(*gpu().context, *gpu().upload, f.scene, c, "many.blocks.json");
+        FAIL("expected DataError");
+    } catch (const DataError& e) {
+        REQUIRE(e.issues().size() == 1);
+        CHECK(e.issues()[0].path == "/materials");
+        CHECK(e.issues()[0].message.find("exceed the limit of " + std::to_string(limit)) != std::string::npos);
+    }
+    gpu().context->waitIdle();
+}
+
+TEST_CASE("voxel material: layers outside the parameter table use the fallback parameters") {
+    zodar::test::ValidationGuard guard;
+    const BlockDir files;
+    const BlockCatalogue c = loadBlockCatalogue(files.dir / "test.blocks.json"); // 2 layers
+    // A palette from elsewhere: layer 7 is outside the 2-entry table (and the 2-layer array).
+    voxel::VoxelPalette foreign = c.palette;
+    foreign.faceLayers = {{7, 7, 7}, {7, 7, 7}};
+    voxel::VoxelChunk chunk;
+    for (int y = 0; y < 16; ++y) {
+        for (int x = 0; x < 16; ++x) chunk.set(x, y, 0, *c.find("stone"));
+    }
+    voxel::ChunkNeighborhood nb;
+    nb.chunks[13] = &chunk;
+    voxel::MeshOptions o;
+    o.uvPerMetre = c.uvPerMetre;
+    Fixture f;
+    std::optional<GpuMesh> mesh;
+    {
+        UploadBatch batch(*gpu().upload);
+        mesh.emplace(batch, voxel::meshChunk(nb, foreign, o));
+        batch.submit();
+    }
+    BlockMaterials blocks(*gpu().context, *gpu().upload, f.scene, c, "test.blocks.json");
+    // Expected: the texture layer clamps to the last layer (stone); parameters fall back to
+    // roughness 1, metallic 0, emissive 0.
+    const Reference fallback = reference(f, files.dir / "stone.png", f.scene.materials().pbrShader(), 1.0f, 0.0f);
+    std::vector<MeshDraw> draws;
+    const auto lit = [&](MaterialHandle material) {
+        SceneView view = wallView(*mesh, material, draws);
+        view.lighting.sun.enabled = true;
+        view.lighting.sun.direction = glm::normalize(glm::vec3(-0.3f, -0.4f, -1.0f));
+        view.lighting.sun.intensity = 3.0f;
+        view.lighting.ambientIntensity = 0.1f;
+        return f.render(view, {96, 64});
+    };
+    const auto voxel = lit(blocks.material());
+    const auto expected = lit(fallback.material);
+    CHECK(distinctColors(voxel) >= 2);
+    const int diff = maxDifference(voxel, expected);
+    MESSAGE("out-of-range layers: max difference to the fallback reference " << diff);
+    CHECK(diff <= 1);
+    f.scene.materials().releaseMaterial(fallback.material);
+    gpu().context->waitIdle();
+}

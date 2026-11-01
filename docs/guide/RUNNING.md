@@ -26,6 +26,30 @@ cmake --workflow --preset ci
 
 Test presets set `SDL_VIDEO_DRIVER=offscreen`, so GPU tests run without a display.
 
+### Test gate (`tools/gate.sh`, pre-push hook)
+
+`tools/gate.sh` builds Debug and Release (own build trees under `ZODAR_GATE_BUILD_ROOT`,
+default `../zodar-gate-build`; `-DZODAR_WARNINGS_AS_ERRORS=ON`, GPU tests on), runs every ctest
+test **once** (no retries: an intermittent failure fails the gate and is appended to
+`gate-failures.log` with date and commit), runs the Highlands regression scene (640×360, 90
+frames, validation must report 0 messages) and compares its sha256 with
+`ZODAR_GATE_HIGHLANDS_SHA256` when set (the hash depends on the driver build, so set it to the
+pre-change baseline measured on the same machine). Exit code 0 only when everything passed.
+
+Enforcement: `tools/hooks/pre-push` runs the gate and blocks the push when it fails. Enable it
+once per clone:
+
+```bash
+git config core.hooksPath tools/hooks
+```
+
+Limitations (it is a local hook, not CI): it is inactive until enabled in each clone,
+`git push --no-verify` bypasses it, it needs bash, CMake, Ninja and (for GPU tests) a Vulkan
+driver, and it tests the checked-out tree, so it refuses pushes with uncommitted changes or
+of a commit other than `HEAD`. The repository has no CI workflow yet; a CI job running
+`tools/gate.sh` would be the non-bypassable form. The first run builds both trees from
+scratch (long).
+
 ## 2. `tools/zodar.py` (short output)
 
 Python 3.8+, standard library only. Global options come before the command:

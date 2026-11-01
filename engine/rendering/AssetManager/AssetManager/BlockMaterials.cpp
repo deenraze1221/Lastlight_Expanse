@@ -26,6 +26,13 @@ BlockMaterials::BlockMaterials(gfx::VulkanContext& context, gfx::UploadContext& 
                                const BlockMaterialOptions& options)
     : m_context(context), m_scene(scene), m_resources(std::make_shared<Resources>()) {
     ZODAR_ENSURE(!catalogue.layers.empty(), "block materials '" + options.name + "': the catalogue has no layers");
+    VkPhysicalDeviceProperties device{};
+    vkGetPhysicalDeviceProperties(context.physicalDevice(), &device);
+    if (std::vector<DataIssue> issues =
+            checkBlockLayerCount(catalogue, device.limits.maxImageArrayLayers, file);
+        !issues.empty()) {
+        throw DataError(std::move(issues));
+    }
     std::vector<ImageData> images;
     std::vector<glm::uvec2> sizes;
     images.reserve(catalogue.layers.size());
@@ -52,7 +59,10 @@ BlockMaterials::BlockMaterials(gfx::VulkanContext& context, gfx::UploadContext& 
     desc.baseColorFactor = options.baseColorFactor;
     desc.custom0 = {std::bit_cast<float>(m_resources->textures.bindlessIndex()),
                     std::bit_cast<float>(scene.bindless().sampler(options.sampler)),
-                    std::bit_cast<float>(m_resources->parameters.bindlessIndex()), 0.0f};
+                    std::bit_cast<float>(m_resources->parameters.bindlessIndex()),
+                    std::bit_cast<float>(m_resources->parameters.size())};
+    // Nearest sampler for the exact table reads (never a filtering sampler on RGBA32F).
+    desc.custom1 = {std::bit_cast<float>(scene.bindless().sampler(gfx::SamplerDesc::nearest())), 0.0f, 0.0f, 0.0f};
     m_material = scene.materials().createMaterial(desc);
 }
 

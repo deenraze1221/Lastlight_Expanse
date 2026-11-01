@@ -33,6 +33,12 @@ TextureArray::TextureArray(UploadBatch& batch, BindlessRegistry& registry, std::
                      "texture array '" + name + "': layer '" + l.name + "' differs in size, format or mips");
     }
     m_format = textureFormat(first.format, first.colorSpace);
+    VkPhysicalDeviceProperties device{};
+    vkGetPhysicalDeviceProperties(batch.context().physicalDevice(), &device);
+    ZODAR_ENSURE(std::max<size_t>(layers.size(), 2) <= device.limits.maxImageArrayLayers,
+                 "texture array '" + name + "': " + std::to_string(layers.size()) +
+                     " layers exceed the device limit maxImageArrayLayers = " +
+                     std::to_string(device.limits.maxImageArrayLayers));
     ImageDesc desc{first.width, first.height, m_format,
                    VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                    static_cast<uint32_t>(first.levels.size()), name.c_str()};
@@ -42,16 +48,23 @@ TextureArray::TextureArray(UploadBatch& batch, BindlessRegistry& registry, std::
         desc.arrayLayers = 2;
     }
     m_image = GpuImage(batch.context(), desc);
-    for (uint32_t layer = 0; layer < desc.arrayLayers; ++layer) {
+    // Register before recording uploads: if registration throws (table full), no copy into the
+    // image is pending in `batch`, so destroying the image during unwinding is safe.
+    m_index = registry.registerTexture(m_image.view());
+    m_registry = &registry;
+    try {
+        for (uint32_t layer = 0; layer < desc.arrayLayers; ++layer) {
         const ImageData& image = layers[std::min<size_t>(layer, layers.size() - 1)];
         std::vector<ImageLevelData> levels;
         for (size_t i = 0; i < image.levels.size(); ++i) {
             levels.push_back({image.levelWidth(i), image.levelHeight(i), image.levels[i]});
         }
         batch.uploadImage(m_image, levels, layer);
+        }
+    } catch (...) {
+        release();
+        throw;
     }
-    m_registry = &registry;
-    m_index = registry.registerTexture(m_image.view());
 }
 
 TextureArray::~TextureArray() {

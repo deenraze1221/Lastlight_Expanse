@@ -7,6 +7,7 @@
 
 #include <doctest/doctest.h>
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -201,7 +202,7 @@ TEST_CASE("block file: schema errors carry JSON paths") {
         CHECK(e.issues()[0].path == "/blocks/0/shape");
         CHECK(e.issues()[0].file == "u.blocks.json");
     }
-    // Id limit: 65535 ids including rotation variants.
+    // Id limit: 65534 ids including rotation variants (id 0xFFFF stays outside the registry).
     std::string many;
     for (int i = 0; i < 16384; ++i) many += (i ? "," : "") + std::string(R"({"name": "b)") + std::to_string(i) +
                                            R"(", "material": "a", "rotations": 4})";
@@ -245,4 +246,95 @@ TEST_CASE("block file: catalogue palettes mesh deterministically (golden hash)")
     CHECK(again.get() == first);
     // Golden: captured on GCC 13 (V2); integer-only inputs, single IEEE operations.
     CHECK(first == 0x2444B9C0D80D2BD6ull);
+}
+
+TEST_CASE("block file: catalogues built from code data are validated with JSON paths") {
+    const BlockFileData good = parseBlockFile(kBlocks, "b.blocks.json");
+    const auto issuesOfBuild = [](const BlockFileData& d) {
+        try {
+            (void)buildBlockCatalogue(d, "dir", {}, "code");
+        } catch (const DataError& e) {
+            return e.issues();
+        }
+        return std::vector<DataIssue>{};
+    };
+    CHECK(issuesOfBuild(good).empty());
+
+    BlockFileData bad = good;
+    bad.blocks[0].rotations = 0;
+    bad.blocks[1].rotations = 2;
+    bad.blocks[2].name = "";
+    bad.blocks[3].name = "concrete"; // duplicate of blocks[0]
+    bad.materials[1].name = "concrete"; // duplicate of materials[0]
+    bad.materials[2].name = "";
+    bad.materials[0].roughness = std::numeric_limits<float>::quiet_NaN();
+    bad.materials[0].metallic = 2.0f;
+    bad.materials[1].emissive = -1.0f;
+    bad.materials[1].tint.y = std::numeric_limits<float>::quiet_NaN();
+    bad.materials[2].textures[2] = "";
+    bad.uvPerMetre = 0.0f;
+    const auto issues = issuesOfBuild(bad);
+    CHECK(hasIssue(issues, "/blocks/0/rotations", "rotations must be 1 or 4, got 0"));
+    CHECK(hasIssue(issues, "/blocks/1/rotations", "got 2"));
+    CHECK(hasIssue(issues, "/blocks/2/name", "empty block name"));
+    CHECK(hasIssue(issues, "/blocks/3/name", "duplicate block name 'concrete'"));
+    CHECK(hasIssue(issues, "/materials/1/name", "duplicate material name 'concrete'"));
+    CHECK(hasIssue(issues, "/materials/2/name", "empty material name"));
+    CHECK(hasIssue(issues, "/materials/0/roughness", "outside [0"));
+    CHECK(hasIssue(issues, "/materials/0/metallic", "outside [0"));
+    CHECK(hasIssue(issues, "/materials/1/emissive", "outside [0"));
+    CHECK(hasIssue(issues, "/materials/1/tint/1", "outside [0, 1]"));
+    CHECK(hasIssue(issues, "/materials/2/textures/bottom", "empty texture path"));
+    CHECK(hasIssue(issues, "/uvPerMetre", "positive"));
+    for (const DataIssue& i : issues) CHECK(i.file == "code");
+
+    // Id limit: 65534 ids fit (id 0xFFFF stays outside every registry), 65535 do not.
+    BlockFileData many;
+    many.materials = {good.materials[0]};
+    for (int i = 0; i < 16383; ++i) many.blocks.push_back({"r" + std::to_string(i), "concrete", "cube", 4, true});
+    many.blocks.push_back({"x", "concrete", "cube", 1, true});
+    many.blocks.push_back({"y", "concrete", "cube", 1, true}); // 16383 * 4 + 2 = 65534 ids
+    const BlockCatalogue full = buildBlockCatalogue(many, "dir");
+    CHECK(full.palette.blocks.size() == 0xFFFF);
+    CHECK(full.find("y") == Voxel(0xFFFE));
+    const voxel::BlockTable table(full.palette);
+    CHECK(table.isCube(0xFFFF)); // outside the registry: fallback cube
+    many.blocks.push_back({"z", "concrete", "cube", 1, true});
+    CHECK(hasIssue(issuesOfBuild(many), "/blocks", "too many block ids (65535; at most 65534"));
+    std::string json = R"({"schema": "zodar.blocks", "version": 1, "materials": [{"name": "a", "textures": "a.png"}],
+        "blocks": [)";
+    for (int i = 0; i < 16383; ++i) json += R"({"name": "r)" + std::to_string(i) + R"(", "material": "a", "rotations": 4},)";
+    CHECK(issuesOf(json + R"({"name": "x", "material": "a"}, {"name": "y", "material": "a"}]})").empty());
+    CHECK(hasIssue(issuesOf(json + R"({"name": "x", "material": "a"}, {"name": "y", "material": "a"},
+        {"name": "z", "material": "a"}]})"), "/blocks/16385", "too many block ids"));
+
+    // BlockTable refuses registries that would use id 0xFFFF.
+    voxel::VoxelPalette huge;
+    huge.colors = {glm::vec4(1.0f)};
+    huge.blocks.resize(0x10000);
+    CHECK_THROWS_AS(voxel::BlockTable{huge}, Error);
+}
+
+TEST_CASE("block file: layer checks use a square reference layer and validate their inputs") {
+    const BlockCatalogue c = buildBlockCatalogue(parseBlockFile(kBlocks, "b.blocks.json"), "game/blocks");
+    // Layer 0 is not square: it is reported, and layer 1 (the first square one) is the reference.
+    const auto issues = checkBlockLayerSizes(c, {{64, 32}, {32, 32}, {32, 32}, {64, 64}}, "b.blocks.json");
+    REQUIRE(issues.size() == 2);
+    CHECK(issues[0].path == "/materials/0/textures/top");
+    CHECK(issues[0].message.find("64x32 (concrete.png) is not square") == 0);
+    CHECK(issues[1].path == "/materials/2/textures/top");
+    CHECK(issues[1].message.find("differs from the texture array size 32x32 (first layer: /materials/1/textures/top)") !=
+          std::string::npos);
+    // No square layer at all: every layer is reported as not square, nothing else.
+    CHECK(checkBlockLayerSizes(c, {{2, 1}, {2, 1}, {2, 1}, {2, 1}}, "b").size() == 4);
+    // Mismatched origins (a hand-built catalogue) are an error, never an out-of-range read.
+    BlockCatalogue broken = c;
+    broken.layerOrigins.pop_back();
+    CHECK_THROWS_AS((void)checkBlockLayerSizes(broken, {{64, 64}, {64, 64}, {64, 64}, {64, 64}}, "b"), Error);
+    // Layer count against a texture-array limit.
+    CHECK(checkBlockLayerCount(c, 4, "b").empty());
+    const auto count = checkBlockLayerCount(c, 3, "b.blocks.json");
+    REQUIRE(count.size() == 1);
+    CHECK(count[0].path == "/materials");
+    CHECK(count[0].message.find("4 texture-array layers exceed the limit of 3") == 0);
 }

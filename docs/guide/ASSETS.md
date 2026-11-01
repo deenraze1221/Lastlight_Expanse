@@ -80,12 +80,15 @@ them like a glTF's external textures: covered by the blocks entry's hash, no own
 `check` reports: schema errors with JSON paths and unknown shapes (built-in shapes; games with
 code-registered shapes pass `AssetCheckOptions::blockShapes`) as errors; each texture once
 against the entry's `textureClass` (warnings; ≥ 256 errors) and the palette (colour data);
-**texture-array dimensions** (all layers square and of one size) as errors naming the layer's
-JSON path (`texture array: blocks/bunker.blocks.json: /materials/1/textures/side: 32x32
-(panel.png) differs from the texture array size 64x64 (first layer:
-/materials/0/textures/top)`); texel density = layer size × `uvPerMetre` against the
-registry's density target (warning). The report adds `blocks` (ids incl. rotation variants)
-and `layers`.
+**texture-array dimensions** (all layers square and the size of the first square layer) as
+errors naming the layer's JSON path (`texture array: blocks/walls.blocks.json:
+/materials/1/textures/side: 32x32 (panel.png) differs from the texture array size 64x64
+(first layer: /materials/0/textures/top)`); the **layer count** against
+`AssetCheckOptions::maxTextureArrayLayers` (default 2048, the Vulkan guaranteed minimum of
+`maxImageArrayLayers`; the runtime checks the real device) as an error at `/materials`; an
+unreadable texture is an error for that texture while the others are still checked; texel
+density = layer size × `uvPerMetre` against the registry's density target (warning). The
+report adds `blocks` (ids incl. rotation variants) and `layers`.
 
 ```bash
 python3 tools/zodar.py import assets/crate.gltf                      # add/update (nearest assets.json, else ./assets.json)
@@ -234,7 +237,9 @@ Use `linear` for smooth textures (sky, UI gradients, effects).
 - `classes`: texture class -> allowed square sizes (powers of two, ascending, below
   `prohibitedSize`); kept sorted by name. `defaultClass` applies to entries without a class.
   `prohibitedSize` (default and maximum 256), `densityTarget` (default 32) and
-  `densityTolerance` (default 2) are optional. Problems are reported with their JSON path
+  `densityTolerance` (default 2) are optional; density values have float precision (engine
+  JSON numbers are float; `setTextureStandards` rounds them). Known limit: duplicate keys in
+  `classes` are not reported (the JSON parser keeps the last one). Problems are reported with their JSON path
   (`/textureStandards/classes/env/1: size 48 is not a power of two`).
 - Entries (`texture`, `model`, `material`) may set `"textureClass"` (`--texture-class NAME` on
   import, `""` clears; `defaults` for texture and model). It must name a declared class (parse

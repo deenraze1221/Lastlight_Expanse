@@ -3,6 +3,7 @@
 #include "Core/Error.h"
 #include "SceneFile/JsonRead.h"
 
+#include <cmath>
 #include <set>
 #include <tuple>
 
@@ -13,7 +14,9 @@ namespace {
 using detail::Json;
 
 constexpr const char* kFaceKeys[3] = {"top", "side", "bottom"};
-constexpr size_t kMaxIds = 0x10000; // ids 0..65535
+// Ids 0..65534: id 0xFFFF stays outside every registry, so BlockTable always has an
+// out-of-range id (fallback cube, e.g. for bedrock when no block is a cube).
+constexpr size_t kMaxIds = 0xFFFF;
 
 bool validName(const std::string& name, const std::string& path, detail::Issues& issues) {
     if (name.find('@') != std::string::npos) {
@@ -163,7 +166,7 @@ BlockFileData parseBlockFile(std::string_view json, std::string_view file, const
             detail::readBool(b, "collision", path, bd.collision, issues);
             ids += bd.rotations;
             if (ids > kMaxIds) {
-                issues.add(path, "too many block ids (at most 65535 including rotation variants)");
+                issues.add(path, "too many block ids (at most 65534 including rotation variants)");
                 break;
             }
             data.blocks.push_back(std::move(bd));
@@ -232,6 +235,60 @@ BlockCatalogue buildBlockCatalogue(const BlockFileData& data, const std::filesys
         shapes = std::make_shared<const voxel::ShapeLibrary>(voxel::ShapeLibrary::builtins());
     }
     detail::Issues issues{std::string(file)};
+    // Data may be built in code (not only by parseBlockFile): validate it again here.
+    if (data.materials.size() >= voxel::VoxelPalette::kFallbackMaterial) {
+        issues.add("/materials", "at most 65534 materials");
+    }
+    if (!std::isfinite(data.uvPerMetre) || !(data.uvPerMetre > 0.0f)) {
+        issues.add("/uvPerMetre", "expected a positive number of texture tiles per metre");
+    }
+    {
+        std::set<std::string, std::less<>> seen;
+        for (size_t i = 0; i < data.materials.size(); ++i) {
+            const BlockMaterialData& m = data.materials[i];
+            const std::string path = "/materials/" + std::to_string(i);
+            if (m.name.empty()) issues.add(path + "/name", "empty material name");
+            else if (m.name.find('@') != std::string::npos) issues.add(path + "/name", "name '" + m.name + "' contains '@'");
+            else if (!seen.insert(m.name).second) issues.add(path + "/name", "duplicate material name '" + m.name + "'");
+            for (size_t f = 0; f < 3; ++f) {
+                if (m.textures[f].empty()) {
+                    issues.add(path + "/textures/" + kFaceKeys[f], "empty texture path");
+                }
+            }
+            const auto range = [&](const char* key, float v, float lo, float hi) {
+                if (!(v >= lo && v <= hi)) { // also rejects NaN
+                    issues.add(path + "/" + key, "value " + std::to_string(v) + " is outside [" + std::to_string(lo) +
+                                                     ", " + std::to_string(hi) + "]");
+                }
+            };
+            range("roughness", m.roughness, 0.0f, 1.0f);
+            range("metallic", m.metallic, 0.0f, 1.0f);
+            range("emissive", m.emissive, 0.0f, 1000.0f);
+            for (int k = 0; k < 3; ++k) {
+                if (!(m.tint[k] >= 0.0f && m.tint[k] <= 1.0f)) {
+                    issues.add(path + "/tint/" + std::to_string(k), "value is outside [0, 1]");
+                }
+            }
+        }
+        std::set<std::string, std::less<>> blockNames;
+        size_t ids = 1;
+        for (size_t i = 0; i < data.blocks.size(); ++i) {
+            const BlockDefinitionData& b = data.blocks[i];
+            const std::string path = "/blocks/" + std::to_string(i);
+            if (b.name.empty()) issues.add(path + "/name", "empty block name");
+            else if (b.name.find('@') != std::string::npos) issues.add(path + "/name", "name '" + b.name + "' contains '@'");
+            else if (!blockNames.insert(b.name).second) issues.add(path + "/name", "duplicate block name '" + b.name + "'");
+            if (b.rotations != 1 && b.rotations != 4) {
+                issues.add(path + "/rotations", "rotations must be 1 or 4, got " + std::to_string(b.rotations));
+            }
+            ids += b.rotations;
+        }
+        if (ids > kMaxIds) {
+            issues.add("/blocks", "too many block ids (" + std::to_string(ids - 1) +
+                                      "; at most 65534 including rotation variants)");
+        }
+    }
+    issues.throwIfAny();
     BlockCatalogue c;
     c.uvPerMetre = data.uvPerMetre;
     c.palette.shapes = shapes;
@@ -291,26 +348,44 @@ BlockCatalogue loadBlockCatalogue(const std::filesystem::path& path, std::shared
 
 std::vector<DataIssue> checkBlockLayerSizes(const BlockCatalogue& catalogue, const std::vector<glm::uvec2>& sizes,
                                             std::string_view file) {
-    if (sizes.size() != catalogue.layers.size()) {
-        fail("checkBlockLayerSizes: " + std::to_string(sizes.size()) + " sizes for " +
-             std::to_string(catalogue.layers.size()) + " layers");
+    if (sizes.size() != catalogue.layers.size() || catalogue.layerOrigins.size() != catalogue.layers.size()) {
+        fail("checkBlockLayerSizes: " + std::to_string(sizes.size()) + " sizes and " +
+             std::to_string(catalogue.layerOrigins.size()) + " origins for " + std::to_string(catalogue.layers.size()) +
+             " layers");
     }
     std::vector<DataIssue> out;
     const auto text = [](const glm::uvec2& s) { return std::to_string(s.x) + "x" + std::to_string(s.y); };
+    // Reference size: the first square layer (a non-square layer 0 is reported itself and does
+    // not become the reference).
+    size_t reference = sizes.size();
+    for (size_t i = 0; i < sizes.size(); ++i) {
+        if (sizes[i].x == sizes[i].y) {
+            reference = i;
+            break;
+        }
+    }
     for (size_t i = 0; i < sizes.size(); ++i) {
         const std::string name = catalogue.layers[i].filename().generic_string();
         DataIssue issue{std::string(file), 0, 0, catalogue.layerOrigins[i], {}};
         if (sizes[i].x != sizes[i].y) {
             issue.message = text(sizes[i]) + " (" + name + ") is not square (texture-array layers are square)";
-        } else if (i > 0 && sizes[i] != sizes[0]) {
-            issue.message = text(sizes[i]) + " (" + name + ") differs from the texture array size " + text(sizes[0]) +
-                            " (first layer: " + catalogue.layerOrigins[0] + ")";
+        } else if (i != reference && sizes[i] != sizes[reference]) {
+            issue.message = text(sizes[i]) + " (" + name + ") differs from the texture array size " +
+                            text(sizes[reference]) + " (first layer: " + catalogue.layerOrigins[reference] + ")";
         } else {
             continue;
         }
         out.push_back(std::move(issue));
     }
     return out;
+}
+
+std::vector<DataIssue> checkBlockLayerCount(const BlockCatalogue& catalogue, uint32_t maxLayers, std::string_view file) {
+    if (catalogue.layers.size() <= maxLayers) return {};
+    return {DataIssue{std::string(file), 0, 0, "/materials",
+                      std::to_string(catalogue.layers.size()) + " texture-array layers exceed the limit of " +
+                          std::to_string(maxLayers) + " (maxImageArrayLayers; distinct textures and parameters per " +
+                          "layer count separately)"}};
 }
 
 } // namespace zodar

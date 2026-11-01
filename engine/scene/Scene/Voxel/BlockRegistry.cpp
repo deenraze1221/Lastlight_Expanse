@@ -138,12 +138,13 @@ Shape analyse(std::string name, const std::vector<std::vector<glm::vec3>>& polyg
             const glm::vec3 a = corners[i] - corners[0];
             const glm::vec3 b = corners[i + 1] - corners[0];
             const float turn = glm::dot(glm::cross(a, b), p.normal);
-            if (turn < -kEps) {
+            const float la = glm::length(a);
+            const float lb = glm::length(b);
+            // Relative test (sine of the fan angle), independent of the triangle's size.
+            if (la > kEps && lb > kEps && turn < -kEps * la * lb) {
                 shapeError(s.name, where + " is not star-shaped from its first corner (fan triangle " +
                                        std::to_string(i - 1) + " is reversed)");
             }
-            const float la = glm::length(a);
-            const float lb = glm::length(b);
             if (la > kEps && lb > kEps) {
                 sweep += std::atan2(static_cast<double>(turn), static_cast<double>(glm::dot(a, b)));
             }
@@ -328,6 +329,9 @@ BlockTable::BlockTable(const VoxelPalette& palette) : m_palette(palette) {
     }
     ZODAR_ENSURE(palette.colors.size() < VoxelPalette::kFallbackMaterial,
                  "Voxel palette: registry palettes hold at most 65534 materials");
+    // Id 0xFFFF must stay outside the registry: it is the out-of-range firstCube() (a fallback
+    // cube) when no block is a cube.
+    ZODAR_ENSURE(palette.blocks.size() <= 0xFFFF, "Voxel palette: registry palettes hold at most 65534 block ids");
     const size_t n = palette.blocks.size();
     m_flags.assign(n, 0);
     m_material.assign(n, 0);

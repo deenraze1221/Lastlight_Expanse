@@ -159,7 +159,8 @@ public:
 
     // Optional texture standard (Phase V2): texture classes and their allowed sizes, default
     // class, prohibited size, texel density target; written as "textureStandards" when set.
-    // Classes are kept sorted by name. Without it the engine default applies
+    // Classes are kept sorted by name; density values are rounded to float (the precision of
+    // engine JSON numbers). Without it the engine default applies
     // (TextureStandard::engineDefault(): 32 default / 64 maximum, density 32).
     const std::optional<TextureStandard>& textureStandards() const { return m_textureStandards; }
     // Throws zodar::Error if the standard is invalid (TextureStandard::validate).
@@ -301,6 +302,9 @@ struct AssetCheckOptions {
     // Shape library resolving block shape names (Phase V2); null: the built-in shapes. Games
     // that register shapes in code pass their library (ZodarAssetTool knows built-ins only).
     std::shared_ptr<const voxel::ShapeLibrary> blockShapes;
+    // Texture-array layer limit for blocks assets (no device here): the Vulkan guaranteed
+    // minimum of maxImageArrayLayers. Runtime BlockMaterials checks the real device limit.
+    uint32_t maxTextureArrayLayers = 2048;
 };
 
 // Checks one entry / every entry (registry order). Never throws: problems become errors.

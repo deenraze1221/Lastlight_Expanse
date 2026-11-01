@@ -481,7 +481,7 @@ TEST_CASE("asset registry: blocks assets (dependencies, sizes, texture array, de
     };
     png("concrete.png", 64, 64);
     png("panel.png", 64, 64);
-    ws.write("blocks/bunker.blocks.json", R"({"schema": "zodar.blocks", "version": 1, "uvPerMetre": 1,
+    ws.write("blocks/walls.blocks.json", R"({"schema": "zodar.blocks", "version": 1, "uvPerMetre": 1,
         "materials": [{"name": "concrete", "textures": "textures/concrete.png"},
                       {"name": "panel", "textures": {"top": "textures/concrete.png", "all": "textures/panel.png"},
                        "emissive": 1}],
@@ -492,12 +492,12 @@ TEST_CASE("asset registry: blocks assets (dependencies, sizes, texture array, de
     CHECK((detectAssetType("x.blocks.json") == AssetType::Blocks));
     CHECK((parseAssetType("blocks") == AssetType::Blocks));
     CHECK(std::string(toString(AssetType::Blocks)) == "blocks");
-    const AssetEntry e = importAsset(r, ws.dir / "blocks" / "bunker.blocks.json");
+    const AssetEntry e = importAsset(r, ws.dir / "blocks" / "walls.blocks.json");
     CHECK((e.type == AssetType::Blocks));
-    CHECK(e.id == "bunker");
+    CHECK(e.id == "walls");
     CHECK(e.dependencies ==
           std::vector<std::string>{"blocks/textures/concrete.png", "blocks/textures/panel.png"});
-    AssetCheckResult res = checkAsset(r, r.at("bunker"));
+    AssetCheckResult res = checkAsset(r, r.at("walls"));
     CHECK_MESSAGE(std::string(res.status()) == "ok", (res.warnings.empty() ? "" : res.warnings[0]));
     CHECK(res.blocks == 6);
     CHECK(res.layers == 3); // concrete, panel's concrete top (other parameters), panel
@@ -514,55 +514,55 @@ TEST_CASE("asset registry: blocks assets (dependencies, sizes, texture array, de
 
     // Editing a texture makes the blocks asset stale.
     png("panel.png", 64, 64, 30);
-    CHECK(contains(checkAsset(r, r.at("bunker")).warnings, "stale"));
-    importAsset(r, ws.dir / "blocks" / "bunker.blocks.json");
+    CHECK(contains(checkAsset(r, r.at("walls")).warnings, "stale"));
+    importAsset(r, ws.dir / "blocks" / "walls.blocks.json");
 
     // A layer of another size: the texture array cannot be built (error with the JSON path)
     // and the size is outside the texture class (warning).
     png("panel.png", 32, 32);
-    importAsset(r, ws.dir / "blocks" / "bunker.blocks.json");
-    res = checkAsset(r, r.at("bunker"));
-    CHECK(contains(res.errors, "texture array: blocks/bunker.blocks.json: /materials/1/textures/side: 32x32 (panel.png) "
+    importAsset(r, ws.dir / "blocks" / "walls.blocks.json");
+    res = checkAsset(r, r.at("walls"));
+    CHECK(contains(res.errors, "texture array: blocks/walls.blocks.json: /materials/1/textures/side: 32x32 (panel.png) "
                                "differs from the texture array size 64x64 (first layer: /materials/0/textures/top)"));
     CHECK(contains(res.warnings, "32x32 is not allowed for texture class 'environment'"));
     // ... with texture class "small" the size warnings move (32 ok, 64 not), the array error stays.
     AssetImportOptions small;
     small.textureClass = "small";
-    importAsset(r, ws.dir / "blocks" / "bunker.blocks.json", small);
-    res = checkAsset(r, r.at("bunker"));
+    importAsset(r, ws.dir / "blocks" / "walls.blocks.json", small);
+    res = checkAsset(r, r.at("walls"));
     CHECK(contains(res.warnings, "concrete.png: 64x64 is not allowed for texture class 'small'"));
     CHECK_FALSE(contains(res.warnings, "panel.png: 32x32"));
     CHECK(contains(res.errors, "texture array:"));
 
     // Density = layer size x uvPerMetre against the registry target: 64 x 0.25 = 16, outside 32..128.
     png("panel.png", 64, 64);
-    ws.write("blocks/bunker.blocks.json", R"({"schema": "zodar.blocks", "version": 1, "uvPerMetre": 0.25,
+    ws.write("blocks/walls.blocks.json", R"({"schema": "zodar.blocks", "version": 1, "uvPerMetre": 0.25,
         "materials": [{"name": "concrete", "textures": "textures/concrete.png"}],
         "blocks": [{"name": "concrete", "material": "concrete"}]})");
     AssetImportOptions env;
     env.textureClass = "";
-    importAsset(r, ws.dir / "blocks" / "bunker.blocks.json", env);
-    res = checkAsset(r, r.at("bunker"));
+    importAsset(r, ws.dir / "blocks" / "walls.blocks.json", env);
+    res = checkAsset(r, r.at("walls"));
     CHECK(res.texelDensity == 16.0);
     CHECK(contains(res.warnings, "texel density 16.0 texels/m outside 32..128 (target 64)"));
 
     // Schema errors and unknown shapes are errors (built-in shapes unless options pass a library).
-    ws.write("blocks/bunker.blocks.json", R"({"schema": "zodar.blocks", "version": 1,
+    ws.write("blocks/walls.blocks.json", R"({"schema": "zodar.blocks", "version": 1,
         "materials": [{"name": "concrete", "textures": "textures/concrete.png"}],
         "blocks": [{"name": "arch", "material": "concrete", "shape": "game_arch"}]})");
-    importAsset(r, ws.dir / "blocks" / "bunker.blocks.json");
-    CHECK(contains(checkAsset(r, r.at("bunker")).errors, "/blocks/0/shape: unknown shape 'game_arch'"));
+    importAsset(r, ws.dir / "blocks" / "walls.blocks.json");
+    CHECK(contains(checkAsset(r, r.at("walls")).errors, "/blocks/0/shape: unknown shape 'game_arch'"));
     auto lib = std::make_shared<voxel::ShapeLibrary>(voxel::ShapeLibrary::builtins());
     voxel::ShapeTemplate arch{"game_arch", {}, {}, false};
     for (const auto& p : (*lib)[voxel::ShapeLibrary::kCube].polygons) arch.polygons.push_back({p.corners});
     lib->add(arch);
     AssetCheckOptions withShapes;
     withShapes.blockShapes = lib;
-    CHECK(checkAsset(r, r.at("bunker"), withShapes).errors.empty());
+    CHECK(checkAsset(r, r.at("walls"), withShapes).errors.empty());
 
     // A missing texture is a missing dependency (no texture-array error on top).
     std::filesystem::remove(ws.dir / "blocks" / "textures" / "concrete.png");
-    res = checkAsset(r, r.at("bunker"), withShapes);
+    res = checkAsset(r, r.at("walls"), withShapes);
     CHECK(contains(res.errors, "dependency missing: blocks/textures/concrete.png"));
     CHECK_FALSE(contains(res.errors, "texture array"));
 }
@@ -585,4 +585,50 @@ TEST_CASE("asset registry: blocks textures are palette-checked") {
     REQUIRE(res.paletteDeviation.has_value());
     CHECK(res.paletteDeviation->texels == 1024);
     CHECK(res.paletteDeviation->offPalette == 1);
+}
+
+TEST_CASE("asset registry: blocks checks report every texture and the layer limit") {
+    const Workspace ws;
+    AssetRegistry r(ws.dir);
+    std::filesystem::create_directories(ws.dir / "b");
+    REQUIRE(writePng(ws.dir / "b" / "good.png", 32, 32, std::vector<uint8_t>(32 * 32 * 4, 90)));
+    REQUIRE(writePng(ws.dir / "b" / "odd.png", 48, 48, std::vector<uint8_t>(48 * 48 * 4, 90)));
+    ws.write("b/broken.png", "not a png");
+    ws.write("b/w.blocks.json", R"({"schema": "zodar.blocks", "version": 1,
+        "materials": [{"name": "a", "textures": "broken.png"}, {"name": "b", "textures": "odd.png"},
+                      {"name": "c", "textures": "good.png"}],
+        "blocks": [{"name": "x", "material": "a"}]})");
+    importAsset(r, ws.dir / "b" / "w.blocks.json");
+    const AssetCheckResult res = checkAsset(r, r.at("w"));
+    // The unreadable texture is an error; the other textures are still checked.
+    CHECK(contains(res.errors, "texture b/broken.png:"));
+    CHECK(contains(res.warnings, "48x48 is not a standard texture size"));
+    CHECK(res.textures.size() == 2);
+    CHECK_FALSE(contains(res.errors, "texture array: ")); // incomplete: no array check
+
+    // Layer limit (no device in the checks: the Vulkan minimum 2048 by default).
+    AssetCheckOptions small;
+    small.maxTextureArrayLayers = 2;
+    CHECK(contains(checkAsset(r, r.at("w"), small).errors,
+                   "texture array: b/w.blocks.json: /materials: 3 texture-array layers exceed the limit of 2"));
+}
+
+TEST_CASE("asset registry: textureStandards density values round-trip (float precision)") {
+    AssetRegistry r("reg");
+    TextureStandard s;
+    s.classes = {{"env", {64}}};
+    s.defaultClass = "env";
+    s.densityTarget = 33.3;
+    s.densityTolerance = 1.7;
+    r.setTextureStandards(s);
+    const AssetRegistry back = AssetRegistry::parse(r.serialize(), "reg/assets.json");
+    CHECK(back == r);
+    CHECK(r.textureStandards()->densityTarget == static_cast<double>(33.3f)); // rounded when set
+    CHECK(back.textureStandards()->densityTarget == static_cast<double>(33.3f));
+    CHECK(back.serialize() == r.serialize());
+    const auto issues = parseIssues(R"({"schema": "zodar.asset_registry", "version": 1,
+        "textureStandards": {"classes": {"env": [64]}, "defaultClass": "env", "densityTolerance": "x"},
+        "assets": []})");
+    REQUIRE(issues.size() == 1);
+    CHECK(issues[0].path == "/textureStandards/densityTolerance");
 }

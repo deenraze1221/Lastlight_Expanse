@@ -67,7 +67,7 @@ struct BlockFileData {
 
 // Parses block JSON; `file` names the source in errors. Throws DataError listing every problem
 // with its JSON path (and line:column): schema/version, unknown fields, duplicate or reserved
-// names, unknown materials, bad numbers, rotations other than 1/4, more than 65535 ids. With
+// names, unknown materials, bad numbers, rotations other than 1/4, more than 65534 ids. With
 // `shapes`, unknown shape names are reported too.
 [[nodiscard]] BlockFileData parseBlockFile(std::string_view json, std::string_view file,
                                            const voxel::ShapeLibrary* shapes = nullptr);
@@ -107,19 +107,27 @@ struct BlockCatalogue {
 };
 
 // Builds the catalogue. `directory` resolves texture paths; `shapes` (default: the built-in
-// library) resolves shape names (throws DataError naming "/blocks/<i>/shape" for an unknown
-// one). Deterministic: the same data gives the same catalogue.
+// library) resolves shape names. Data built in code is validated again (DataError with JSON
+// paths: empty/duplicate/reserved names, rotations other than 1/4, more than 65534 ids,
+// parameters out of range or NaN, empty textures, unknown shapes/materials).
+// Deterministic: the same data gives the same catalogue.
 [[nodiscard]] BlockCatalogue buildBlockCatalogue(const BlockFileData& data, const std::filesystem::path& directory,
                                                  std::shared_ptr<const voxel::ShapeLibrary> shapes = {},
                                                  std::string_view file = "<memory>");
 [[nodiscard]] BlockCatalogue loadBlockCatalogue(const std::filesystem::path& path,
                                                 std::shared_ptr<const voxel::ShapeLibrary> shapes = {});
 
-// Texture-array dimension check: every layer must be square and the same size as layer 0.
-// `sizes[i]` is the (width, height) of layers[i]. Returns one issue per offending layer, with
-// the layer's JSON path, e.g. "/materials/1/textures/side: 32x32 (rust.png) differs from the
-// texture array size 64x64 (first layer: /materials/0/textures/top)".
+// Texture-array dimension check: every layer must be square and the same size as the first
+// square layer (the reference). `sizes[i]` is the (width, height) of layers[i]. Returns one
+// issue per offending layer, with the layer's JSON path, e.g. "/materials/1/textures/side:
+// 32x32 (rust.png) differs from the texture array size 64x64 (first layer:
+// /materials/0/textures/top)". zodar::Error if sizes/layerOrigins do not match the layers.
 [[nodiscard]] std::vector<DataIssue> checkBlockLayerSizes(const BlockCatalogue& catalogue,
                                                           const std::vector<glm::uvec2>& sizes, std::string_view file);
+
+// Layer-count check against a texture-array limit (the device's maxImageArrayLayers at
+// runtime; the Vulkan minimum 2048 in the asset checks). One issue at "/materials" or none.
+[[nodiscard]] std::vector<DataIssue> checkBlockLayerCount(const BlockCatalogue& catalogue, uint32_t maxLayers,
+                                                          std::string_view file);
 
 } // namespace zodar

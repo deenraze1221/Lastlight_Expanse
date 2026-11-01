@@ -49,6 +49,9 @@ cmake --build build
 SDL_VIDEO_DRIVER=offscreen ctest --test-dir build --output-on-failure
 ```
 
+- Test gate before every push: `tools/gate.sh` (Debug + Release, warnings as errors, all ctest once,
+  Highlands); enforced by `tools/hooks/pre-push` after `git config core.hooksPath tools/hooks`
+  (local hook, bypassable; `docs/guide/RUNNING.md` "Test gate"). Never retry failures until green.
 - Short output: `python3 tools/zodar.py [--preset P | --build-dir DIR] build|test|run|shot|bench|report`
   (presets `debug|release|gpu-tests|ci` in `CMakePresets.json`; guide: `docs/guide/RUNNING.md`).
 - Focused: `./build/bin/ZodarTests -tc='name*'`, `./build/bin/ZodarGpuTests -tc='name*'`.

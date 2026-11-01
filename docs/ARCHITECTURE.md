@@ -486,8 +486,13 @@ Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
   (RGBA32F, `texelFetch`): exact float32, because RGBA8/RGBA16F lose precision (tested).
   `AssetManager/BlockMaterials` builds texture array + table + material from a catalogue.
 - Registry palettes: unknown ids map to `VoxelPalette::kFallbackMaterial` (magenta), never a
-  real material; shape validation also requires star-shaped polygons and non-overlapping
-  face polygons.
+  real material; at most 65534 block ids (id 0xFFFF stays out of range); shape validation
+  also requires star-shaped polygons and non-overlapping face polygons.
+- V2 follow-up (audit): bindless slots are registered before uploads are recorded
+  (`Texture`, `TextureArray`, `Vec4Table`); texture arrays and block catalogues are checked
+  against `maxImageArrayLayers`; `zodar/voxel` bounds-checks the table index and reads the
+  table with a dedicated nearest sampler; `buildBlockCatalogue` re-validates code-built data;
+  `tools/gate.sh` + `tools/hooks/pre-push` (opt-in local hook) gate pushes.
 
 ## World production (approved in principle, 2026-11-01; planning only)
 

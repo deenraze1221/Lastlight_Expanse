@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Pre-push hook: runs tools/gate.sh and blocks the push unless it passes.
+# Enable once per clone:  git config core.hooksPath tools/hooks
+# Limitations (docs/guide/RUNNING.md "Test gate"): hooks are not active after cloning until
+# enabled, `git push --no-verify` skips them, and the gate tests the checked-out tree, so the
+# hook refuses pushes of commits other than a clean HEAD.
+repo=$(git rev-parse --show-toplevel)
+head=$(git rev-parse HEAD)
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    echo "pre-push: uncommitted changes; the gate tests the working tree, so commit or stash first" >&2
+    exit 1
+fi
+zero=0000000000000000000000000000000000000000
+while read -r localRef localSha remoteRef remoteSha; do
+    [ "$localSha" = "$zero" ] && continue # deleting a remote ref
+    if [ "$localSha" != "$head" ]; then
+        echo "pre-push: pushing $localRef ($localSha) but HEAD is $head; check out the pushed commit so the gate tests it" >&2
+        exit 1
+    fi
+done
+exec "$repo/tools/gate.sh"

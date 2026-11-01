@@ -328,22 +328,24 @@ std::optional<TextureStandard> readTextureStandards(const Json& value, detail::I
     } else {
         ok = false;
     }
-    float target = static_cast<float>(s.densityTarget);
-    if (detail::readFloat(value, "densityTarget", path, target, issues)) {
-        if (!(target > 0.0f)) {
-            issues.add(detail::child(path, "densityTarget"), "expected a positive number of texels per metre");
-            ok = false;
+    // Engine JSON numbers are float (JsonRead.h); setTextureStandards rounds to float too, so
+    // parse(serialize()) == registry holds.
+    const auto readDouble = [&](const char* key, double& out) {
+        const auto it = value.find(key);
+        if (it == value.end()) return true;
+        if (!it->is_number() || !std::isfinite(it->get<double>())) {
+            issues.add(detail::child(path, key), "expected a finite number, got " + detail::typeName(*it));
+            return false;
         }
-        s.densityTarget = target;
-    } else if (value.contains("densityTarget")) {
+        out = it->get<double>();
+        return true;
+    };
+    ok = readDouble("densityTarget", s.densityTarget) && ok;
+    if (!(s.densityTarget > 0.0)) {
+        issues.add(detail::child(path, "densityTarget"), "expected a positive number of texels per metre");
         ok = false;
     }
-    float tolerance = static_cast<float>(s.densityTolerance);
-    if (detail::readFloat(value, "densityTolerance", path, tolerance, issues)) {
-        s.densityTolerance = tolerance;
-    } else if (value.contains("densityTolerance")) {
-        ok = false;
-    }
+    ok = readDouble("densityTolerance", s.densityTolerance) && ok;
     if (!ok) {
         return std::nullopt;
     }
@@ -717,6 +719,10 @@ void AssetRegistry::setTextureStandards(std::optional<TextureStandard> standard)
         standard->validate();
         std::ranges::sort(standard->classes, {}, &TextureClassRule::name);
         standard->engineRule = false;
+        // Stored as float in assets.json (engine JSON numbers are float): round now so the
+        // registry compares equal after save + load.
+        standard->densityTarget = static_cast<float>(standard->densityTarget);
+        standard->densityTolerance = static_cast<float>(standard->densityTolerance);
     }
     m_textureStandards = std::move(standard);
 }
@@ -1402,8 +1408,18 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
                     complete = false; // reported as a missing dependency
                     continue;
                 }
-                checkImageFile(r, sizes, t, dir, &palette);
+                // One unreadable texture must not hide the problems of the others.
+                try {
+                    checkImageFile(r, sizes, t, dir, &palette);
+                } catch (const std::exception& e) {
+                    r.errors.push_back("texture " + relativePath(t, dir) + ": " + e.what());
+                    complete = false;
+                    continue;
+                }
                 dims[t] = {r.textures.back().width, r.textures.back().height};
+            }
+            for (const DataIssue& i : checkBlockLayerCount(c, options.maxTextureArrayLayers, entry.source)) {
+                r.errors.push_back("texture array: " + i.toString());
             }
             if (complete && !c.layers.empty()) {
                 // One texture array: square layers of one size (errors: the array cannot be built).

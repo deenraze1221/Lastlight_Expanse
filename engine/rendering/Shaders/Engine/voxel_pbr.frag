@@ -7,9 +7,13 @@
 // a = texture-array layer. UVs: mesher UVs (vUv0, MeshOptions::uvPerMetre), so shapes and
 // slopes are textured like cube faces.
 // Material: custom0.x texture array (uint bits), custom0.y sampler (uint bits),
-//           custom0.z layer parameter table (Renderer/Vec4Table, uint bits);
-//           baseColorFactor multiplies the albedo.
+//           custom0.z layer parameter table (Renderer/Vec4Table, uint bits),
+//           custom0.w table size (uint bits), custom1.x nearest sampler for the table
+//           (uint bits); baseColorFactor multiplies the albedo.
 // Layer parameters (float32, exact): r = roughness, g = metallic, b = emissive strength.
+// Layers outside the table (a mesh from another palette, a non-voxel mesh) never read past
+// it: they use the fallback parameters (roughness 1, metallic 0, emissive 0); the texture
+// sample clamps its layer as Vulkan defines for array layers.
 // Emissive: texels with alpha < 1 emit texel.rgb * (1 - alpha) * strength (not tinted).
 #include "zodar/surface.glsl"
 #include "zodar/lighting.glsl"
@@ -22,9 +26,15 @@ void main() {
     const uint textureArray = floatBitsToUint(m.custom0.x);
     const uint samplerIndex = floatBitsToUint(m.custom0.y);
     const uint table = floatBitsToUint(m.custom0.z);
-    const int layer = int(floor(vColor.a + 0.5));
-    vec4 texel = zodarSampleArray(textureArray, samplerIndex, vec3(vUv0, float(layer)));
-    vec4 params = zodarFetch(table, samplerIndex, ivec2(layer, 0));
+    const uint tableSize = floatBitsToUint(m.custom0.w);
+    const uint tableSampler = floatBitsToUint(m.custom1.x);
+    const float layerValue = floor(vColor.a + 0.5);
+    vec4 texel = zodarSampleArray(textureArray, samplerIndex, vec3(vUv0, layerValue));
+    // Bounds check in float before converting: NaN, negative or too-large values fail it.
+    vec4 params = vec4(1.0, 0.0, 0.0, 0.0);
+    if (layerValue >= 0.0 && layerValue < float(tableSize)) {
+        params = zodarFetch(table, tableSampler, ivec2(int(layerValue), 0));
+    }
 
     ZodarPbrSurface s;
     s.position = vWorldPosition;

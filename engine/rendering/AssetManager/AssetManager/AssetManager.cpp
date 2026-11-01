@@ -278,6 +278,9 @@ Decoded decodeModelFile(const std::filesystem::path& file, const ModelLoadSettin
         for (const ImageData& image : d.data.images) {
             const std::string name = file.filename().string() + "/" + (image.name.empty() ? "image" : image.name);
             if (auto issue = checkTextureSizeAnyClass(*sizes, name, image.width, image.height)) {
+                if (issue->verdict == TextureSizeVerdict::Prohibited) {
+                    ZODAR_LOG_ERROR("{}", issue->message); // still loaded; logged once more below
+                }
                 d.warnings.push_back(std::move(issue->message));
             }
         }

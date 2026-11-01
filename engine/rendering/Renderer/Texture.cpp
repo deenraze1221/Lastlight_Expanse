@@ -46,14 +46,20 @@ Texture::Texture(UploadBatch& batch, BindlessRegistry& registry, const ImageData
                                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                           mips, image.name.empty() ? "Texture" : image.name.c_str()});
 
+    // Register before recording the upload: if registration throws (table full), no copy into
+    // the image is pending in `batch`, so destroying the image during unwinding is safe.
+    m_index = registry.registerTexture(m_image.view());
+    m_registry = &registry;
     std::vector<ImageLevelData> levels;
     for (size_t i = 0; i < image.levels.size(); ++i) {
         levels.push_back({image.levelWidth(i), image.levelHeight(i), image.levels[i]});
     }
-    batch.uploadImage(m_image, levels);
-
-    m_registry = &registry;
-    m_index = registry.registerTexture(m_image.view());
+    try {
+        batch.uploadImage(m_image, levels);
+    } catch (...) {
+        release();
+        throw;
+    }
 }
 
 Texture::~Texture() {

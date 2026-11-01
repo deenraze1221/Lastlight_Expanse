@@ -80,9 +80,11 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
   - fill fraction (derived from the enclosed volume, in eighths, for LOD) and an explicit
     `aoOccluder` flag (V1 decision).
   - Validation (`zodar::Error`): corners inside the cell, planar non-degenerate polygons,
-    star-shaped from the first corner (no reversed fan triangle, the fan sweeps less than a
-    full turn; V2), boundary polygons facing outward, no overlap on a face (area sum ≤ 1 and
-    no 32 × 32 sample point strictly inside two polygons, so overlaps balanced by gaps fail; V2), closed and outward surface
+    star-shaped from the first corner (no reversed fan triangle (relative test on the fan
+    angle's sine), the fan sweeps less than a full turn; V2), boundary polygons facing outward,
+    no overlap on a face (area sum ≤ 1 and no 32 × 32 sample point strictly inside two
+    polygons, so overlaps balanced by gaps fail; V2; known limit: an overlapping sliver
+    thinner than about 1/32 cell between sample points is not detected), closed and outward surface
     (volume independent of the reference point), valid boxes, unique name.
 - Built-in engine shapes (generic, game-neutral) *(exists)*. Rotation 0: slopes and steps rise
   toward +Z, curved pieces bend about the X axis.
@@ -134,6 +136,11 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
     (rust.png) differs from the texture array size 64x64 (first layer:
     /materials/0/textures/top)`.
 - **Block id stability (V2 rules):**
+  - At most **65534 ids** (incl. rotation variants): id 0xFFFF always stays outside the
+    registry, so `BlockTable` keeps an out-of-range fallback cube (e.g. for bedrock when no
+    block is a cube); `BlockTable` rejects larger registry palettes.
+  - `buildBlockCatalogue` validates data built in code as well (names, rotations 1/4, id
+    limit, parameter ranges incl. NaN, empty textures) with JSON paths.
   - Ids follow the file order: id 0 is empty, the first definition is id 1. `"rotations": 4`
     expands into four consecutive ids named `name`, `name@1`, `name@2`, `name@3` (yaw steps
     0..3); `@` is reserved in names. Loading the same file always gives the same ids.
@@ -221,7 +228,14 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
   `MaterialSystem` as `kVoxelShader`; `AssetManager/BlockMaterials`)*
   - Inputs: mesher UVs (`vUv0`, `MeshOptions::uvPerMetre` = the catalogue's), vertex colour
     rgb = tint × AO, alpha = texture-array layer. Material `custom0` = texture array, sampler,
-    layer table (bindless indices as uint bits); `baseColorFactor` multiplies the albedo.
+    layer table, table size; `custom1.x` = a nearest sampler used only for the table reads
+    (never a filtering sampler on RGBA32F) (indices/sizes as uint bits); `baseColorFactor`
+    multiplies the albedo.
+  - **Bounds:** the shader checks the layer against the table size before the table read
+    (in float, so NaN/negative/too large fail) and uses fallback parameters (roughness 1,
+    metallic 0, emissive 0) outside it; it does not rely on `robustImageAccess`. The texture
+    sample clamps its layer as Vulkan defines for array layers. Tested with a mesh whose
+    layers lie outside the table.
   - Per-layer parameters (roughness, metallic, emissive) live in `gfx::Vec4Table`: an N × 1
     `R32G32B32A32_SFLOAT` image read with `texelFetch` (`zodarFetch`), so values are exact
     float32. **Precision decision (tested):** RGBA8 would store roughness 0.3 as 0.302 and
@@ -229,13 +243,22 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
     is checked at creation (mandatory in Vulkan).
   - Emissive: texels with alpha < 1 emit `texel.rgb × (1 − alpha) × emissive` (untinted; the
     Lastlight terrain convention).
-  - `BlockMaterials(context, upload, scene, catalogue)` loads the layer textures (sRGB,
-    mips, pixel-art sampler), rejects mismatched layer sizes with the layer's JSON path,
-    uploads the texture array and the table and creates the material; destruction retires
-    them through the deletion queue.
+  - `BlockMaterials(context, upload, scene, catalogue)` checks the layer count against the
+    device's `maxImageArrayLayers` (DataError at `/materials`, before any texture is loaded),
+    loads the layer textures (sRGB, mips, pixel-art sampler), rejects mismatched layer sizes
+    with the layer's JSON path, uploads the texture array and the table and creates the
+    material; destruction retires them through the deletion queue. It must be destroyed before
+    its `SceneRenderer` (same contract as `AssetManager`).
+  - GPU resource order: `Texture`, `TextureArray` and `Vec4Table` register their bindless slot
+    before recording uploads, so a full bindless table throws before any copy into the image
+    is pending (tested). Remaining limitation: `TextureArray` records one upload per layer; if
+    staging allocation fails (out of memory) after some layers were recorded, those copies stay
+    pending while the image is destroyed (pre-existing, not reachable by input data).
   - Tests (`engine/tests/Gpu/VoxelMaterialTests.cpp`, lavapipe): table read back bit-exact;
     emissive blocks byte-identical to `zodar/unlit`; lit and fogged blocks identical to
-    `zodar/pbr` on the same surface (tolerance 1 for other drivers).
+    `zodar/pbr` on the same surface (tolerance 1 for other drivers); out-of-range layers use
+    the fallback parameters; a full bindless table and catalogues above `maxImageArrayLayers`
+    fail cleanly.
 - Required renderer track (`docs/AI_FIRST_ROADMAP.md`): S5 shadows, S7 AO beyond voxel AO,
   S8 volumetric fog, weather; scheduled after D8, before the bunker's final presentation and
   sign-off (approved placement, `docs/WORLD_PRODUCTION_ROADMAP.md` §2).

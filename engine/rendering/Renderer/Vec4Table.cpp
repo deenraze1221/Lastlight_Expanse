@@ -29,12 +29,19 @@ Vec4Table::Vec4Table(UploadBatch& batch, BindlessRegistry& registry, std::span<c
     m_image = GpuImage(context, {m_size, 1, kFormat, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                                                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                  1, name.c_str()});
+    // Register before recording the upload: if registration throws (table full), no copy into
+    // the image is pending in `batch`, so destroying the image during unwinding is safe.
+    m_index = registry.registerTexture(m_image.view());
+    m_registry = &registry;
     std::vector<uint8_t> bytes(values.size() * sizeof(glm::vec4));
     std::memcpy(bytes.data(), values.data(), bytes.size());
     const ImageLevelData level{m_size, 1, bytes};
-    batch.uploadImage(m_image, std::span(&level, 1));
-    m_registry = &registry;
-    m_index = registry.registerTexture(m_image.view());
+    try {
+        batch.uploadImage(m_image, std::span(&level, 1));
+    } catch (...) {
+        release();
+        throw;
+    }
 }
 
 Vec4Table::~Vec4Table() {
