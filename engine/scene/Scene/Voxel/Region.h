@@ -26,10 +26,11 @@ struct RegionData {
     RegionLayer authored, runtime;
     bool operator==(const RegionData&) const = default;
 };
+uint64_t regionMemoryBytes(const RegionData& data);
 // Canonical versioned palette/RLE format; all decode allocations are bounded.
 std::string serializeRegion(const RegionData& data);
-RegionData parseRegion(std::string_view bytes);
-RegionData loadRegion(const std::filesystem::path& path);
+RegionData parseRegion(std::string_view bytes, uint64_t maxMemory = 128 * 1024 * 1024);
+RegionData loadRegion(const std::filesystem::path& path, uint64_t maxMemory = 128 * 1024 * 1024);
 void saveRegion(const std::filesystem::path& path, const RegionData& data);
 // Resolve the entire layer before publishing any data. Unknown names are errors.
 using BlockNames = std::vector<std::string>; // id -> stable name, id 0 must be empty

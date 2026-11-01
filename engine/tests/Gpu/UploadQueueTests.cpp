@@ -173,3 +173,24 @@ TEST_CASE("upload queue: throughput (informational)") {
     CHECK(ms(staged, submitted) < ms(submitted, done) + 50.0); // Submission does not wait for the copy.
     CHECK(upload.queue().stats().stagingBytesInFlight == 0);
 }
+
+#include "Renderer/StreamedMeshSet.h"
+TEST_CASE("streamed meshes: pressure preserves old meshes and counts deferred releases") {
+    zodar::test::ValidationGuard guard;
+    StreamedMeshSet meshes(*gpu().context,*gpu().upload);
+    zodar::MeshData mesh; mesh.vertices.resize(3); mesh.indices={0,1,2};
+    mesh.vertices[0].position={0,0,0}; mesh.vertices[1].position={1,0,0}; mesh.vertices[2].position={0,1,0};
+    mesh.computeBounds();
+    const uint64_t bytes=3*sizeof(zodar::Vertex)+3*4;
+    CHECK_FALSE(meshes.tryUpsert(1,mesh,glm::mat4(1),0,bytes));
+    CHECK(meshes.stats().gpuBytes==0);
+    REQUIRE(meshes.tryUpsert(1,mesh,glm::mat4(1),0,2*bytes));
+    CHECK(meshes.stats().gpuBytes==bytes); CHECK(meshes.stats().stagingBytes==bytes);
+    meshes.update(); gpu().upload->queue().waitIdle(); acquireInFrame(*gpu().upload); meshes.update();
+    CHECK(meshes.stats().meshes==1);
+    CHECK_FALSE(meshes.tryUpsert(1,mesh,glm::mat4(1),0,2*bytes));
+    CHECK(meshes.stats().meshes==1);
+    meshes.remove(1); CHECK(meshes.stats().deferredBytes==bytes); CHECK(meshes.stats().gpuBytes==bytes);
+    gpu().context->waitIdle(); gpu().context->deletionQueue().flushAll();
+    CHECK(meshes.stats().deferredBytes==0); CHECK(meshes.stats().gpuBytes==0);
+}

@@ -12,7 +12,8 @@ public:
         BlockNames names;
         std::string baseIdentity;
         uint32_t maxRequests = 4;
-        uint64_t maxBytes = 64 * 1024 * 1024;
+        uint64_t requestBytes = 32 * 1024 * 1024; // reservation includes decode/encode scratch
+        uint64_t maxBytes = 256 * 1024 * 1024;
     };
     enum class Outcome { Success, Cancelled, Failure };
     struct Event { uint64_t request; RegionCoord coord; bool save; Outcome outcome; std::string error; };
@@ -33,7 +34,7 @@ public:
 private:
     struct Entry { std::shared_ptr<const RegionData> data; uint64_t revision=0, saved=0; bool pending=false; };
     struct Result { Event event; uint64_t revision=0; std::shared_ptr<const RegionData> data; };
-    struct Request { uint64_t id; RegionCoord coord; bool save; uint64_t revision; std::shared_ptr<std::atomic_bool> cancel; };
+    struct Request { uint64_t id; RegionCoord coord; bool save; uint64_t revision; std::shared_ptr<std::atomic_bool> cancel; std::shared_ptr<const RegionData> snapshot; };
     void integrate() const;
     void submit(RegionCoord coord, bool save) const;
     void saveDirty() const;
@@ -43,6 +44,7 @@ private:
     JobSystem* m_jobs;
     RegionLayout m_layout;
     mutable std::mutex m_mutex;
+    mutable std::vector<std::weak_ptr<const RegionData>> m_snapshots;
     mutable std::map<RegionCoord, Entry> m_entries;
     mutable std::map<RegionCoord, std::shared_ptr<const RegionData>> m_resident;
     mutable std::map<uint64_t, Request> m_requests;

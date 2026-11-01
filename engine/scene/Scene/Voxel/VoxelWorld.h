@@ -49,6 +49,7 @@ struct StreamingSettings {
     float unloadHysteresis = 1.5f;      // extra chunks before meshes/data are dropped
     uint32_t maxJobsPerUpdate = 48;     // generation + meshing jobs scheduled per update()
     uint32_t maxJobsInFlight = 256;
+    uint64_t cpuBudgetBytes = 0; // 0: legacy unlimited; conservative CPU payload reservations
     MeshOptions mesh;                   // lod, voxelSize and sealFaces are set per chunk
 };
 
@@ -111,6 +112,8 @@ struct VoxelWorldStats {
     uint32_t generateInFlight = 0;
     uint32_t meshInFlight = 0;
     uint32_t editedChunks = 0;
+    uint64_t cpuBytes = 0; // retained data, pending work and unconsumed mesh events
+    bool memoryPressure = false;
     uint64_t voxelBytes = 0;       // dense chunk arrays (uniform chunks cost nothing)
     uint32_t lodHistogram[kMaxLod + 1]{};
     uint64_t generated = 0;        // totals since creation
@@ -271,6 +274,8 @@ private:
     uint64_t m_totalMeshed = 0;
     uint64_t m_staleDropped = 0;
     std::string m_failure;
+    uint64_t m_meshReservation = 0;
+    bool m_memoryPressure = false;
 };
 
 } // namespace zodar::voxel

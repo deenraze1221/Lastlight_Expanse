@@ -21,10 +21,26 @@ StreamedMeshSet::~StreamedMeshSet() {
 
 void StreamedMeshSet::retire(std::shared_ptr<GpuMesh> mesh) {
     if (mesh) {
-        m_context.deletionQueue().retire([mesh = std::move(mesh)]() mutable { mesh.reset(); });
+        const uint64_t bytes=uint64_t(mesh->vertexCount())*sizeof(Vertex)+uint64_t(mesh->indexCount())*4;
+        *m_deferredBytes+=bytes;
+        m_context.deletionQueue().retire([mesh=std::move(mesh), counter=m_deferredBytes,bytes]() mutable {
+            mesh.reset(); *counter-=bytes;
+        });
     }
 }
 
+StreamedMeshSet::Stats StreamedMeshSet::stats() const {
+    auto result=m_stats; result.deferredBytes=*m_deferredBytes; result.gpuBytes+=result.deferredBytes;
+    return result;
+}
+bool StreamedMeshSet::tryUpsert(uint64_t key,const MeshData& mesh,const glm::mat4& transform,
+                              MaterialHandle material,uint64_t budgetBytes) {
+    recountStats();
+    const auto current=stats();
+    const uint64_t bytes=mesh.vertices.size()*sizeof(Vertex)+mesh.indices.size()*4;
+    if(budgetBytes && current.gpuBytes+current.stagingBytes+2*bytes>budgetBytes) return false;
+    upsert(key,mesh,transform,material); recountStats(); return true;
+}
 void StreamedMeshSet::upsert(uint64_t key, const MeshData& mesh, const glm::mat4& transform, MaterialHandle material) {
     if (mesh.indices.empty()) {
         remove(key);
@@ -43,6 +59,7 @@ void StreamedMeshSet::upsert(uint64_t key, const MeshData& mesh, const glm::mat4
     slot.ticket = {};
     m_inBatch.push_back(key);
     m_stats.uploadedBytes += mesh.vertices.size() * sizeof(Vertex) + mesh.indices.size() * sizeof(uint32_t);
+    recountStats();
 }
 
 void StreamedMeshSet::remove(uint64_t key) {
@@ -53,6 +70,7 @@ void StreamedMeshSet::remove(uint64_t key) {
     retire(std::move(it->second.live));
     retire(std::move(it->second.pending));
     m_slots.erase(it);
+    recountStats();
 }
 
 void StreamedMeshSet::update() {
@@ -85,6 +103,7 @@ void StreamedMeshSet::recountStats() {
     m_stats.pendingUploads = 0;
     m_stats.triangles = 0;
     m_stats.gpuBytes = 0;
+    m_stats.stagingBytes=0;
     for (const auto& [key, slot] : m_slots) {
         if (slot.live) {
             ++m_stats.meshes;
@@ -93,6 +112,7 @@ void StreamedMeshSet::recountStats() {
         }
         if (slot.pending) {
             ++m_stats.pendingUploads;
+            m_stats.stagingBytes+=uint64_t(slot.pending->vertexCount())*sizeof(Vertex)+uint64_t(slot.pending->indexCount())*4;
             m_stats.gpuBytes += uint64_t(slot.pending->vertexCount()) * sizeof(Vertex) + uint64_t(slot.pending->indexCount()) * 4;
         }
     }

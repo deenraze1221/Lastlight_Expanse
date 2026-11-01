@@ -117,3 +117,21 @@ TEST_CASE("region: cancelled loads and incompatible files emit terminal results"
     stream.flush();
     std::filesystem::remove_all(root);
 }
+TEST_CASE("region: budget pressure blocks admission and oversized decode") {
+    struct Base : IVoxelGenerator { void generate(const ChunkCoord&,VoxelChunk& c) const override { c=VoxelChunk(1); } };
+    const auto root=std::filesystem::temp_directory_path()/"zodar-region-budget";
+    std::filesystem::remove_all(root);
+    RegionStreamer::Settings s; s.directory=root; s.names={"","stone"}; s.world.viewRadius=0;
+    s.maxBytes=s.requestBytes; // reserve fits, resident data leaves insufficient space for another request
+    RegionStreamer stream(std::make_shared<Base>(),s);
+    stream.updateStreaming({0,0,0}); stream.updateStreaming({0,0,0});
+    CHECK(stream.pressured()); CHECK(stream.memoryBytes()<=s.maxBytes);
+    RegionData data; data.runtime[{0,0,0}][0]="stone";
+    CHECK_THROWS_AS(parseRegion(serializeRegion(data),1),zodar::Error);
+    StreamingSettings worldSettings; worldSettings.viewRadius=0; worldSettings.minChunkY=0; worldSettings.maxChunkY=0;
+    worldSettings.cpuBudgetBytes=1;
+    VoxelWorld world(std::make_shared<Base>(),{},worldSettings);
+    world.update({0,0,0});
+    CHECK(world.stats().memoryPressure); CHECK(world.stats().generateInFlight==0);
+    std::filesystem::remove_all(root);
+}

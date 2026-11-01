@@ -40,6 +40,9 @@ public:
     StreamedMeshSet(const StreamedMeshSet&) = delete;
     StreamedMeshSet& operator=(const StreamedMeshSet&) = delete;
 
+    // False leaves the old mesh intact; caller retains/retries its CPU event.
+    bool tryUpsert(uint64_t key, const MeshData& mesh, const glm::mat4& transform, MaterialHandle material,
+                   uint64_t budgetBytes);
     void upsert(uint64_t key, const MeshData& mesh, const glm::mat4& transform, MaterialHandle material);
     void remove(uint64_t key);
     // Submits recorded uploads and promotes meshes whose upload is ready. Call once per frame
@@ -52,9 +55,11 @@ public:
         uint32_t pendingUploads = 0; // meshes waiting for their upload
         uint64_t triangles = 0;      // drawable triangles
         uint64_t gpuBytes = 0;       // vertex + index bytes of drawable and pending meshes
+        uint64_t deferredBytes = 0; // buffers retained until the deletion timeline completes
+        uint64_t stagingBytes = 0; // conservative payload estimate for pending uploads
         uint64_t uploadedBytes = 0;  // total since creation
     };
-    Stats stats() const { return m_stats; }
+    Stats stats() const;
 
 private:
     struct Slot {
@@ -76,6 +81,7 @@ private:
     std::vector<uint64_t> m_inBatch; // keys whose pending mesh is in m_batch
     std::unordered_map<uint64_t, Slot> m_slots;
     Stats m_stats;
+    std::shared_ptr<uint64_t> m_deferredBytes = std::make_shared<uint64_t>(0);
 };
 
 } // namespace zodar::gfx

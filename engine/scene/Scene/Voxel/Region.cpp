@@ -47,6 +47,14 @@ size_t count(std::istream& in, size_t max) {
     return static_cast<size_t>(n);
 }
 }
+uint64_t regionMemoryBytes(const RegionData& d) {
+    uint64_t bytes=sizeof(d)+d.baseIdentity.capacity();
+    for (const auto* layer : {&d.authored,&d.runtime}) for(const auto& [coord,cells]:*layer) {
+        bytes+=128;
+        for(const auto& [i,name]:cells) bytes+=128+name.capacity();
+    }
+    return bytes;
+}
 std::string serializeRegion(const RegionData& d) {
     validate(d);
     std::set<std::string> unique{""};
@@ -79,7 +87,8 @@ std::string serializeRegion(const RegionData& d) {
     ZODAR_ENSURE(bytes.size() <= kMaxRegionBytes, "region file too large");
     return bytes;
 }
-RegionData parseRegion(std::string_view bytes) {
+RegionData parseRegion(std::string_view bytes, uint64_t maxMemory) {
+    uint64_t memory=sizeof(RegionData);
     ZODAR_ENSURE(bytes.size() <= kMaxRegionBytes, "region file too large");
     std::istringstream in{std::string(bytes)};
     in.imbue(std::locale::classic());
@@ -113,6 +122,8 @@ RegionData parseRegion(std::string_view bytes) {
                 const auto id = count(in, names.size() - 1);
                 ZODAR_ENSURE(length > 0 && first >= end && first + length <= kChunkVolume,
                              "invalid or overlapping region run");
+                memory += length * (128 + names[id].size());
+                ZODAR_ENSURE(memory <= maxMemory, "region decode memory budget exceeded");
                 total += length;
                 ZODAR_ENSURE(total <= kMaxRecords, "region override limit exceeded");
                 end = first + length;
@@ -125,13 +136,13 @@ RegionData parseRegion(std::string_view bytes) {
     validate(d);
     return d;
 }
-RegionData loadRegion(const std::filesystem::path& path) {
-    ZODAR_ENSURE(std::filesystem::file_size(path) <= kMaxRegionBytes, "region file too large");
+RegionData loadRegion(const std::filesystem::path& path, uint64_t maxMemory) {
+    ZODAR_ENSURE(std::filesystem::file_size(path) <= std::min<uint64_t>(kMaxRegionBytes,maxMemory), "region file too large");
     std::ifstream in(path, std::ios::binary);
     ZODAR_ENSURE(bool(in), "cannot open region");
     std::string bytes((std::istreambuf_iterator<char>(in)), {});
     ZODAR_ENSURE(!in.bad(), "cannot read region");
-    return parseRegion(bytes);
+    return parseRegion(bytes,maxMemory);
 }
 void saveRegion(const std::filesystem::path& path, const RegionData& d) {
     const auto bytes = serializeRegion(d); // validate before touching the old file

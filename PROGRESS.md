@@ -745,3 +745,9 @@
   during saves remain dirty. VoxelWorld provider hooks retain legacy defaults; generation and
   meshing failures now drain counters and fail on the main thread instead of hanging.
   Focused tests: 6 cases / 56 assertions passed (inline/threaded errors, cancellation, reload).
+- Step 5: opt-in CPU payload reservations (including queued results/events and retained
+  snapshots), bounded region decode/admission/edit limits, memory-pressure reporting, and
+  stationary chunk cleanup. GPU tryUpsert rejects before mutation and accounts pending staging
+  plus deferred releases until timeline destruction. Defaults preserve legacy behavior.
+  Focused: 7 CPU cases / 61 assertions; 1 GPU case / 13 assertions; validation 0/0.
+  Byte estimates cover managed payloads conservatively, not driver allocator granularity/RSS.

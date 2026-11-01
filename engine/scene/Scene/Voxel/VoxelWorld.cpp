@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <utility>
+#include <set>
 
 namespace zodar::voxel {
 namespace {
@@ -61,6 +62,13 @@ VoxelWorld::VoxelWorld(std::shared_ptr<const IVoxelGenerator> generator, VoxelPa
                        StreamingSettings settings, JobSystem* jobs)
     : m_generator(std::move(generator)), m_table(std::make_shared<const BlockTable>(palette)),
       m_settings(std::move(settings)), m_jobs(jobs) {
+    uint64_t maxVertices=24, maxIndices=36;
+    for(size_t i=1;i<m_table->palette().blocks.size();++i) if(const auto* shape=m_table->shape(static_cast<Voxel>(i))) {
+        uint64_t vertices=0,indices=0;
+        for(const auto& p:shape->polygons) { vertices+=p.corners.size(); indices+=(p.corners.size()-2)*3; }
+        maxVertices=std::max(maxVertices,vertices); maxIndices=std::max(maxIndices,indices);
+    }
+    m_meshReservation=2*kChunkVolume*(maxVertices*sizeof(Vertex)+maxIndices*4)+4*1024*1024;
     // Below the world's lowest chunk layer reads as a solid cube, so the underside of the world
     // is never meshed; above the highest layer reads as empty.
     m_bedrock = std::make_shared<const VoxelChunk>(m_table->firstCube());
@@ -123,14 +131,15 @@ void VoxelWorld::update(const glm::vec3& observer) {
     const ChunkCoord center = chunkAt(observer);
     if (!m_candidateCenter || *m_candidateCenter != center) {
         rebuildCandidates(center, m_observerChunkSpace);
-        unloadFarChunks(m_observerChunkSpace);
     }
+    unloadFarChunks(m_observerChunkSpace);
     // LODs follow the exact observer position, not just its chunk.
     for (auto& [coord, lod] : m_wantedLod) {
         lod = wantedLod(coord);
     }
 
     const float meshRadius = static_cast<float>(m_settings.viewRadius);
+    m_memoryPressure=false;
     uint32_t budget = m_settings.maxJobsPerUpdate;
     bool settled = true;
 
@@ -141,6 +150,9 @@ void VoxelWorld::update(const glm::vec3& observer) {
             settled = false;
             if (budget == 0 || m_generateInFlight + m_meshInFlight >= m_settings.maxJobsInFlight) {
                 continue;
+            }
+            if(m_settings.cpuBudgetBytes && stats().cpuBytes+2*kChunkVolume*sizeof(Voxel)>m_settings.cpuBudgetBytes) {
+                m_memoryPressure=true; continue;
             }
             --budget;
             Entry& entry = m_chunks[c.coord];
@@ -211,6 +223,9 @@ void VoxelWorld::update(const glm::vec3& observer) {
         }
         if (budget == 0 || m_generateInFlight + m_meshInFlight >= m_settings.maxJobsInFlight) {
             continue;
+        }
+        if(m_settings.cpuBudgetBytes && stats().cpuBytes+m_meshReservation>m_settings.cpuBudgetBytes) {
+            m_memoryPressure=true; continue;
         }
         --budget;
         scheduleMesh(c.coord, entry, lod, seal);
@@ -510,6 +525,9 @@ bool VoxelWorld::setVoxel(const glm::ivec3& voxel, Voxel value) {
     if (it->second.data->get(l.x, l.y, l.z) == value) {
         return true;
     }
+    if(m_settings.cpuBudgetBytes && stats().cpuBytes+2*kChunkVolume*sizeof(Voxel)>m_settings.cpuBudgetBytes) {
+        m_memoryPressure=true; return false;
+    }
     auto copy = std::make_shared<VoxelChunk>(*it->second.data); // copy on write: jobs may read the old one
     copy->set(l.x, l.y, l.z, value);
     copy->compact();
@@ -787,6 +805,12 @@ VoxelWorldStats VoxelWorld::stats() const {
             s.lodHistogram[std::clamp(entry.meshedLod, 0, kMaxLod)]++;
         }
     }
+    std::set<const VoxelChunk*> counted;
+    for(const auto& [coord,entry]:m_chunks) if(entry.data && counted.insert(entry.data.get()).second) s.cpuBytes+=entry.data->memoryBytes()+sizeof(VoxelChunk);
+    for(const auto& [coord,data]:m_edits) if(counted.insert(data.get()).second) s.cpuBytes+=data->memoryBytes()+sizeof(VoxelChunk);
+    for(const auto& e:m_events) s.cpuBytes+=e.mesh.vertices.capacity()*sizeof(Vertex)+e.mesh.indices.capacity()*4;
+    s.cpuBytes+=uint64_t(m_generateInFlight)*2*kChunkVolume*sizeof(Voxel)+uint64_t(m_meshInFlight)*m_meshReservation;
+    s.memoryPressure=m_memoryPressure;
     s.generateInFlight = m_generateInFlight;
     s.meshInFlight = m_meshInFlight;
     s.editedChunks = static_cast<uint32_t>(m_edits.size());
