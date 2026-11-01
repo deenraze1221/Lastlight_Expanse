@@ -64,6 +64,7 @@ MaterialSystem::MaterialSystem(const VulkanContext& context, BindlessRegistry& b
 
     m_pbr = registerShader(kPbrShader, "mesh.vert.spv", "pbr.frag.spv");
     m_unlit = registerShader(kUnlitShader, "mesh.vert.spv", "unlit.frag.spv");
+    m_voxel = registerShader(kVoxelShader, "mesh.vert.spv", "voxel_pbr.frag.spv");
     m_depthMask = std::make_unique<ShaderModule>(context.device(), loadSpirv(shaderDirectory / "depth_mask.frag.spv"));
 }
 

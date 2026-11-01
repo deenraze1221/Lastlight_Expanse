@@ -6,6 +6,7 @@
 add_library(ZodarAssetManager STATIC
     AssetManager/AssetManager.cpp
     AssetManager/AssetRegistry.cpp
+    AssetManager/BlockMaterials.cpp
     AssetManager/LiveScene.cpp)
 add_library(Zodar::AssetManager ALIAS ZodarAssetManager)
 

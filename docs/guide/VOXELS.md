@@ -216,6 +216,25 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
 
 - Shared voxel material shader in the engine (`zodar/voxel`: texture-array sampling, PBR,
   fog, the same lighting as `zodar/pbr`). Highlands keeps its game shader (§12).
+  *(exists, V2: `engine/rendering/Shaders/Engine/voxel_pbr.frag`, registered by
+  `MaterialSystem` as `kVoxelShader`; `AssetManager/BlockMaterials`)*
+  - Inputs: mesher UVs (`vUv0`, `MeshOptions::uvPerMetre` = the catalogue's), vertex colour
+    rgb = tint × AO, alpha = texture-array layer. Material `custom0` = texture array, sampler,
+    layer table (bindless indices as uint bits); `baseColorFactor` multiplies the albedo.
+  - Per-layer parameters (roughness, metallic, emissive) live in `gfx::Vec4Table`: an N × 1
+    `R32G32B32A32_SFLOAT` image read with `texelFetch` (`zodarFetch`), so values are exact
+    float32. **Precision decision (tested):** RGBA8 would store roughness 0.3 as 0.302 and
+    cannot hold emissive > 1; RGBA16F stores 0.3 as 0.2998. The format's sampled-image support
+    is checked at creation (mandatory in Vulkan).
+  - Emissive: texels with alpha < 1 emit `texel.rgb × (1 − alpha) × emissive` (untinted; the
+    Lastlight terrain convention).
+  - `BlockMaterials(context, upload, scene, catalogue)` loads the layer textures (sRGB,
+    mips, pixel-art sampler), rejects mismatched layer sizes with the layer's JSON path,
+    uploads the texture array and the table and creates the material; destruction retires
+    them through the deletion queue.
+  - Tests (`engine/tests/Gpu/VoxelMaterialTests.cpp`, lavapipe): table read back bit-exact;
+    emissive blocks byte-identical to `zodar/unlit`; lit and fogged blocks identical to
+    `zodar/pbr` on the same surface (tolerance 1 for other drivers).
 - Required renderer track (`docs/AI_FIRST_ROADMAP.md`): S5 shadows, S7 AO beyond voxel AO,
   S8 volumetric fog, weather; scheduled after D8, before the bunker's final presentation and
   sign-off (approved placement, `docs/WORLD_PRODUCTION_ROADMAP.md` §2).

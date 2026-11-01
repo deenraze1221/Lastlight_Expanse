@@ -7,6 +7,7 @@ add_library(ZodarRenderer STATIC
     BindlessRegistry.cpp
     Texture.cpp
     TextureArray.cpp
+    Vec4Table.cpp
     Material.cpp
     Frustum.cpp
     SceneRenderer.cpp
@@ -33,6 +34,7 @@ zodar_compile_shaders(ZodarRenderer SOURCES
     ${ZODAR_ENGINE_DIR}/rendering/Shaders/Engine/mesh.vert
     ${ZODAR_ENGINE_DIR}/rendering/Shaders/Engine/pbr.frag
     ${ZODAR_ENGINE_DIR}/rendering/Shaders/Engine/unlit.frag
+    ${ZODAR_ENGINE_DIR}/rendering/Shaders/Engine/voxel_pbr.frag
     ${ZODAR_ENGINE_DIR}/rendering/Shaders/Engine/resolve.vert
     ${ZODAR_ENGINE_DIR}/rendering/Shaders/Engine/resolve.frag
     ${ZODAR_ENGINE_DIR}/rendering/Shaders/Engine/cull_scan.comp

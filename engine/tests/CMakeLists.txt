@@ -155,8 +155,9 @@ if(ZODAR_GPU_TESTS)
         Gpu/LightingTests.cpp
         Gpu/IblTests.cpp
         Gpu/WorldRenderTests.cpp
-        Gpu/AssetManagerTests.cpp)
-    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::WorldRender Zodar::SceneFile Zodar::AssetManager Zodar::Debug Zodar::AssetPipeline doctest::doctest)
+        Gpu/AssetManagerTests.cpp
+        Gpu/VoxelMaterialTests.cpp)
+    target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::WorldRender Zodar::SceneFile Zodar::AssetManager Zodar::Debug Zodar::AssetPipeline Zodar::Scene doctest::doctest)
     zodar_set_warnings(ZodarGpuTests)
     target_compile_definitions(ZodarGpuTests PRIVATE ZODAR_TEST_SHADER_DIR="${ZODAR_OUTPUT_DIR}/shaders"
         ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples" ZODAR_TEST_DATA_DIR="${ZODAR_ENGINE_DIR}/tests/data")

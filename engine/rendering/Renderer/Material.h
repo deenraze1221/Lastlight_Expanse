@@ -34,7 +34,7 @@ struct TextureBinding {
 };
 
 // Style-neutral material description. The shader decides how parameters are used:
-// engine shaders implement PBR metallic-roughness ("zodar/pbr") and unlit ("zodar/unlit");
+// engine shaders implement PBR metallic-roughness ("zodar/pbr"), unlit ("zodar/unlit") and voxel blocks ("zodar/voxel");
 // games register their own shaders and may use custom0/custom1 freely.
 struct MaterialDesc {
     std::string name;
@@ -98,6 +98,8 @@ public:
     static constexpr uint32_t kMaxMaterials = 4096;
     static constexpr const char* kPbrShader = "zodar/pbr";
     static constexpr const char* kUnlitShader = "zodar/unlit";
+    // Voxel blocks (Phase V2): texture array + per-layer PBR table (voxel_pbr.frag).
+    static constexpr const char* kVoxelShader = "zodar/voxel";
 
     struct TargetFormats {
         VkFormat color = VK_FORMAT_UNDEFINED;
@@ -132,6 +134,7 @@ public:
     ShaderReloadResult reloadShader(ShaderHandle shader, DeletionQueue& retire);
     ShaderHandle pbrShader() const { return m_pbr; }
     ShaderHandle unlitShader() const { return m_unlit; }
+    ShaderHandle voxelShader() const { return m_voxel; }
 
     // Creates a material (change it later with updateMaterial).
     // Reuses a released handle when one is free.
@@ -196,6 +199,7 @@ private:
     std::unordered_map<uint64_t, std::unique_ptr<GraphicsPipeline>> m_pipelines;
     ShaderHandle m_pbr = 0;
     ShaderHandle m_unlit = 0;
+    ShaderHandle m_voxel = 0;
     std::unique_ptr<ShaderModule> m_depthMask;
     std::unordered_map<uint64_t, std::unique_ptr<GraphicsPipeline>> m_depthPipelines;
 };

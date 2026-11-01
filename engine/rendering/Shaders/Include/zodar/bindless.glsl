@@ -32,4 +32,11 @@ vec4 zodarSampleArray(uint textureIndex, uint samplerIndex, vec3 uvLayer) {
                    uvLayer);
 }
 
+// Exact texel read (no filtering or conversion), e.g. Renderer/Vec4Table entries:
+// zodarFetch(table, sampler, ivec2(i, 0)). The sampler is required by the GLSL syntax only.
+vec4 zodarFetch(uint textureIndex, uint samplerIndex, ivec2 texel) {
+    return texelFetch(sampler2D(zodarTextures[nonuniformEXT(textureIndex)], zodarSamplers[nonuniformEXT(samplerIndex)]),
+                      texel, 0);
+}
+
 #endif
