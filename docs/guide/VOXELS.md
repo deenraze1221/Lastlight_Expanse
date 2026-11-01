@@ -103,6 +103,46 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
   the engine, registered in `assets.json` (new asset type, dependencies = textures) and
   validated by the asset checks (sizes, palette, density). Block names map to stable ids
   saved with regions (§7) so ids can be re-assigned without corrupting saves.
+  *(exists, V2: `engine/rendering/SceneFile/SceneFile/BlockFile.h`)*
+
+```json
+{ "schema": "zodar.blocks", "version": 1, "uvPerMetre": 1,
+  "materials": [
+    { "name": "concrete", "textures": "textures/concrete.png", "roughness": 0.9 },
+    { "name": "panel", "textures": { "top": "textures/panel_top.png", "all": "textures/panel.png" },
+      "tint": [1, 1, 1], "metallic": 0.6, "roughness": 0.4, "emissive": 2 } ],
+  "blocks": [
+    { "name": "concrete", "material": "concrete" },
+    { "name": "stair", "material": "concrete", "shape": "stair", "rotations": 4 },
+    { "name": "grate", "material": "panel", "shape": "slab_low", "collision": false } ] }
+```
+
+  - Materials: `textures` = one path for every face, or `top`/`side`/`bottom` (`all` fills the
+    missing ones); paths relative to the file. `tint` (RGB, 0..1, default white), `roughness`
+    (0..1, default 0.8), `metallic` (0..1, default 0), `emissive` (≥ 0, default 0: strength of
+    texels with alpha < 1). Material index = file order (`VoxelPalette::colors`/`faceLayers`).
+  - Blocks: `material`, `shape` (shape-library name, default `cube`; custom shapes are
+    registered in code with `ShapeLibrary::add`, not in JSON (V2 decision)), `rotations` 1 or
+    4, `collision` (default true; false = `kNoCollision`).
+  - `BlockCatalogue` (`buildBlockCatalogue` / `loadBlockCatalogue`): registry palette, names,
+    texture-array layers (first-use order, deduplicated by texture + PBR parameters, so a
+    texture reused with other parameters gets its own layer), per-layer parameters and the
+    JSON path of each layer's first use. All errors are `DataError`s with JSON paths.
+  - **Texture-array dimensions:** all layers of one catalogue are square and the same size;
+    `checkBlockLayerSizes` names each offending layer, e.g. `/materials/1/textures/side: 32x32
+    (rust.png) differs from the texture array size 64x64 (first layer:
+    /materials/0/textures/top)`.
+- **Block id stability (V2 rules):**
+  - Ids follow the file order: id 0 is empty, the first definition is id 1. `"rotations": 4`
+    expands into four consecutive ids named `name`, `name@1`, `name@2`, `name@3` (yaw steps
+    0..3); `@` is reserved in names. Loading the same file always gives the same ids.
+  - Reordering, inserting or removing a definition changes every later id. Anything that
+    stores raw ids (chunk data, saves, test fixtures) is only valid for an unchanged file, so
+    **block files are append-only** until regions save names.
+  - Ids beyond the registry load as the fallback material (magenta), never as another block.
+  - V4 (`*.zregion`, §7) saves the block **names** (palette) with each region and maps them to
+    the current ids on load; the `name@N` names are part of that contract. V2 provides no save
+    migration and no saved data uses block ids yet.
 
 ## 4. Meshing *(extends ChunkMesher)*
 

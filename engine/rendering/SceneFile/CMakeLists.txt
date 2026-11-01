@@ -4,10 +4,11 @@
 # nlohmann/json is private: public headers expose only engine types.
 add_library(ZodarSceneFile STATIC
     SceneFile/DataError.cpp
+    SceneFile/BlockFile.cpp
     SceneFile/MaterialFile.cpp
     SceneFile/SceneFile.cpp)
 add_library(Zodar::SceneFile ALIAS ZodarSceneFile)
 
 target_include_directories(ZodarSceneFile PUBLIC ${ZODAR_ENGINE_DIR}/rendering/SceneFile)
-target_link_libraries(ZodarSceneFile PUBLIC Zodar::WorldRender PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(ZodarSceneFile PUBLIC Zodar::WorldRender Zodar::Scene PRIVATE nlohmann_json::nlohmann_json)
 zodar_set_warnings(ZodarSceneFile)

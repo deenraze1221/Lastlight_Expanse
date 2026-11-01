@@ -32,6 +32,7 @@ add_executable(ZodarTests
     World/WorldTests.cpp
     World/WorldComponentTests.cpp
     World/WorldRenderTests.cpp
+    SceneFile/BlockFileTests.cpp
     SceneFile/SceneFileTests.cpp
     SceneFile/MaterialTextureTests.cpp
     SceneFile/ModelReferenceTests.cpp
