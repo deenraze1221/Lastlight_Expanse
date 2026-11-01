@@ -114,6 +114,91 @@ bool uniformAo(uint32_t aoBits) {
     return aoBits == 0x00u || aoBits == 0x55u || aoBits == 0xAAu || aoBits == 0xFFu;
 }
 
+int dominantAxis(const glm::vec3& n) {
+    const glm::vec3 a = glm::abs(n);
+    if (a.y >= a.x && a.y >= a.z) return 1;
+    return a.x >= a.z ? 0 : 2;
+}
+
+// Shape cells (LOD 0): every polygon of the rotated template, never merged. Boundary polygons
+// are culled when the neighbour fully covers the touching face. AO approximation: the
+// polygon is treated like a cube face along its dominant normal axis; each corner samples the
+// three neighbours of the cell in front of it toward the nearest cell corner.
+void emitShapes(const CellGrid& grid, const BlockTable& table, const MeshOptions& options, float cellSize,
+                float uvFactor, MeshData& mesh, MeshStats& stats) {
+    const VoxelPalette& palette = table.palette();
+    const int n = grid.size();
+    for (int y = 0; y < n; ++y) {
+        for (int z = 0; z < n; ++z) {
+            for (int x = 0; x < n; ++x) {
+                const glm::ivec3 cell(x, y, z);
+                const Voxel id = grid.at(cell);
+                if (id == kEmpty || (grid.flags(cell) & BlockInfo::kCube)) continue;
+                const Shape* shape = table.shape(id);
+                if (!shape) continue;
+                const uint32_t material = table.material(id);
+                const glm::vec4 color = palette.color(material);
+                for (const Shape::Polygon& poly : shape->polygons) {
+                    if (poly.boundaryFace >= 0) {
+                        const int f = poly.boundaryFace;
+                        glm::ivec3 dir(0);
+                        dir[f >> 1] = (f & 1) ? 1 : -1;
+                        if (grid.covers(cell + dir, f ^ 1)) continue;
+                    }
+                    const glm::vec3 normal = poly.normal;
+                    const int a = dominantAxis(normal);
+                    const bool positive = normal[a] > 0.0f;
+                    const int u = (a + 1) % 3;
+                    const int v = (a + 2) % 3;
+                    glm::ivec3 aDir(0), uDir(0), vDir(0);
+                    aDir[a] = positive ? 1 : -1;
+                    uDir[u] = 1;
+                    vDir[v] = 1;
+                    glm::vec3 eu(0.0f);
+                    eu[u] = 1.0f;
+                    const glm::vec3 t = glm::normalize(eu - normal * glm::dot(normal, eu));
+                    const glm::vec4 tangent(t, positive ? 1.0f : -1.0f);
+                    const int faceKind = a != 1 ? 1 : positive ? 0 : 2;
+                    const float layerAlpha = palette.hasLayers() ? palette.layer(material, faceKind) : color.a;
+                    const glm::ivec3 front = cell + aDir;
+                    const auto base = static_cast<uint32_t>(mesh.vertices.size());
+                    const size_t count = poly.corners.size();
+                    uint32_t ao[4] = {3, 3, 3, 3};
+                    for (size_t c = 0; c < count; ++c) {
+                        const glm::vec3& local = poly.corners[c];
+                        uint32_t occlusion = 3;
+                        if (options.ambientOcclusion) {
+                            const int du = local[u] < 0.5f ? -1 : 1;
+                            const int dv = local[v] < 0.5f ? -1 : 1;
+                            const bool s1 = grid.occludes(front + uDir * du);
+                            const bool s2 = grid.occludes(front + vDir * dv);
+                            const bool sc = grid.occludes(front + uDir * du + vDir * dv);
+                            occlusion = (s1 && s2) ? 0u : 3u - (uint32_t(s1) + uint32_t(s2) + uint32_t(sc));
+                        }
+                        if (c < 4) ao[c] = occlusion;
+                        const glm::vec3 p = glm::vec3(cell) + local; // cell units
+                        Vertex vert;
+                        vert.position = p * cellSize;
+                        vert.normal = normal;
+                        vert.tangent = tangent;
+                        vert.uv0 = glm::vec2(p[u], p[v]) * uvFactor;
+                        vert.color = glm::vec4(glm::vec3(color) * options.aoCurve[occlusion], layerAlpha);
+                        mesh.vertices.push_back(vert);
+                    }
+                    if (count == 4 && ao[0] + ao[2] < ao[1] + ao[3]) {
+                        mesh.indices.insert(mesh.indices.end(), {base + 1, base + 2, base + 3, base + 1, base + 3, base});
+                    } else {
+                        for (uint32_t k = 1; k + 1 < count; ++k) {
+                            mesh.indices.insert(mesh.indices.end(), {base, base + k, base + k + 1});
+                        }
+                    }
+                    ++stats.shapePolygons;
+                }
+            }
+        }
+    }
+}
+
 } // namespace
 
 MeshData meshChunk(const ChunkNeighborhood& neighborhood, const VoxelPalette& palette, const MeshOptions& options,
@@ -141,7 +226,7 @@ MeshData meshChunk(const ChunkNeighborhood& neighborhood, const BlockTable& tabl
     const int n = grid.size();
     const float cellSize = static_cast<float>(1 << options.lod) * options.voxelSize;
     std::vector<uint32_t> mask(static_cast<size_t>(n) * n);
-    const float uvFactor = cellSize / options.voxelSize;
+    const float uvFactor = options.uvPerMetre > 0.0f ? cellSize * options.uvPerMetre : cellSize / options.voxelSize;
 
     for (int face = 0; face < 6; ++face) {
         const int a = face >> 1;
@@ -264,6 +349,10 @@ MeshData meshChunk(const ChunkNeighborhood& neighborhood, const BlockTable& tabl
                 }
             }
         }
+    }
+
+    if (options.lod == 0 && grid.hasShapes()) {
+        emitShapes(grid, table, options, cellSize, uvFactor, mesh, localStats);
     }
 
     if (!mesh.indices.empty()) {

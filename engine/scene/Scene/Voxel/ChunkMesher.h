@@ -39,6 +39,10 @@ struct MeshOptions {
     // surfaces are joined by walls instead of leaving cracks.
     uint8_t sealFaces = 0;
     bool ambientOcclusion = true;
+    // Texture coordinates: 0 = voxel units (legacy). > 0: tiles per world unit (metre) from
+    // chunk-local positions, e.g. 1 = one texture tile per metre; tiles line up across chunks
+    // when the chunk edge in world units times uvPerMetre is an integer.
+    float uvPerMetre = 0.0f;
     // Vertex colour multiplier for 0..3 occluding neighbours (3 = unoccluded).
     std::array<float, 4> aoCurve{0.45f, 0.64f, 0.82f, 1.0f};
 };
@@ -46,6 +50,7 @@ struct MeshOptions {
 struct MeshStats {
     uint32_t quads = 0;
     uint32_t faces = 0; // unmerged voxel faces the quads represent
+    uint32_t shapePolygons = 0; // polygons emitted for shape cells (LOD 0)
 };
 
 // Greedy mesher with per-vertex ambient occlusion. Coplanar cube faces with the same material
