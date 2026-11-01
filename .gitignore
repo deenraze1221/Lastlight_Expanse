@@ -7,3 +7,7 @@
 compile_commands.json
 *.ppm
 /zodar-shots/
+# Blender backups and compiled texture caches (rebuilt by zodar.py import --compile)
+*.blend1
+*.blend2
+game/assets/**/*.zodar/

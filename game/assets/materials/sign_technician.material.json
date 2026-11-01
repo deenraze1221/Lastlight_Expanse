@@ -1,0 +1,10 @@
+{
+  "name": "sign_technician",
+  "shader": "zodar/pbr",
+  "roughness": 0.9,
+  "doubleSided": true,
+  "baseColorTexture": {
+    "path": "../textures/signs/technician.png",
+    "filter": "pixelArt"
+  }
+}

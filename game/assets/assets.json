@@ -1,0 +1,319 @@
+{
+  "schema": "zodar.asset_registry",
+  "version": 1,
+  "palette": {
+    "colors": "palette.png",
+    "subPalettes": {
+      "glow": "palettes/glow.png"
+    }
+  },
+  "defaults": {
+    "model": {
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop"
+    }
+  },
+  "budgets": {
+    "architecture": 3000,
+    "character": 6000,
+    "prop": 1500
+  },
+  "assets": [
+    {
+      "id": "airlock_arch",
+      "type": "model",
+      "source": "models/airlock_arch.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:3413103b06710237",
+      "dependencies": []
+    },
+    {
+      "id": "bench",
+      "type": "model",
+      "source": "models/bench.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:51e454991ec02a29",
+      "dependencies": []
+    },
+    {
+      "id": "bunk",
+      "type": "model",
+      "source": "models/bunk.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:8ccb936063da5e61",
+      "dependencies": []
+    },
+    {
+      "id": "bunker",
+      "type": "scene",
+      "source": "levels/bunker.scene.json",
+      "hash": "fnv1a64:629913aa6ae5a5d1",
+      "dependencies": [
+        "materials/sign_medic.material.json",
+        "materials/sign_resources.material.json",
+        "materials/sign_scout.material.json",
+        "materials/sign_technician.material.json",
+        "materials/sign_weapons.material.json",
+        "prefabs/ceiling_lamp.prefab.json",
+        "prefabs/merchant_stall.prefab.json",
+        "textures/signs/medic.png",
+        "textures/signs/resources.png",
+        "textures/signs/scout.png",
+        "textures/signs/technician.png",
+        "textures/signs/weapons.png"
+      ]
+    },
+    {
+      "id": "ceiling",
+      "type": "model",
+      "source": "models/ceiling.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:e3680667ea479510",
+      "dependencies": []
+    },
+    {
+      "id": "ceiling_lamp",
+      "type": "prefab",
+      "source": "prefabs/ceiling_lamp.prefab.json",
+      "hash": "fnv1a64:076a407382735285",
+      "dependencies": []
+    },
+    {
+      "id": "corner",
+      "type": "model",
+      "source": "models/corner.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:bc212568293c6e6f",
+      "dependencies": []
+    },
+    {
+      "id": "crate",
+      "type": "model",
+      "source": "models/crate.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:48b6809dbf08b4a6",
+      "dependencies": []
+    },
+    {
+      "id": "door_leaf",
+      "type": "model",
+      "source": "models/door_leaf.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:411d4c33c1292d88",
+      "dependencies": []
+    },
+    {
+      "id": "doorway",
+      "type": "model",
+      "source": "models/doorway.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:2babbf58cc55bb65",
+      "dependencies": []
+    },
+    {
+      "id": "electrical_panel",
+      "type": "model",
+      "source": "models/electrical_panel.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:8f135123c6c5c188",
+      "dependencies": []
+    },
+    {
+      "id": "emergency_light",
+      "type": "model",
+      "source": "models/emergency_light.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:c39436884ee202a6",
+      "dependencies": [],
+      "palette": "glow"
+    },
+    {
+      "id": "floor",
+      "type": "model",
+      "source": "models/floor.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:21fdc436a03176b4",
+      "dependencies": []
+    },
+    {
+      "id": "generator",
+      "type": "model",
+      "source": "models/generator.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:001d16ef9da7848d",
+      "dependencies": []
+    },
+    {
+      "id": "lamp",
+      "type": "model",
+      "source": "models/lamp.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:c16ce4cb48c3c770",
+      "dependencies": [],
+      "palette": "glow"
+    },
+    {
+      "id": "locker",
+      "type": "model",
+      "source": "models/locker.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:f0f13b15bbb59e40",
+      "dependencies": []
+    },
+    {
+      "id": "merchant_counter",
+      "type": "model",
+      "source": "models/merchant_counter.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:756dcfefc3d5ae98",
+      "dependencies": []
+    },
+    {
+      "id": "merchant_stall",
+      "type": "prefab",
+      "source": "prefabs/merchant_stall.prefab.json",
+      "hash": "fnv1a64:112e7f6aecebf27c",
+      "dependencies": [
+        "materials/sign_weapons.material.json",
+        "textures/signs/weapons.png"
+      ]
+    },
+    {
+      "id": "pillar",
+      "type": "model",
+      "source": "models/pillar.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:b3ae64288b95c748",
+      "dependencies": []
+    },
+    {
+      "id": "shelf",
+      "type": "model",
+      "source": "models/shelf.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:9a4329ede81b8e61",
+      "dependencies": []
+    },
+    {
+      "id": "sign_medic",
+      "type": "material",
+      "source": "materials/sign_medic.material.json",
+      "hash": "fnv1a64:7da76aaca771ea69",
+      "dependencies": [
+        "textures/signs/medic.png"
+      ]
+    },
+    {
+      "id": "sign_resources",
+      "type": "material",
+      "source": "materials/sign_resources.material.json",
+      "hash": "fnv1a64:4df0516c93764a02",
+      "dependencies": [
+        "textures/signs/resources.png"
+      ]
+    },
+    {
+      "id": "sign_scout",
+      "type": "material",
+      "source": "materials/sign_scout.material.json",
+      "hash": "fnv1a64:b42d268af0ef57af",
+      "dependencies": [
+        "textures/signs/scout.png"
+      ]
+    },
+    {
+      "id": "sign_technician",
+      "type": "material",
+      "source": "materials/sign_technician.material.json",
+      "hash": "fnv1a64:98aace22e4f978ce",
+      "dependencies": [
+        "textures/signs/technician.png"
+      ]
+    },
+    {
+      "id": "sign_weapons",
+      "type": "material",
+      "source": "materials/sign_weapons.material.json",
+      "hash": "fnv1a64:a973ff6c66f3fe4b",
+      "dependencies": [
+        "textures/signs/weapons.png"
+      ]
+    },
+    {
+      "id": "stairs",
+      "type": "model",
+      "source": "models/stairs.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:eb342898e985bb55",
+      "dependencies": []
+    },
+    {
+      "id": "table",
+      "type": "model",
+      "source": "models/table.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:e3b3ffe7e0087039",
+      "dependencies": []
+    },
+    {
+      "id": "terminal",
+      "type": "model",
+      "source": "models/terminal.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:91867bb989d7efee",
+      "dependencies": [],
+      "palette": "glow"
+    },
+    {
+      "id": "wall",
+      "type": "model",
+      "source": "models/wall.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:62b12feb2aec49a9",
+      "dependencies": []
+    }
+  ]
+}

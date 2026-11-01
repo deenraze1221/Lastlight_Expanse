@@ -50,7 +50,8 @@ Arguments after `--` go to the app unchanged. The exit code is the build's, test
 ```bash
 python3 tools/zodar.py build
 python3 tools/zodar.py test -R runtime
-python3 tools/zodar.py shot game --frames 120
+python3 tools/zodar.py shot game --frames 120                       # bunker (default level)
+python3 tools/zodar.py shot game --frames 120 -- --level highlands  # regression scene
 python3 tools/zodar.py shot viewer --frames 30 -- --width 640 --height 360 --debug-view normals
 python3 tools/zodar.py --preset release bench -- --scene city --blocks 6 --no-validation
 ```

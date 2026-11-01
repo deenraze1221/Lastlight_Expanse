@@ -449,6 +449,28 @@ Binding plan: `docs/PHASE_D_PLAN.md`.
   bytes do not depend on the zlib version; ctest `tools.gltf_fixtures_up_to_date` guards them
   and the committed fixture registry is checked strictly.
 
+## Phase D2 decisions (implemented)
+
+- Game assets live in `game/assets` (registry, palette + `glow` sub-palette, models,
+  materials, prefabs, levels, `sources/`); layout and workflow in `game/assets/README.md`.
+  The game binary finds them through `LASTLIGHT_ASSETS_DIR` (CMake, source tree) or `--assets`.
+- `LastlightExpanse --level bunker|highlands` (default `bunker`). The highlands code path is
+  untouched (`LastlightApp` in `main.cpp`); the bunker is a separate `Application`
+  (`game/src/Bunker/BunkerApp.cpp`) selected by the factory, so highlands stays byte-identical.
+- Bunker loading: AssetManager async pre-load of the level's models and materials
+  (`loadSceneModelsAsync`, `createSceneMaterialsAsync`; `--deterministic` waits), then a
+  `LiveScene` (registry ids, code mesh `sign`, file watching) instantiates the level from the
+  cache. Rendering through `collectDraws` (CPU path) + `collectLighting` every frame (lights,
+  ambient and fog follow scene reloads). Hot reload: `AssetManagerDesc::watchFiles` and
+  `LiveSceneDesc::watch`, both active only in Debug builds.
+- Greybox content is generated (`game/tools/make_greybox_kit.py`, deterministic); real exports
+  replace modules under the same file names with their sources in `sources/`.
+- Source files in regular Git: `tools.game_source_sizes` limits `.blend` only (20 MiB) and
+  rejects `.blend1`/`.blend2`; `.gitattributes` marks `game/assets/**` `-text`, `*.blend`
+  `binary`; `.gitignore` drops Blender backups and `*.zodar/` caches.
+- Registry defaults `compile: false` until compiled caches are produced in the build instead
+  of the source tree.
+
 ## Frame flow (Milestone 1)
 
 ```

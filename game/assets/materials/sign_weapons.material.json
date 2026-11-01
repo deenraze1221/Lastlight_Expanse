@@ -1,0 +1,10 @@
+{
+  "name": "sign_weapons",
+  "shader": "zodar/pbr",
+  "roughness": 0.9,
+  "doubleSided": true,
+  "baseColorTexture": {
+    "path": "../textures/signs/weapons.png",
+    "filter": "pixelArt"
+  }
+}

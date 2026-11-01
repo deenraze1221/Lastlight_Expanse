@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "materials": {
+    "sign": "../materials/sign_weapons.material.json"
+  },
+  "entities": [
+    {
+      "id": "counter",
+      "name": "Counter",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          2.6
+        ]
+      },
+      "modelRenderer": {
+        "model": "merchant_counter"
+      }
+    },
+    {
+      "id": "shelf",
+      "name": "Shelf",
+      "transform": {
+        "position": [
+          -1.4,
+          0.0,
+          0.35
+        ]
+      },
+      "modelRenderer": {
+        "model": "shelf"
+      }
+    },
+    {
+      "id": "sign",
+      "name": "Sign",
+      "transform": {
+        "position": [
+          0.8,
+          2.0,
+          0.02
+        ],
+        "rotationDegrees": [
+          90.0,
+          0.0,
+          0.0
+        ]
+      },
+      "meshRenderer": {
+        "mesh": "sign",
+        "material": "sign"
+      }
+    }
+  ]
+}

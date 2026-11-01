@@ -25,18 +25,23 @@ a real export in this repository.
 game/assets/
   assets.json                    registry: palette, defaults, budgets, entries
   palette.png                    master palette swatch (or a hex list in assets.json)
-  sources/blockbench/*.bbmodel   sources, versioned next to the exports
-  sources/blender/*.blend
+  sources/blockbench/*.bbmodel   sources, versioned next to the exports (same base name)
+  sources/blender/*.blend        + sources/blender/textures/*.png (unpacked textures)
   models/*.glb                   exports (the registry entries point here)
 ```
+
+Lastlight Expanse uses exactly this layout (`game/assets/README.md`, Phase D2).
 
 Mark the asset folder `-text` in `.gitattributes`: registry hashes cover exact file bytes.
 All sources are regular Git files (no Git LFS). For `.blend` files: mark them `binary`, save
 with *File > Save > Compress*, keep textures as separate PNGs in `sources/blender/textures/`
 (not packed), stay at or below 20 MB per file and never commit Blender backups (`*.blend1`,
-`*.blend2`; ignore them in `.gitignore`). A game can enforce this with a test (Lastlight:
-`tools.game_source_sizes`); other assets have no file-size cap, their limits are the asset
-checks (texture sizes, triangle budgets, bounds).
+`*.blend2`; ignore them in `.gitignore`). A game can enforce this with a test. Lastlight:
+`tools.game_source_sizes` runs `game/tools/check_source_sizes.py game/assets`, which fails on
+any `.blend` above 20 MiB (20 × 1024 × 1024 bytes) and on any `.blend1`/`.blend2` file, and
+applies no limit to other file types (`tools.game_source_sizes_selftest` covers both rules).
+Other assets have no file-size cap: their limits are the asset checks (texture sizes,
+triangle budgets, bounds).
 
 ## Export settings
 

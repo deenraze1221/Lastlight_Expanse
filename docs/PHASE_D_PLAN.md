@@ -1,6 +1,6 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **approved; D1 done (2026-11-01).** Next session: D2. Roadmap summary:
+Status: **approved; D1 and D2 done (2026-11-01).** Next session: D3. Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`.
 
@@ -182,6 +182,15 @@ handoff block described under "Session workflow".
 - Acceptance: readable bunker PNG; editing a `.glb`, material or scene in Debug reloads live;
   highlands screenshot byte-identical; checks clean for both tool paths;
   `tools.game_source_sizes` passes.
+- **Done (2026-11-01).** Scope notes: the generator also writes the level, prefabs, sign
+  materials and sign textures (`tools.greybox_kit_up_to_date`); registry defaults use
+  `compile: false` in D2 (compiled caches are git-ignored, and `compile: true` entries would
+  fail the strict check in a fresh checkout for missing outputs); material files and prefabs
+  are imported explicitly (the directory import skips files the level depends on); "async"
+  means the level's models and materials are pre-loaded with the AssetManager's async API,
+  then `LiveScene` (blocking, cache hits) instantiates the level; the highlands
+  byte-identity was verified by comparing screenshots before/after on lavapipe (no golden
+  image in ctest, results are GPU-specific).
 
 ### D3 — Input action maps (engine)
 - Read: `engine/runtime/Runtime/Application.h`, `CommandLine.h`, game input code.

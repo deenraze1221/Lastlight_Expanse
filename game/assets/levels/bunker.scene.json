@@ -1,0 +1,8044 @@
+{
+  "version": 1,
+  "materials": {
+    "sign_weapons": "../materials/sign_weapons.material.json",
+    "sign_medic": "../materials/sign_medic.material.json",
+    "sign_resources": "../materials/sign_resources.material.json",
+    "sign_technician": "../materials/sign_technician.material.json",
+    "sign_scout": "../materials/sign_scout.material.json"
+  },
+  "entities": [
+    {
+      "id": "bunker",
+      "name": "Bunker"
+    },
+    {
+      "id": "corridor",
+      "name": "Main corridor",
+      "parent": "bunker"
+    },
+    {
+      "id": "dormitory",
+      "name": "Dormitory",
+      "parent": "bunker"
+    },
+    {
+      "id": "locker_room",
+      "name": "Locker room",
+      "parent": "bunker"
+    },
+    {
+      "id": "common_area",
+      "name": "Common area",
+      "parent": "bunker"
+    },
+    {
+      "id": "generator_room",
+      "name": "Generator room",
+      "parent": "bunker"
+    },
+    {
+      "id": "weapon_dealer",
+      "name": "Weapon dealer area",
+      "parent": "bunker"
+    },
+    {
+      "id": "medic",
+      "name": "Medic area",
+      "parent": "bunker"
+    },
+    {
+      "id": "resource_trader",
+      "name": "Resource trader area",
+      "parent": "bunker"
+    },
+    {
+      "id": "technician",
+      "name": "Technician area",
+      "parent": "bunker"
+    },
+    {
+      "id": "scout",
+      "name": "Scout area",
+      "parent": "bunker"
+    },
+    {
+      "id": "airlock",
+      "name": "Airlock",
+      "parent": "bunker"
+    },
+    {
+      "id": "exit_passage",
+      "name": "Exit passage",
+      "parent": "bunker"
+    },
+    {
+      "id": "exit_passage/stairs_1",
+      "name": "stairs 1",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -7.0,
+          0.0,
+          0.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "stairs"
+      }
+    },
+    {
+      "id": "exit_passage/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -7.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "exit_passage/floor_1",
+      "name": "floor 1",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -5.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "exit_passage/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -5.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "airlock/floor_1",
+      "name": "floor 1",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "airlock/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "airlock/floor_2",
+      "name": "floor 2",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "airlock/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "airlock/floor_3",
+      "name": "floor 3",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "airlock/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "airlock/floor_4",
+      "name": "floor 4",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -1.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "airlock/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -1.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "airlock/floor_5",
+      "name": "floor 5",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -1.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "airlock/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -1.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "airlock/floor_6",
+      "name": "floor 6",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -1.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "airlock/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -1.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "weapon_dealer/floor_1",
+      "name": "floor 1",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "weapon_dealer/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "weapon_dealer/floor_2",
+      "name": "floor 2",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "weapon_dealer/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "weapon_dealer/floor_3",
+      "name": "floor 3",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "weapon_dealer/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_1",
+      "name": "floor 1",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "dormitory/floor_1",
+      "name": "floor 1",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "dormitory/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "dormitory/floor_2",
+      "name": "floor 2",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "dormitory/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "dormitory/floor_3",
+      "name": "floor 3",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "dormitory/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "weapon_dealer/floor_4",
+      "name": "floor 4",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "weapon_dealer/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "weapon_dealer/floor_5",
+      "name": "floor 5",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "weapon_dealer/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "weapon_dealer/floor_6",
+      "name": "floor 6",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "weapon_dealer/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_2",
+      "name": "floor 2",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "dormitory/floor_4",
+      "name": "floor 4",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "dormitory/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "dormitory/floor_5",
+      "name": "floor 5",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "dormitory/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "dormitory/floor_6",
+      "name": "floor 6",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "dormitory/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "weapon_dealer/floor_7",
+      "name": "floor 7",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "weapon_dealer/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "weapon_dealer/floor_8",
+      "name": "floor 8",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "weapon_dealer/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "weapon_dealer/floor_9",
+      "name": "floor 9",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "weapon_dealer/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_3",
+      "name": "floor 3",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "dormitory/floor_7",
+      "name": "floor 7",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "dormitory/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "dormitory/floor_8",
+      "name": "floor 8",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "dormitory/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "dormitory/floor_9",
+      "name": "floor 9",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "dormitory/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "medic/floor_1",
+      "name": "floor 1",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "medic/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "medic/floor_2",
+      "name": "floor 2",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "medic/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "medic/floor_3",
+      "name": "floor 3",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "medic/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_4",
+      "name": "floor 4",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "locker_room/floor_1",
+      "name": "floor 1",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "locker_room/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "locker_room/floor_2",
+      "name": "floor 2",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "locker_room/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "locker_room/floor_3",
+      "name": "floor 3",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "locker_room/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "medic/floor_4",
+      "name": "floor 4",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "medic/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "medic/floor_5",
+      "name": "floor 5",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "medic/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "medic/floor_6",
+      "name": "floor 6",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "medic/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_5",
+      "name": "floor 5",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "locker_room/floor_4",
+      "name": "floor 4",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "locker_room/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "locker_room/floor_5",
+      "name": "floor 5",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "locker_room/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "locker_room/floor_6",
+      "name": "floor 6",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "locker_room/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "medic/floor_7",
+      "name": "floor 7",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "medic/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "medic/floor_8",
+      "name": "floor 8",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "medic/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "medic/floor_9",
+      "name": "floor 9",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "medic/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_6",
+      "name": "floor 6",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "locker_room/floor_7",
+      "name": "floor 7",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "locker_room/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "locker_room/floor_8",
+      "name": "floor 8",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "locker_room/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "locker_room/floor_9",
+      "name": "floor 9",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "locker_room/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "resource_trader/floor_1",
+      "name": "floor 1",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "resource_trader/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "resource_trader/floor_2",
+      "name": "floor 2",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "resource_trader/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "resource_trader/floor_3",
+      "name": "floor 3",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "resource_trader/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_7",
+      "name": "floor 7",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_1",
+      "name": "floor 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_2",
+      "name": "floor 2",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_3",
+      "name": "floor 3",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "resource_trader/floor_4",
+      "name": "floor 4",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "resource_trader/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "resource_trader/floor_5",
+      "name": "floor 5",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "resource_trader/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "resource_trader/floor_6",
+      "name": "floor 6",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "resource_trader/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_8",
+      "name": "floor 8",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_4",
+      "name": "floor 4",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_5",
+      "name": "floor 5",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_6",
+      "name": "floor 6",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "resource_trader/floor_7",
+      "name": "floor 7",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "resource_trader/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "resource_trader/floor_8",
+      "name": "floor 8",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "resource_trader/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "resource_trader/floor_9",
+      "name": "floor 9",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "resource_trader/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_9",
+      "name": "floor 9",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_7",
+      "name": "floor 7",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_8",
+      "name": "floor 8",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_9",
+      "name": "floor 9",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "technician/floor_1",
+      "name": "floor 1",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "technician/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "technician/floor_2",
+      "name": "floor 2",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "technician/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "technician/floor_3",
+      "name": "floor 3",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "technician/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_10",
+      "name": "floor 10",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_10",
+      "name": "ceiling 10",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_10",
+      "name": "floor 10",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_10",
+      "name": "ceiling 10",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_11",
+      "name": "floor 11",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_11",
+      "name": "ceiling 11",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_12",
+      "name": "floor 12",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_12",
+      "name": "ceiling 12",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "technician/floor_4",
+      "name": "floor 4",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "technician/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "technician/floor_5",
+      "name": "floor 5",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "technician/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "technician/floor_6",
+      "name": "floor 6",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "technician/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_11",
+      "name": "floor 11",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_11",
+      "name": "ceiling 11",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_13",
+      "name": "floor 13",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_13",
+      "name": "ceiling 13",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_14",
+      "name": "floor 14",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_14",
+      "name": "ceiling 14",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_15",
+      "name": "floor 15",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_15",
+      "name": "ceiling 15",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "technician/floor_7",
+      "name": "floor 7",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "technician/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "technician/floor_8",
+      "name": "floor 8",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "technician/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "technician/floor_9",
+      "name": "floor 9",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "technician/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_12",
+      "name": "floor 12",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_12",
+      "name": "ceiling 12",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_16",
+      "name": "floor 16",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_16",
+      "name": "ceiling 16",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_17",
+      "name": "floor 17",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_17",
+      "name": "ceiling 17",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "common_area/floor_18",
+      "name": "floor 18",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "common_area/ceiling_18",
+      "name": "ceiling 18",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "scout/floor_1",
+      "name": "floor 1",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "scout/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "scout/floor_2",
+      "name": "floor 2",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "scout/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "scout/floor_3",
+      "name": "floor 3",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "scout/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_13",
+      "name": "floor 13",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_13",
+      "name": "ceiling 13",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "generator_room/floor_1",
+      "name": "floor 1",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "generator_room/ceiling_1",
+      "name": "ceiling 1",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "generator_room/floor_2",
+      "name": "floor 2",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "generator_room/ceiling_2",
+      "name": "ceiling 2",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "generator_room/floor_3",
+      "name": "floor 3",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "generator_room/ceiling_3",
+      "name": "ceiling 3",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "scout/floor_4",
+      "name": "floor 4",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "scout/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "scout/floor_5",
+      "name": "floor 5",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "scout/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "scout/floor_6",
+      "name": "floor 6",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "scout/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_14",
+      "name": "floor 14",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_14",
+      "name": "ceiling 14",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "generator_room/floor_4",
+      "name": "floor 4",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "generator_room/ceiling_4",
+      "name": "ceiling 4",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "generator_room/floor_5",
+      "name": "floor 5",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "generator_room/ceiling_5",
+      "name": "ceiling 5",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "generator_room/floor_6",
+      "name": "floor 6",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "generator_room/ceiling_6",
+      "name": "ceiling 6",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "scout/floor_7",
+      "name": "floor 7",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "scout/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          -6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "scout/floor_8",
+      "name": "floor 8",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "scout/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "scout/floor_9",
+      "name": "floor 9",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "scout/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "corridor/floor_15",
+      "name": "floor 15",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "corridor/ceiling_15",
+      "name": "ceiling 15",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "generator_room/floor_7",
+      "name": "floor 7",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "generator_room/ceiling_7",
+      "name": "ceiling 7",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "generator_room/floor_8",
+      "name": "floor 8",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "generator_room/ceiling_8",
+      "name": "ceiling 8",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "generator_room/floor_9",
+      "name": "floor 9",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "floor"
+      }
+    },
+    {
+      "id": "generator_room/ceiling_9",
+      "name": "ceiling 9",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          6.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "ceiling"
+      }
+    },
+    {
+      "id": "exit_passage/wall_1",
+      "name": "wall 1",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -8.0,
+          0.0,
+          0.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "exit_passage/wall_2",
+      "name": "wall 2",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -7.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "exit_passage/wall_3",
+      "name": "wall 3",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -7.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "exit_passage/airlock_arch_1",
+      "name": "airlock arch 1",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          0.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "airlock_arch"
+      }
+    },
+    {
+      "id": "exit_passage/wall_4",
+      "name": "wall 4",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -5.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "exit_passage/wall_5",
+      "name": "wall 5",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -5.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "airlock/wall_1",
+      "name": "wall 1",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "airlock/wall_2",
+      "name": "wall 2",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "airlock/wall_3",
+      "name": "wall 3",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "airlock/wall_4",
+      "name": "wall 4",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "airlock/wall_5",
+      "name": "wall 5",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "airlock/wall_6",
+      "name": "wall 6",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -1.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "airlock/doorway_1",
+      "name": "doorway 1",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "airlock/wall_7",
+      "name": "wall 7",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "airlock/wall_8",
+      "name": "wall 8",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -1.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_1",
+      "name": "wall 1",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_2",
+      "name": "wall 2",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_3",
+      "name": "wall 3",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_4",
+      "name": "wall 4",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_1",
+      "name": "wall 1",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "dormitory/wall_1",
+      "name": "wall 1",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "dormitory/wall_2",
+      "name": "wall 2",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "dormitory/wall_3",
+      "name": "wall 3",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_5",
+      "name": "wall 5",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/doorway_1",
+      "name": "doorway 1",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "corridor/doorway_1",
+      "name": "doorway 1",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "dormitory/wall_4",
+      "name": "wall 4",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_6",
+      "name": "wall 6",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_7",
+      "name": "wall 7",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_8",
+      "name": "wall 8",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_9",
+      "name": "wall 9",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "weapon_dealer/wall_10",
+      "name": "wall 10",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_2",
+      "name": "wall 2",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "dormitory/wall_5",
+      "name": "wall 5",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "dormitory/wall_6",
+      "name": "wall 6",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "dormitory/wall_7",
+      "name": "wall 7",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "dormitory/wall_8",
+      "name": "wall 8",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          5.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "medic/wall_1",
+      "name": "wall 1",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "medic/wall_2",
+      "name": "wall 2",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_3",
+      "name": "wall 3",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "locker_room/wall_1",
+      "name": "wall 1",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "medic/wall_3",
+      "name": "wall 3",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "medic/doorway_1",
+      "name": "doorway 1",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "corridor/doorway_2",
+      "name": "doorway 2",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "locker_room/wall_2",
+      "name": "wall 2",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "medic/wall_4",
+      "name": "wall 4",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          -6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "medic/wall_5",
+      "name": "wall 5",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "medic/wall_6",
+      "name": "wall 6",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          -4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "medic/wall_7",
+      "name": "wall 7",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          -2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "medic/wall_8",
+      "name": "wall 8",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_4",
+      "name": "wall 4",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "locker_room/wall_3",
+      "name": "wall 3",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "locker_room/wall_4",
+      "name": "wall 4",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "locker_room/wall_5",
+      "name": "wall 5",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "locker_room/wall_6",
+      "name": "wall 6",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "resource_trader/wall_1",
+      "name": "wall 1",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "resource_trader/wall_2",
+      "name": "wall 2",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_5",
+      "name": "wall 5",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "common_area/wall_1",
+      "name": "wall 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "resource_trader/wall_3",
+      "name": "wall 3",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "resource_trader/doorway_1",
+      "name": "doorway 1",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "corridor/doorway_3",
+      "name": "doorway 3",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "common_area/wall_2",
+      "name": "wall 2",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "resource_trader/wall_4",
+      "name": "wall 4",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          -6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "resource_trader/wall_5",
+      "name": "wall 5",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "resource_trader/wall_6",
+      "name": "wall 6",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          -4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "resource_trader/wall_7",
+      "name": "wall 7",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          -2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "resource_trader/wall_8",
+      "name": "wall 8",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_6",
+      "name": "wall 6",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "common_area/wall_3",
+      "name": "wall 3",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          17.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "technician/wall_1",
+      "name": "wall 1",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "technician/wall_2",
+      "name": "wall 2",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_7",
+      "name": "wall 7",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "common_area/wall_4",
+      "name": "wall 4",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          19.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "technician/wall_3",
+      "name": "wall 3",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "technician/doorway_1",
+      "name": "doorway 1",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "corridor/doorway_4",
+      "name": "doorway 4",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "common_area/wall_5",
+      "name": "wall 5",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "technician/wall_4",
+      "name": "wall 4",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          -6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "technician/wall_5",
+      "name": "wall 5",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "technician/wall_6",
+      "name": "wall 6",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          -4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "technician/wall_7",
+      "name": "wall 7",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          -2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "technician/wall_8",
+      "name": "wall 8",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_8",
+      "name": "wall 8",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "common_area/wall_6",
+      "name": "wall 6",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "common_area/wall_7",
+      "name": "wall 7",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "common_area/wall_8",
+      "name": "wall 8",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "common_area/wall_9",
+      "name": "wall 9",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "scout/wall_1",
+      "name": "wall 1",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "scout/wall_2",
+      "name": "wall 2",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_9",
+      "name": "wall 9",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "generator_room/wall_1",
+      "name": "wall 1",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "scout/wall_3",
+      "name": "wall 3",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "scout/doorway_1",
+      "name": "doorway 1",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "corridor/doorway_5",
+      "name": "doorway 5",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "doorway"
+      }
+    },
+    {
+      "id": "generator_room/wall_2",
+      "name": "wall 2",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "scout/wall_4",
+      "name": "wall 4",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          -6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "scout/wall_5",
+      "name": "wall 5",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "scout/wall_6",
+      "name": "wall 6",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          -4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "scout/wall_7",
+      "name": "wall 7",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          -2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "scout/wall_8",
+      "name": "wall 8",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_10",
+      "name": "wall 10",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          0.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "corridor/wall_11",
+      "name": "wall 11",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "generator_room/wall_3",
+      "name": "wall 3",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "generator_room/wall_4",
+      "name": "wall 4",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "generator_room/wall_5",
+      "name": "wall 5",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          6.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "generator_room/wall_6",
+      "name": "wall 6",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          29.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wall"
+      }
+    },
+    {
+      "id": "exit_passage/corner_1",
+      "name": "corner 1",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -8.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "exit_passage/corner_2",
+      "name": "corner 2",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -8.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "exit_passage/corner_3",
+      "name": "corner 3",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "exit_passage/corner_4",
+      "name": "corner 4",
+      "parent": "exit_passage",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "airlock/corner_1",
+      "name": "corner 1",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "airlock/corner_2",
+      "name": "corner 2",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "airlock/corner_3",
+      "name": "corner 3",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "airlock/corner_4",
+      "name": "corner 4",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "airlock/corner_5",
+      "name": "corner 5",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "airlock/corner_6",
+      "name": "corner 6",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "weapon_dealer/corner_1",
+      "name": "corner 1",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "weapon_dealer/corner_2",
+      "name": "corner 2",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "weapon_dealer/corner_3",
+      "name": "corner 3",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_1",
+      "name": "corner 1",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "dormitory/corner_1",
+      "name": "corner 1",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "dormitory/corner_2",
+      "name": "corner 2",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "dormitory/corner_3",
+      "name": "corner 3",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "dormitory/corner_4",
+      "name": "corner 4",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "weapon_dealer/corner_4",
+      "name": "corner 4",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_2",
+      "name": "corner 2",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "dormitory/corner_5",
+      "name": "corner 5",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "dormitory/corner_6",
+      "name": "corner 6",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "weapon_dealer/corner_5",
+      "name": "corner 5",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_3",
+      "name": "corner 3",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "dormitory/corner_7",
+      "name": "corner 7",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "dormitory/corner_8",
+      "name": "corner 8",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "medic/corner_1",
+      "name": "corner 1",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "medic/corner_2",
+      "name": "corner 2",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "medic/corner_3",
+      "name": "corner 3",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_4",
+      "name": "corner 4",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "locker_room/corner_1",
+      "name": "corner 1",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "locker_room/corner_2",
+      "name": "corner 2",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "locker_room/corner_3",
+      "name": "corner 3",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "locker_room/corner_4",
+      "name": "corner 4",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "medic/corner_4",
+      "name": "corner 4",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          8.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_5",
+      "name": "corner 5",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          8.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "locker_room/corner_5",
+      "name": "corner 5",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          8.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "locker_room/corner_6",
+      "name": "corner 6",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          8.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "medic/corner_5",
+      "name": "corner 5",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_6",
+      "name": "corner 6",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "locker_room/corner_7",
+      "name": "corner 7",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "locker_room/corner_8",
+      "name": "corner 8",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "resource_trader/corner_1",
+      "name": "corner 1",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "resource_trader/corner_2",
+      "name": "corner 2",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          -5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "resource_trader/corner_3",
+      "name": "corner 3",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_7",
+      "name": "corner 7",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_1",
+      "name": "corner 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_2",
+      "name": "corner 2",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_3",
+      "name": "corner 3",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_4",
+      "name": "corner 4",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          12.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "resource_trader/corner_4",
+      "name": "corner 4",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_8",
+      "name": "corner 8",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_5",
+      "name": "corner 5",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_6",
+      "name": "corner 6",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "resource_trader/corner_5",
+      "name": "corner 5",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          16.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_9",
+      "name": "corner 9",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          16.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_7",
+      "name": "corner 7",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          16.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_8",
+      "name": "corner 8",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          16.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "technician/corner_1",
+      "name": "corner 1",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "technician/corner_2",
+      "name": "corner 2",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          -5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "technician/corner_3",
+      "name": "corner 3",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_10",
+      "name": "corner 10",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_9",
+      "name": "corner 9",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_10",
+      "name": "corner 10",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "technician/corner_4",
+      "name": "corner 4",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          20.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_11",
+      "name": "corner 11",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          20.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_11",
+      "name": "corner 11",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          20.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_12",
+      "name": "corner 12",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          20.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "technician/corner_5",
+      "name": "corner 5",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_12",
+      "name": "corner 12",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_13",
+      "name": "corner 13",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "common_area/corner_14",
+      "name": "corner 14",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "scout/corner_1",
+      "name": "corner 1",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "scout/corner_2",
+      "name": "corner 2",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          -5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "scout/corner_3",
+      "name": "corner 3",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_13",
+      "name": "corner 13",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_1",
+      "name": "corner 1",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_2",
+      "name": "corner 2",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_3",
+      "name": "corner 3",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_4",
+      "name": "corner 4",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          24.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "scout/corner_4",
+      "name": "corner 4",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_14",
+      "name": "corner 14",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_5",
+      "name": "corner 5",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_6",
+      "name": "corner 6",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "scout/corner_5",
+      "name": "corner 5",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_15",
+      "name": "corner 15",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_7",
+      "name": "corner 7",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_8",
+      "name": "corner 8",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "scout/corner_6",
+      "name": "corner 6",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          -7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "scout/corner_7",
+      "name": "corner 7",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          -5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "scout/corner_8",
+      "name": "corner 8",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/corner_16",
+      "name": "corner 16",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_9",
+      "name": "corner 9",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          1.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_10",
+      "name": "corner 10",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_11",
+      "name": "corner 11",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "generator_room/corner_12",
+      "name": "corner 12",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          7.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "corner"
+      }
+    },
+    {
+      "id": "corridor/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "corridor",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          0.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 4.0,
+            "range": 4.0
+          }
+        }
+      }
+    },
+    {
+      "id": "corridor/lamp_2",
+      "name": "Ceiling lamp 2",
+      "parent": "corridor",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          0.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 4.0,
+            "range": 4.0
+          }
+        }
+      }
+    },
+    {
+      "id": "corridor/lamp_3",
+      "name": "Ceiling lamp 3",
+      "parent": "corridor",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          0.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 4.0,
+            "range": 4.0
+          }
+        }
+      }
+    },
+    {
+      "id": "corridor/lamp_4",
+      "name": "Ceiling lamp 4",
+      "parent": "corridor",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          0.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 4.0,
+            "range": 4.0
+          }
+        }
+      }
+    },
+    {
+      "id": "corridor/lamp_5",
+      "name": "Ceiling lamp 5",
+      "parent": "corridor",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          0.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 4.0,
+            "range": 4.0
+          }
+        }
+      }
+    },
+    {
+      "id": "dormitory/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "dormitory",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "locker_room/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "locker_room",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "common_area/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "common_area",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "common_area/lamp_2",
+      "name": "Ceiling lamp 2",
+      "parent": "common_area",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "generator_room/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "generator_room",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "weapon_dealer/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "weapon_dealer",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "medic/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "medic",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "resource_trader/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "resource_trader",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "technician/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "technician",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "scout/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "scout",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "airlock/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "airlock",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          0.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 6.0,
+            "range": 5.0
+          }
+        }
+      }
+    },
+    {
+      "id": "exit_passage/lamp_1",
+      "name": "Ceiling lamp 1",
+      "parent": "exit_passage",
+      "prefab": "../prefabs/ceiling_lamp.prefab.json",
+      "transform": {
+        "position": [
+          -5.0,
+          0.0,
+          0.0
+        ]
+      },
+      "overrides": {
+        "light": {
+          "pointLight": {
+            "intensity": 2.5,
+            "range": 3.0
+          }
+        }
+      }
+    },
+    {
+      "id": "dormitory/bunk_1",
+      "name": "bunk 1",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          1.2,
+          0.0,
+          6.3
+        ]
+      },
+      "modelRenderer": {
+        "model": "bunk"
+      }
+    },
+    {
+      "id": "dormitory/bunk_2",
+      "name": "bunk 2",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          4.8,
+          0.0,
+          6.3
+        ]
+      },
+      "modelRenderer": {
+        "model": "bunk"
+      }
+    },
+    {
+      "id": "dormitory/bunk_3",
+      "name": "bunk 3",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          0.6,
+          0.0,
+          3.5
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "bunk"
+      }
+    },
+    {
+      "id": "dormitory/locker_1",
+      "name": "locker 1",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          5.6,
+          0.0,
+          4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "dormitory/door_leaf_1",
+      "name": "Door",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          2.4,
+          0.0,
+          1.13
+        ],
+        "rotationDegrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "door_leaf"
+      }
+    },
+    {
+      "id": "locker_room/locker_1",
+      "name": "locker 1",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.2,
+          0.0,
+          6.6
+        ],
+        "rotationDegrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/locker_2",
+      "name": "locker 2",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.2,
+          0.0,
+          3.8
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/locker_3",
+      "name": "locker 3",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.75,
+          0.0,
+          6.6
+        ],
+        "rotationDegrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/locker_4",
+      "name": "locker 4",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          7.75,
+          0.0,
+          3.8
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/locker_5",
+      "name": "locker 5",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          8.3,
+          0.0,
+          6.6
+        ],
+        "rotationDegrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/locker_6",
+      "name": "locker 6",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          8.3,
+          0.0,
+          3.8
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/locker_7",
+      "name": "locker 7",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          8.85,
+          0.0,
+          6.6
+        ],
+        "rotationDegrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/locker_8",
+      "name": "locker 8",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          8.85,
+          0.0,
+          3.8
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/locker_9",
+      "name": "locker 9",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.4,
+          0.0,
+          6.6
+        ],
+        "rotationDegrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/locker_10",
+      "name": "locker 10",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.4,
+          0.0,
+          3.8
+        ]
+      },
+      "modelRenderer": {
+        "model": "locker"
+      }
+    },
+    {
+      "id": "locker_room/bench_1",
+      "name": "bench 1",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          5.2
+        ]
+      },
+      "modelRenderer": {
+        "model": "bench"
+      }
+    },
+    {
+      "id": "common_area/table_1",
+      "name": "table 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "table"
+      }
+    },
+    {
+      "id": "common_area/bench_1",
+      "name": "bench 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          3.3
+        ]
+      },
+      "modelRenderer": {
+        "model": "bench"
+      }
+    },
+    {
+      "id": "common_area/bench_2",
+      "name": "bench 2",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          4.7
+        ]
+      },
+      "modelRenderer": {
+        "model": "bench"
+      }
+    },
+    {
+      "id": "common_area/table_2",
+      "name": "table 2",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "table"
+      }
+    },
+    {
+      "id": "common_area/bench_3",
+      "name": "bench 3",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          3.3
+        ]
+      },
+      "modelRenderer": {
+        "model": "bench"
+      }
+    },
+    {
+      "id": "common_area/bench_4",
+      "name": "bench 4",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          4.7
+        ]
+      },
+      "modelRenderer": {
+        "model": "bench"
+      }
+    },
+    {
+      "id": "common_area/pillar_1",
+      "name": "pillar 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "pillar"
+      }
+    },
+    {
+      "id": "common_area/pillar_2",
+      "name": "pillar 2",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          5.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "pillar"
+      }
+    },
+    {
+      "id": "common_area/shelf_1",
+      "name": "shelf 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          6.5
+        ]
+      },
+      "modelRenderer": {
+        "model": "shelf"
+      }
+    },
+    {
+      "id": "common_area/crate_1",
+      "name": "crate 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          23.0,
+          0.0,
+          6.3
+        ]
+      },
+      "modelRenderer": {
+        "model": "crate"
+      }
+    },
+    {
+      "id": "common_area/terminal_1",
+      "name": "terminal 1",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          23.2,
+          0.0,
+          2.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "terminal"
+      }
+    },
+    {
+      "id": "generator_room/generator_1",
+      "name": "generator 1",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          4.5
+        ]
+      },
+      "modelRenderer": {
+        "model": "generator"
+      }
+    },
+    {
+      "id": "generator_room/electrical_panel_1",
+      "name": "Electrical panel 1",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          29.875,
+          0.0,
+          3.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      }
+    },
+    {
+      "id": "generator_room/electrical_panel_2",
+      "name": "Electrical panel 2",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          29.875,
+          0.0,
+          5.5
+        ],
+        "rotationDegrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      }
+    },
+    {
+      "id": "generator_room/crate_1",
+      "name": "crate 1",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          24.8,
+          0.0,
+          6.2
+        ]
+      },
+      "modelRenderer": {
+        "model": "crate"
+      }
+    },
+    {
+      "id": "generator_room/door_leaf_1",
+      "name": "Door",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          26.4,
+          0.0,
+          1.13
+        ],
+        "rotationDegrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "door_leaf"
+      }
+    },
+    {
+      "id": "weapon_dealer/stall",
+      "name": "Merchant stall (weapons)",
+      "parent": "weapon_dealer",
+      "prefab": "../prefabs/merchant_stall.prefab.json",
+      "transform": {
+        "position": [
+          3.0,
+          0.0,
+          -6.875
+        ]
+      },
+      "overrides": {
+        "sign": {
+          "meshRenderer": {
+            "material": "sign_weapons"
+          }
+        }
+      }
+    },
+    {
+      "id": "medic/stall",
+      "name": "Merchant stall (medic)",
+      "parent": "medic",
+      "prefab": "../prefabs/merchant_stall.prefab.json",
+      "transform": {
+        "position": [
+          9.0,
+          0.0,
+          -6.875
+        ]
+      },
+      "overrides": {
+        "sign": {
+          "meshRenderer": {
+            "material": "sign_medic"
+          }
+        }
+      }
+    },
+    {
+      "id": "resource_trader/stall",
+      "name": "Merchant stall (resources)",
+      "parent": "resource_trader",
+      "prefab": "../prefabs/merchant_stall.prefab.json",
+      "transform": {
+        "position": [
+          15.0,
+          0.0,
+          -6.875
+        ]
+      },
+      "overrides": {
+        "sign": {
+          "meshRenderer": {
+            "material": "sign_resources"
+          }
+        }
+      }
+    },
+    {
+      "id": "technician/stall",
+      "name": "Merchant stall (technician)",
+      "parent": "technician",
+      "prefab": "../prefabs/merchant_stall.prefab.json",
+      "transform": {
+        "position": [
+          21.0,
+          0.0,
+          -6.875
+        ]
+      },
+      "overrides": {
+        "sign": {
+          "meshRenderer": {
+            "material": "sign_technician"
+          }
+        }
+      }
+    },
+    {
+      "id": "scout/stall",
+      "name": "Merchant stall (scout)",
+      "parent": "scout",
+      "prefab": "../prefabs/merchant_stall.prefab.json",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -6.875
+        ]
+      },
+      "overrides": {
+        "sign": {
+          "meshRenderer": {
+            "material": "sign_scout"
+          }
+        }
+      }
+    },
+    {
+      "id": "weapon_dealer/crate_1",
+      "name": "crate 1",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "crate"
+      }
+    },
+    {
+      "id": "weapon_dealer/crate_2",
+      "name": "crate 2",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          1.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "crate"
+      }
+    },
+    {
+      "id": "medic/shelf_1",
+      "name": "shelf 1",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          6.8,
+          0.0,
+          -3.5
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "shelf"
+      }
+    },
+    {
+      "id": "medic/bunk_1",
+      "name": "bunk 1",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          10.8,
+          0.0,
+          -3.5
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "bunk"
+      }
+    },
+    {
+      "id": "resource_trader/crate_1",
+      "name": "crate 1",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "crate"
+      }
+    },
+    {
+      "id": "resource_trader/crate_2",
+      "name": "crate 2",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          13.0,
+          0.0,
+          -4.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "crate"
+      }
+    },
+    {
+      "id": "resource_trader/crate_3",
+      "name": "crate 3",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          16.9,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "crate"
+      }
+    },
+    {
+      "id": "technician/terminal_1",
+      "name": "terminal 1",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          18.8,
+          0.0,
+          -3.5
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "terminal"
+      }
+    },
+    {
+      "id": "technician/electrical_panel_1",
+      "name": "electrical panel 1",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          23.875,
+          0.0,
+          -4.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      }
+    },
+    {
+      "id": "scout/table_1",
+      "name": "table 1",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          27.0,
+          0.0,
+          -3.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "table"
+      }
+    },
+    {
+      "id": "scout/terminal_1",
+      "name": "terminal 1",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          29.2,
+          0.0,
+          -3.5
+        ],
+        "rotationDegrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "terminal"
+      }
+    },
+    {
+      "id": "corridor/emergency_light_1",
+      "name": "emergency light 1",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -0.875
+        ]
+      },
+      "modelRenderer": {
+        "model": "emergency_light"
+      }
+    },
+    {
+      "id": "corridor/emergency_light_2",
+      "name": "emergency light 2",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          -0.875
+        ]
+      },
+      "modelRenderer": {
+        "model": "emergency_light"
+      }
+    },
+    {
+      "id": "corridor/emergency_light_3",
+      "name": "emergency light 3",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          29.4,
+          0.0,
+          -0.875
+        ]
+      },
+      "modelRenderer": {
+        "model": "emergency_light"
+      }
+    },
+    {
+      "id": "corridor/electrical_panel_1",
+      "name": "electrical panel 1",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          25.0,
+          0.0,
+          0.875
+        ],
+        "rotationDegrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      }
+    },
+    {
+      "id": "airlock/crate_1",
+      "name": "crate 1",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.2,
+          0.0,
+          2.2
+        ]
+      },
+      "modelRenderer": {
+        "model": "crate"
+      }
+    },
+    {
+      "id": "airlock/emergency_light_1",
+      "name": "emergency light 1",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -3.0,
+          0.0,
+          -2.875
+        ]
+      },
+      "modelRenderer": {
+        "model": "emergency_light"
+      }
+    },
+    {
+      "id": "player_start",
+      "name": "Player start",
+      "parent": "bunker",
+      "transform": {
+        "position": [
+          0.9,
+          1.65,
+          -0.35
+        ],
+        "rotationDegrees": [
+          0.0,
+          -84.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "verticalFovDegrees": 70.0,
+        "nearPlane": 0.05
+      }
+    },
+    {
+      "id": "environment",
+      "name": "Bunker air",
+      "parent": "bunker",
+      "environment": {
+        "clearColor": [
+          0.01,
+          0.01,
+          0.012,
+          1.0
+        ],
+        "ambientColor": [
+          0.55,
+          0.5,
+          0.42
+        ],
+        "ambientIntensity": 0.12,
+        "drawBackground": false
+      },
+      "fog": {
+        "color": [
+          0.05,
+          0.045,
+          0.04
+        ],
+        "density": 0.045,
+        "startDistance": 2.0,
+        "maxOpacity": 0.55
+      }
+    }
+  ]
+}

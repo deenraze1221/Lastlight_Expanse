@@ -1,17 +1,21 @@
-// Lastlight Expanse - streamed voxel highlands at dusk, built on the ZODAR engine.
+// Lastlight Expanse, built on the ZODAR engine. Levels:
+//   bunker    (default, Phase D2) the team bunker greybox from game/assets (Bunker/BunkerApp.cpp)
+//   highlands streamed voxel highlands at dusk (regression scene; this file)
 //
-//   LastlightExpanse [standard options] [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]
+//   LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR]
+//                    highlands only: [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]
 //                    [--untextured] [--no-fog] [--spawn-height H] [--pitch DEG]
 //
 // Standard options (--frames, --headless, --deterministic, --screenshot, --capture-frames,
 // --report, --seed, --camera, ...) come from the engine runtime: run with --help.
 // Default seed 1337, window 1600x900.
 //
-// Controls: hold right mouse to look, WASD move, Space/Ctrl up/down, Shift fast,
-// left click digs the targeted voxel, F places stone on it, F1 profiler, Esc quits.
+// Controls: hold right mouse to look, WASD move, Space/Ctrl up/down, Shift fast, F1 profiler,
+// Esc quits; highlands: left click digs the targeted voxel, F places stone on it.
 // Exit codes: 0 ok, 1 fatal error, 2 validation errors, 3 screenshot/capture failed.
 // Runs on zodar::Application (engine/runtime): it owns the window, renderer and frame loop.
 
+#include "Bunker/BunkerApp.h"
 #include "Rendering/BlockTextures.h"
 #include "World/LastlightTerrain.h"
 
@@ -49,11 +53,14 @@ using namespace zodar::gfx;
 using namespace zodar::voxel;
 
 constexpr std::string_view kUsage =
-    "LastlightExpanse [standard options] [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]\n"
+    "LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR]\n"
+    "                 highlands: [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]\n"
     "                 [--untextured] [--no-fog] [--spawn-height H] [--pitch DEG]";
 
 // Game-only options; window, frames, seed, captures etc. are in ApplicationDesc.
 struct Options {
+    std::string level = "bunker";                 // bunker | highlands
+    std::filesystem::path assets = LASTLIGHT_ASSETS_DIR; // game/assets (bunker)
     int viewRadius = 10;
     LightingQuality quality = LightingQuality::High;
     bool textured = true; // pixel-art texture arrays (false: flat palette colours, A/B tests)
@@ -70,7 +77,11 @@ Options parseOptions(std::span<const std::string> args) {
             if (i + 1 >= args.size()) fail("Missing value for " + std::string(arg));
             return args[++i];
         };
-        if (arg == "--view-radius") o.viewRadius = static_cast<int>(parseIntArgument(arg, next()));
+        if (arg == "--level") {
+            o.level = next();
+            if (o.level != "bunker" && o.level != "highlands") fail("--level must be bunker or highlands");
+        } else if (arg == "--assets") o.assets = next();
+        else if (arg == "--view-radius") o.viewRadius = static_cast<int>(parseIntArgument(arg, next()));
         else if (arg == "--lighting-quality") o.quality = parseLightingQuality(next());
         else if (arg == "--untextured") o.textured = false;
         else if (arg == "--no-fog") o.fog = false;
@@ -327,7 +338,12 @@ void LastlightApp::onShutdown() {
 
 int main(int argc, char** argv) {
     return zodar::runMain(argc, argv, defaultDesc(), kUsage,
-                          [](const zodar::ApplicationDesc& desc, std::span<const std::string> args) {
-                              return std::make_unique<LastlightApp>(desc, parseOptions(args));
+                          [](const zodar::ApplicationDesc& desc,
+                             std::span<const std::string> args) -> std::unique_ptr<zodar::Application> {
+                              const Options options = parseOptions(args);
+                              if (options.level == "bunker") {
+                                  return lastlight::makeBunkerApp(desc, options.assets);
+                              }
+                              return std::make_unique<LastlightApp>(desc, options);
                           });
 }

@@ -123,9 +123,58 @@
   (engine, generic), verified with synthetic fixtures only; real-export validation pending
   (user supplies one export per tool). See the D1 handoff below.
 
+- **Phase D2 done (2026-11-01):** game asset layout + static greybox bunker (default level),
+  `--level highlands` regression scene byte-identical. See the D2 handoff below.
+
 ## Current task
-- **Next session: D2 — game asset layout + static bunker (game).** Not started; waits for
-  the user's go. Git LFS dropped (user decision 2026-11-01): all files in regular Git.
+- **Next session: D3 — input action maps (engine).** Not started; waits for the user's go.
+- Open question from the user (2026-11-01, during D2): raise all 32×32 textures to 64×64.
+  Conflicts with GDD §3 (32×32 default, 64×64 maximum) and the 32 texels/m density target;
+  not done, awaiting the user's decision.
+
+## Handoff (Phase D2 session, 2026-11-01)
+- Done:
+  - Source-file policy (regular Git, no LFS): `.gitattributes` `game/assets/** -text`,
+    `*.blend binary`; `.gitignore` `*.blend1`, `*.blend2`, `game/assets/**/*.zodar/`;
+    `game/tools/check_source_sizes.py` (20 MiB limit on `.blend` only, rejects
+    `.blend1`/`.blend2`, no limit on other types) + self-test.
+  - `game/assets/` layout per plan: registry (palette + `glow` sub-palette, defaults, budgets,
+    29 entries: 21 models, 5 materials, 2 prefabs, 1 scene), `sources/blockbench`,
+    `sources/blender(/textures)` (READMEs only; no real sources yet), `game/assets/README.md`.
+  - `game/tools/make_greybox_kit.py` (deterministic): 20 Blockbench-style modules (floor, wall,
+    doorway, corner, ceiling, pillar, stairs, door leaf, lamp, crate, bunk, locker, terminal,
+    generator, electrical panel, emergency light, merchant counter, shelf, table, bench) + the
+    Blender-style curved `airlock_arch`; 13 32×32 textures from the master palette; 5 merchant
+    signs; prefabs `ceiling_lamp`, `merchant_stall`; `levels/bunker.scene.json`.
+  - Level (GDD §10, static): corridor, dormitory, locker room (private lockers as props),
+    common area, generator room, five merchant areas (weapon dealer, medic, resource trader,
+    technician, scout), airlock with the arch, exit passage with stairs. Room point lights
+    (range <= room), emissive lamps and screens, emergency lights as unlit props (D7), dim fog,
+    player start camera. No NPC, merchant, trading, locker or power functionality.
+  - Game: `--level bunker|highlands` (default bunker), `--assets DIR`;
+    `game/src/Bunker/BunkerApp.cpp` (AssetManager async pre-load + LiveScene, hot reload in
+    Debug, fly camera); highlands code untouched.
+  - Docs: `game/assets/README.md`, MODELING.md (layout, policy test), RUNNING.md, CLAUDE.md,
+    ARCHITECTURE "Phase D2 decisions", plan/roadmap status.
+- Tests (GCC 13, warnings as errors): Debug and Release 0 warnings, 34/34 ctest each (new:
+  `tools.game_source_sizes`, `tools.game_source_sizes_selftest`, `tools.greybox_kit_up_to_date`,
+  `tools.game_assets_check` (strict, 29 ok), `gpu.lastlight_bunker_smoke`), 212 unit + 65 GPU
+  cases, validation 0 errors / 0 warnings (GPU tests, bunker, highlands). Highlands screenshot
+  (640×360, 90 frames) sha256 `1e6b461a…` identical before/after D2 in Debug and Release.
+  Bunker screenshot identical Debug vs Release.
+- Manual check (Debug, game running with a copy of the assets): edited sign material, `.glb`
+  (truncated -> "previous version kept", restored -> reloaded), level scene and lamp prefab
+  -> live reloads; broken scene JSON kept the previous level.
+- Decisions: see `docs/PHASE_D_PLAN.md` D2 scope notes (compile false, explicit material and
+  prefab imports, generated level, async pre-load + LiveScene).
+- Open debts: no real Blockbench/Blender exports or sources yet (generated "-style" modules
+  only, no tool compatibility claimed); no ctest golden for highlands (manual comparison);
+  emergency lights unlit until D7; no collision (D7); bunker FPS on real GPUs not measured.
+  Not run: Clang, MinGW, MSVC.
+- **D3 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/PHASE_D_PLAN.md` (D3, GDD alignment item
+  3), `engine/runtime/Runtime/Application.h`, `engine/runtime/Runtime/CommandLine.h`,
+  `game/src/main.cpp` and `game/src/Bunker/BunkerApp.cpp` (current SDL input).
+- **D3 first step:** per plan (`Zodar::Input` actions/bindings), engine-only, no player concept.
 
 ## Handoff (Phase D1 session, 2026-11-01)
 - Done:

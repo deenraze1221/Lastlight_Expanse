@@ -1,7 +1,7 @@
 # ZODAR — AI-First Engine Roadmap
 
 **Status:** **Phase C complete; Phase D planned and approved (8 sessions,
-`docs/PHASE_D_PLAN.md`); D1 done, next D2.** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
+`docs/PHASE_D_PLAN.md`); D1 and D2 done, next D3.** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
 (`zodar::Application`, `FixedTimestep`, headless/deterministic modes, game migrated).
 **Phase A2 done** (standard CLI + `runMain`, PNG screenshots, capture sequences, `--camera`,
 run report JSON). **Phase A3 done** (CMake presets, `tools/zodar.py`, `docs/guide/RUNNING.md`,
@@ -186,5 +186,6 @@ networking (DEAD SECTOR M7 stays on the engine roadmap but after Phase E).
 3. **A3 (next)** CMake presets + `tools/zodar.py` + RUNNING guide; migrate ModelViewer/ZodarBench.
 4. B1 EnTT world, Transform hierarchy, renderer bridge.
 5. B2 scene/material JSON + reflection + round-trip tests.
-6. D1 unified GLB/glTF pipeline for Blockbench and Blender (done); **D2 (next)**, then D3..D8 per
+6. D1 unified GLB/glTF pipeline for Blockbench and Blender (done); D2 game asset layout + static
+   bunker (done); **D3 (next)**, then D4..D8 per
    `docs/PHASE_D_PLAN.md`.

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "entities": [
+    {
+      "id": "lamp",
+      "name": "Lamp",
+      "transform": {
+        "position": [
+          0.0,
+          3.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "lamp"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Lamp light",
+      "parent": "lamp",
+      "transform": {
+        "position": [
+          0.0,
+          -0.35,
+          0.0
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1.0,
+          0.82,
+          0.55
+        ],
+        "intensity": 6.0,
+        "range": 5.0
+      }
+    }
+  ]
+}
