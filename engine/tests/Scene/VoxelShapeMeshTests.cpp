@@ -228,6 +228,53 @@ TEST_CASE("shape mesher: texture layers and uvPerMetre") {
     }
 }
 
+TEST_CASE("shape mesher: sloped polygons take UVs and face layers from their dominant axis") {
+    // VOXELS §4: a sloped polygon is projected along the dominant axis of its normal; ties prefer
+    // Y, then X (a 45° wedge slope is a top face). Planar projection: along a 45° slope the
+    // texture stretches by sqrt(2).
+    const Registry reg;
+    for (const char* name : {"wedge", "corner_outer", "corner_inner", "quarter_round", "quarter_round_inner"}) {
+        for (int rotation = 0; rotation < 4; ++rotation) {
+            CAPTURE(name);
+            CAPTURE(rotation);
+            VoxelChunk c;
+            c.set(3, 3, 3, reg.id(name, rotation));
+            MeshOptions o;
+            o.voxelSize = 0.5f;
+            o.uvPerMetre = 2.0f; // one tile per cell: uv = position in cells
+            const MeshData m = meshChunk(single(c), reg.palette, o);
+            size_t sloped = 0;
+            for (const Vertex& v : m.vertices) {
+                const glm::vec3 n = glm::abs(v.normal);
+                const bool axisAligned = (n.x == 1.0f) + (n.y == 1.0f) + (n.z == 1.0f) == 1;
+                if (axisAligned) continue;
+                ++sloped;
+                const int a = n.y >= n.x && n.y >= n.z ? 1 : n.x >= n.z ? 0 : 2;
+                const glm::vec3 cells = v.position / 0.5f;
+                CHECK(v.uv0 == glm::vec2(cells[(a + 1) % 3], cells[(a + 2) % 3]));
+                const float layer = a != 1 ? 5.0f : v.normal.y > 0.0f ? 4.0f : 6.0f; // material 2: {4, 5, 6}
+                CHECK(v.color.a == layer);
+            }
+            CHECK(sloped > 0);
+        }
+    }
+    // The wedge slope is an exact Y/Z tie and resolves to Y (top layer, uv = (z, x)).
+    VoxelChunk c;
+    c.set(0, 0, 0, reg.id("wedge", 0));
+    MeshOptions o;
+    o.uvPerMetre = 1.0f;
+    const MeshData m = meshChunk(single(c), reg.palette, o);
+    size_t ties = 0;
+    for (const Vertex& v : m.vertices) {
+        if (v.normal.x != 0.0f || v.normal.y == 0.0f || v.normal.z == 0.0f) continue;
+        CHECK(std::abs(v.normal.y) == std::abs(v.normal.z));
+        CHECK(v.uv0 == glm::vec2(v.position.z, v.position.x));
+        CHECK(v.color.a == 4.0f);
+        ++ties;
+    }
+    CHECK(ties > 0);
+}
+
 TEST_CASE("shape mesher: shapes count by fill and render as cubes at LOD > 0") {
     const Registry reg;
     const auto lodMesh = [&](Voxel v) {

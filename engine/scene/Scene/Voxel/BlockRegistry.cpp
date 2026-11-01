@@ -5,6 +5,7 @@
 #include <cmath>
 #include <map>
 #include <string>
+#include <utility>
 
 namespace zodar::voxel {
 namespace {
@@ -48,6 +49,49 @@ bool inTriangle2(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, con
     return (s1 >= 0 && s2 >= 0 && s3 >= 0) || (s1 <= 0 && s2 <= 0 && s3 <= 0);
 }
 
+// Strictly inside the triangle (margin `eps` from every edge, either winding).
+bool strictlyInTriangle2(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, const glm::vec2& c, float eps) {
+    const auto side = [](const glm::vec2& o, const glm::vec2& d, const glm::vec2& q) {
+        const glm::vec2 e = d - o;
+        const float len = glm::length(e);
+        return len > 0.0f ? (e.x * (q.y - o.y) - e.y * (q.x - o.x)) / len : 0.0f;
+    };
+    const float s1 = side(a, b, p);
+    const float s2 = side(b, c, p);
+    const float s3 = side(c, a, p);
+    return (s1 > eps && s2 > eps && s3 > eps) || (s1 < -eps && s2 < -eps && s3 < -eps);
+}
+
+// Boundary polygons of one face overlap when a sample point lies strictly inside two of them.
+// The area sum alone cannot see overlaps that are balanced by gaps. 32 x 32 samples at offsets
+// that avoid the edges of grid-aligned and diagonal polygons; points closer than 1e-4 to an
+// edge are not counted, so polygons that only share an edge never overlap.
+bool faceOverlaps(const std::vector<Shape::Polygon>& polygons, int face) {
+    const int axis = face >> 1;
+    const int u = (axis + 1) % 3;
+    const int v = (axis + 2) % 3;
+    constexpr int kN = 32;
+    for (int j = 0; j < kN; ++j) {
+        for (int i = 0; i < kN; ++i) {
+            const glm::vec2 q((static_cast<float>(i) + 0.371f) / kN, (static_cast<float>(j) + 0.613f) / kN);
+            int hits = 0;
+            for (const auto& p : polygons) {
+                if (p.boundaryFace != face) continue;
+                const glm::vec2 c0(p.corners[0][u], p.corners[0][v]);
+                for (size_t k = 1; k + 1 < p.corners.size(); ++k) {
+                    if (strictlyInTriangle2(q, c0, {p.corners[k][u], p.corners[k][v]},
+                                            {p.corners[k + 1][u], p.corners[k + 1][v]}, 1e-4f)) {
+                        ++hits;
+                        break;
+                    }
+                }
+            }
+            if (hits > 1) return true;
+        }
+    }
+    return false;
+}
+
 // Validates the geometry and computes all derived data.
 Shape analyse(std::string name, const std::vector<std::vector<glm::vec3>>& polygons, std::vector<ShapeBox> collision,
               bool aoOccluder) {
@@ -87,6 +131,26 @@ Shape analyse(std::string name, const std::vector<std::vector<glm::vec3>>& polyg
                 shapeError(s.name, where + " is not planar");
             }
         }
+        // Star-shaped from corners[0] (the mesher fans around it): every fan triangle turns the
+        // same way as the polygon and the fan sweeps less than a full turn, so no triangles overlap.
+        double sweep = 0.0;
+        for (size_t i = 1; i + 1 < corners.size(); ++i) {
+            const glm::vec3 a = corners[i] - corners[0];
+            const glm::vec3 b = corners[i + 1] - corners[0];
+            const float turn = glm::dot(glm::cross(a, b), p.normal);
+            if (turn < -kEps) {
+                shapeError(s.name, where + " is not star-shaped from its first corner (fan triangle " +
+                                       std::to_string(i - 1) + " is reversed)");
+            }
+            const float la = glm::length(a);
+            const float lb = glm::length(b);
+            if (la > kEps && lb > kEps) {
+                sweep += std::atan2(static_cast<double>(turn), static_cast<double>(glm::dot(a, b)));
+            }
+        }
+        if (sweep > 2.0 * 3.14159265358979323846 - 1e-4) {
+            shapeError(s.name, where + " is not star-shaped from its first corner (the fan wraps around it)");
+        }
         for (int a = 0; a < 3; ++a) {
             if (std::abs(std::abs(p.normal[a]) - 1.0f) > kEps) {
                 continue;
@@ -107,7 +171,7 @@ Shape analyse(std::string name, const std::vector<std::vector<glm::vec3>>& polyg
     // Coverage per face, plus a 4 x 4 sample mask for partial faces.
     for (int f = 0; f < 6; ++f) {
         const double a = area[static_cast<size_t>(f)];
-        if (a > 1.0 + 1e-4) {
+        if (a > 1.0 + 1e-4 || faceOverlaps(s.polygons, f)) {
             shapeError(s.name, "overlapping polygons on face " + std::to_string(f));
         }
         s.coverage[static_cast<size_t>(f)] = std::abs(a - 1.0) <= 1e-4 ? FaceCoverage::Full

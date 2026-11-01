@@ -8,6 +8,7 @@
 
 #include "Scene/Voxel/ChunkMesher.h"
 #include "Scene/Voxel/VoxelWorld.h"
+#include "../Support/MeshHash.h"
 
 #include <chrono>
 #include <cstring>
@@ -16,6 +17,9 @@
 
 using namespace zodar;
 using namespace zodar::voxel;
+using zodar::test::Fnv;
+using zodar::test::hashMesh;
+using zodar::test::meshHash;
 
 namespace {
 
@@ -29,39 +33,6 @@ uint64_t splitmix(uint64_t x) {
 uint64_t cellHash(int x, int y, int z, uint64_t seed) {
     return splitmix(seed ^ splitmix(static_cast<uint32_t>(x) ^ splitmix(static_cast<uint32_t>(y) ^
                                                                         splitmix(static_cast<uint32_t>(z)))));
-}
-
-class Fnv {
-public:
-    void bytes(const void* data, size_t size) {
-        const auto* p = static_cast<const unsigned char*>(data);
-        for (size_t i = 0; i < size; ++i) {
-            m_h = (m_h ^ p[i]) * 0x100000001B3ull;
-        }
-    }
-    template <class T> void value(const T& v) { bytes(&v, sizeof(T)); }
-    uint64_t get() const { return m_h; }
-
-private:
-    uint64_t m_h = 0xCBF29CE484222325ull;
-};
-
-void hashMesh(Fnv& h, const MeshData& mesh) {
-    h.value(static_cast<uint64_t>(mesh.vertices.size()));
-    h.value(static_cast<uint64_t>(mesh.indices.size()));
-    if (!mesh.vertices.empty()) h.bytes(mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
-    if (!mesh.indices.empty()) h.bytes(mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
-    h.value(static_cast<uint64_t>(mesh.submeshes.size()));
-    for (const Submesh& s : mesh.submeshes) {
-        h.value(s.firstIndex);
-        h.value(s.indexCount);
-    }
-}
-
-uint64_t meshHash(const MeshData& mesh) {
-    Fnv h;
-    hashMesh(h, mesh);
-    return h.get();
 }
 
 // Rolling terrain from integer hashing: heights per column, a few holes (caves), 4 materials.

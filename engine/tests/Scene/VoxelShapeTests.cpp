@@ -4,6 +4,7 @@
 #include "Scene/Voxel/BlockRegistry.h"
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <string>
 
@@ -140,6 +141,79 @@ TEST_CASE("voxel shapes: invalid templates are rejected") {
     CHECK_THROWS_AS(lib.add(badBox), Error);
     CHECK(lib.size() == 1);
     CHECK(lib.add(unitBox("box_copy")) == 1); // a valid custom shape registers
+}
+
+namespace {
+
+// Message of the zodar::Error thrown by lib.add(t), or "" when it registers.
+std::string addError(ShapeLibrary& lib, const ShapeTemplate& t) {
+    try {
+        lib.add(t);
+    } catch (const Error& e) {
+        return e.what();
+    }
+    return {};
+}
+
+// Polygon on the -Y cell face from (x, z) points, counter-clockwise in (x, z) = outward (-Y).
+ShapePolygon bottom(std::initializer_list<glm::vec2> xz) {
+    ShapePolygon p;
+    for (const glm::vec2& q : xz) p.corners.emplace_back(q.x, 0.0f, q.y);
+    return p;
+}
+
+} // namespace
+
+TEST_CASE("voxel shapes: polygons must be star-shaped from their first corner") {
+    ShapeLibrary lib;
+    // L-shaped polygon starting at a corner that cannot see the whole polygon: one fan triangle
+    // is reversed, so the fan would overlap itself.
+    ShapeTemplate reversed{"l_from_bad_corner",
+                           {bottom({{1, 0.25f}, {0.25f, 0.25f}, {0.25f, 1}, {0, 1}, {0, 0}, {1, 0}})}, {}, false};
+    CHECK(addError(lib, reversed).find("not star-shaped from its first corner (fan triangle 0 is reversed)") !=
+          std::string::npos);
+    // The same L starting at a kernel corner passes the star test (and then fails later as an
+    // open surface, which is not the star error).
+    ShapeTemplate kernel{"l_from_kernel",
+                         {bottom({{0, 0}, {1, 0}, {1, 0.25f}, {0.25f, 0.25f}, {0.25f, 1}, {0, 1}})}, {}, false};
+    const std::string kernelError = addError(lib, kernel);
+    CHECK(kernelError.find("star-shaped") == std::string::npos);
+    CHECK(kernelError.find("not closed") != std::string::npos);
+    // A fan that turns the right way at every step but wraps around its first corner twice.
+    ShapePolygon spiral;
+    spiral.corners.emplace_back(0.5f, 0.0f, 0.5f);
+    for (int k = 0; k <= 8; ++k) {
+        const float a = glm::radians(100.0f * static_cast<float>(k));
+        spiral.corners.emplace_back(0.5f + 0.4f * std::cos(a), 0.0f, 0.5f + 0.4f * std::sin(a));
+    }
+    CHECK(addError(lib, ShapeTemplate{"spiral", {spiral}, {}, false}).find("the fan wraps around it") !=
+          std::string::npos);
+    CHECK(lib.size() == 1);
+}
+
+TEST_CASE("voxel shapes: overlapping face polygons are rejected even when areas sum to 1") {
+    ShapeLibrary lib;
+    // Two half-face strips that overlap by a quarter and leave a quarter uncovered: area 1.
+    ShapeTemplate t{"overlap",
+                    {bottom({{0, 0}, {1, 0}, {1, 0.5f}, {0, 0.5f}}), bottom({{0, 0.25f}, {1, 0.25f}, {1, 0.75f}, {0, 0.75f}})},
+                    {},
+                    false};
+    CHECK(addError(lib, t).find("overlapping polygons on face 2") != std::string::npos);
+    // Polygons that only share an edge (the diagonal of a split face) do not overlap.
+    ShapeTemplate split = unitBox("split_bottom");
+    split.polygons.erase(std::remove_if(split.polygons.begin(), split.polygons.end(),
+                                        [](const ShapePolygon& p) {
+                                            return std::all_of(p.corners.begin(), p.corners.end(),
+                                                               [](const glm::vec3& c) { return c.y == 0.0f; });
+                                        }),
+                         split.polygons.end());
+    REQUIRE(split.polygons.size() == 5);
+    split.polygons.push_back(bottom({{0, 0}, {1, 0}, {1, 1}}));
+    split.polygons.push_back(bottom({{0, 0}, {1, 1}, {0, 1}}));
+    const uint16_t index = lib.add(split);
+    CHECK(lib[index].coverage[static_cast<size_t>(Face::NegY)] == F);
+    // Every built-in shape passes the stricter validation.
+    CHECK(ShapeLibrary::builtins().size() == 10);
 }
 
 TEST_CASE("block table: legacy palettes are cubes with material = id") {

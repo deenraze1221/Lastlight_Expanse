@@ -3,6 +3,8 @@
 // curved pieces bend about the X axis. Engine-generic: games register more shapes.
 #include "Scene/Voxel/BlockRegistry.h"
 
+#include <utility>
+
 namespace zodar::voxel {
 namespace {
 

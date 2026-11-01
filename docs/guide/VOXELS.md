@@ -78,7 +78,9 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
   - fill fraction (derived from the enclosed volume, in eighths, for LOD) and an explicit
     `aoOccluder` flag (V1 decision).
   - Validation (`zodar::Error`): corners inside the cell, planar non-degenerate polygons,
-    boundary polygons facing outward, no overlap on a face, closed and outward surface
+    star-shaped from the first corner (no reversed fan triangle, the fan sweeps less than a
+    full turn; V2), boundary polygons facing outward, no overlap on a face (area sum ≤ 1 and
+    no 32 × 32 sample point strictly inside two polygons, so overlaps balanced by gaps fail; V2), closed and outward surface
     (volume independent of the reference point), valid boxes, unique name.
 - Built-in engine shapes (generic, game-neutral) *(exists)*. Rotation 0: slopes and steps rise
   toward +Z, curved pieces bend about the X axis.
@@ -117,6 +119,12 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
 - UVs: world-space **tiles per metre** (`MeshOptions::uvPerMetre`) *(exists)*; Lastlight sets 1
   (V2/V5). At 64×64 textures that is 64 texels/m; a Sub-block face shows a 32×32 part of the
   tile. Default 0 = legacy voxel units.
+- Sloped polygons *(exists)*: UVs are a **planar projection** along the dominant axis of the
+  polygon normal, and that axis also picks the face layer (Y = top/bottom, X/Z = side).
+  **Tie rule:** the largest absolute normal component wins; ties prefer Y, then X (a 45° wedge
+  slope is a top face). Consequence: along a 45° slope the texture is stretched by √2 (the
+  projected tile covers √2 m of surface per metre). Accepted for V1/V2; revisit with a
+  slope-aware projection only if art needs it (tested in `VoxelShapeMeshTests.cpp`).
 - Output stays `MeshData` until V6 introduces a packed voxel vertex (§9).
 
 ## 5. LOD and cracks *(extends existing LOD + sealing)*
