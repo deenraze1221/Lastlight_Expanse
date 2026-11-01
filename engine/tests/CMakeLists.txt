@@ -27,6 +27,7 @@ add_executable(ZodarTests
     Renderer/ApiVersionTests.cpp
     Scene/VoxelTests.cpp
     Scene/VoxelRegressionTests.cpp
+    Scene/VoxelShapeTests.cpp
     World/WorldTests.cpp
     World/WorldComponentTests.cpp
     World/WorldRenderTests.cpp

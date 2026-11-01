@@ -4,6 +4,8 @@
 add_library(ZodarScene STATIC
     Scene/Noise.cpp
     Scene/Voxel/VoxelChunk.cpp
+    Scene/Voxel/BlockRegistry.cpp
+    Scene/Voxel/Shapes.cpp
     Scene/Voxel/ChunkMesher.cpp
     Scene/Voxel/VoxelWorld.cpp)
 add_library(Zodar::Scene ALIAS ZodarScene)
