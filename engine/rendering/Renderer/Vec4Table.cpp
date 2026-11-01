@@ -39,7 +39,12 @@ Vec4Table::Vec4Table(UploadBatch& batch, BindlessRegistry& registry, std::span<c
     try {
         batch.uploadImage(m_image, std::span(&level, 1));
     } catch (...) {
-        release();
+        // uploadImage validates and stages before queuing anything, but stay safe if that
+        // changes: release the slot and let the batch own the image until its work is done.
+        if (m_registry && m_index != UINT32_MAX) m_registry->releaseTexture(m_index);
+        m_registry = nullptr;
+        m_index = UINT32_MAX;
+        batch.keepAlive(std::move(m_image));
         throw;
     }
 }

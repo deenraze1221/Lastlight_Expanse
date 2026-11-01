@@ -6,6 +6,8 @@
 #include "Renderer/Vulkan/VulkanContext.h"
 
 #include <cstring>
+#include <memory>
+#include <new>
 
 namespace zodar::gfx {
 
@@ -197,6 +199,10 @@ UploadBatch::~UploadBatch() {
 
 GpuBuffer& UploadBatch::stage(const void* data, VkDeviceSize size) {
     ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
+    if (m_stagingCount >= m_failStagingAfter) {
+        fail("UploadBatch: staging allocation failed (injected for testing)");
+    }
+    ++m_stagingCount;
     GpuBuffer staging(m_upload.context(), {size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::Upload, "Staging"});
     if (data) staging.write(data, size);
     m_work.stagingBytes += size;
@@ -239,6 +245,27 @@ void UploadBatch::record(std::function<void(VkCommandBuffer)> commands) {
 void UploadBatch::keepAlive(std::shared_ptr<void> object) {
     ZODAR_ENSURE(!m_submitted, "UploadBatch already submitted");
     m_work.keepAlive.push_back(std::move(object));
+}
+
+void UploadBatch::keepAlive(GpuImage&& image) noexcept {
+    if (!image.isValid()) return;
+    if (!m_submitted) {
+        try {
+            // Reserve first, so nothing can throw once the image has moved into `owned`
+            // (make_shared throws before moving; push_back cannot throw after reserve).
+            m_work.keepAlive.reserve(m_work.keepAlive.size() + 1);
+            auto owned = std::make_shared<GpuImage>(std::move(image));
+            m_work.keepAlive.push_back(std::move(owned));
+            return;
+        } catch (...) {
+        }
+    }
+    // Submitted already (async work may still run) or out of memory for the bookkeeping:
+    // never destroy an image queued commands may use.
+    ZODAR_LOG_ERROR("UploadBatch: could not keep an image alive; leaking it to avoid use-after-free");
+    if (image.isValid()) {
+        static_cast<void>(new (std::nothrow) GpuImage(std::move(image)));
+    }
 }
 
 void UploadBatch::uploadImage(const GpuImage& image, std::span<const ImageLevelData> levels, uint32_t layer) {

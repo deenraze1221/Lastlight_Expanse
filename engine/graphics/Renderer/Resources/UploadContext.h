@@ -103,6 +103,11 @@ public:
     // Keeps `object` alive until the transfer has finished and the graphics queue is done
     // with it (e.g. a buffer the batch copies from that is being replaced).
     void keepAlive(std::shared_ptr<void> object);
+    // Takes ownership of an image that queued commands of this batch may reference (e.g. a
+    // texture whose construction failed after some uploads were recorded): it is destroyed
+    // only after the batch's work has finished. Never throws; if even that bookkeeping cannot
+    // be allocated, the image is leaked (never destroyed early) and an error is logged.
+    void keepAlive(GpuImage&& image) noexcept;
 
     // Uploads all provided mip levels (level i goes to mip i) and hands the image to the
     // graphics queue in SHADER_READ_ONLY_OPTIMAL. The image must not have been used yet and
@@ -117,6 +122,10 @@ public:
     // Bytes staged so far.
     VkDeviceSize stagingBytes() const { return m_work.stagingBytes; }
 
+    // Testing only: after `count` successful staging allocations, the next one throws
+    // zodar::Error as if allocation had failed (exercises partial-upload failure paths).
+    void failStagingAfterForTesting(uint32_t count) { m_failStagingAfter = count; }
+
     const VulkanContext& context() const { return m_upload.context(); }
 
 private:
@@ -125,6 +134,8 @@ private:
     UploadContext& m_upload;
     UploadQueue::Work m_work;
     bool m_submitted = false;
+    uint32_t m_stagingCount = 0;
+    uint32_t m_failStagingAfter = UINT32_MAX;
 };
 
 } // namespace zodar::gfx

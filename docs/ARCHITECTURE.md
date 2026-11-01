@@ -493,6 +493,11 @@ Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
   against `maxImageArrayLayers`; `zodar/voxel` bounds-checks the table index and reads the
   table with a dedicated nearest sampler; `buildBlockCatalogue` re-validates code-built data;
   `tools/gate.sh` + `tools/hooks/pre-push` (opt-in local hook) gate pushes.
+- Upload failure safety: a resource whose construction fails after uploads were queued hands
+  its image to the batch (`UploadBatch::keepAlive(GpuImage&&)`, noexcept; leaks rather than
+  destroys if even that fails) so queued commands never reference a destroyed image;
+  `TextureArray` pre-validates layer byte sizes. Test seam:
+  `UploadBatch::failStagingAfterForTesting`.
 
 ## World production (approved in principle, 2026-11-01; planning only)
 

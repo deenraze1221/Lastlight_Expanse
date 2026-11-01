@@ -230,6 +230,17 @@
   are logged as errors; star-shape test is relative; engine test fixture renamed (no
   "bunker"). Gate: `tools/gate.sh` + `tools/hooks/pre-push` (opt-in local hook, limitations
   in RUNNING.md "Test gate"). Verification: see the follow-up handoff in "Current task".
+- **V2 final fix (TextureArray partial uploads):** failure path: each layer's
+  `uploadImage` queues a copy and a layout transition referencing the `VkImage` (replayed at
+  submit); a failure at a later layer (staging allocation, or a layer with a wrong byte size)
+  destroyed the image in the constructor's unwinding while earlier layers' commands stayed
+  queued, so the submit used a destroyed image (reproduced: validation
+  `VUID-VkImageMemoryBarrier2-image-parameter`, then SIGSEGV). Fix: byte sizes of every layer
+  are validated before anything is registered or queued; on a later failure the slot is
+  released and the image moves into the batch (`UploadBatch::keepAlive(GpuImage&&)`), which
+  destroys it after the work finished (`Texture`/`Vec4Table` do the same). Regression test:
+  `texture array: a failure after some layer uploads were queued ...` (injected staging
+  failure after layer 0 via `UploadBatch::failStagingAfterForTesting`).
 - Open: MinGW and MSVC golden-hash verification; the game's Highlands test still has its own
   FNV helper (moving it to `Support/MeshHash.h` needs a `game/` change, deferred).
 - **V3 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/guide/VOXELS.md` §3–6,

@@ -38,6 +38,9 @@ public:
 
 private:
     void release();
+    // Failure while uploads may be queued in `batch`: releases the slot and hands the image to
+    // the batch (UploadBatch::keepAlive) so queued commands never reference a destroyed image.
+    void abandon(UploadBatch& batch) noexcept;
 
     GpuImage m_image;
     BindlessRegistry* m_registry = nullptr;

@@ -2,6 +2,7 @@
 
 #include "AssetPipeline/TextureCompiler.h"
 #include "Assets/ImageData.h"
+#include "Core/Error.h"
 #include "Assets/Ktx2.h"
 #include "Renderer/BindlessRegistry.h"
 #include "Renderer/Texture.h"
@@ -10,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <string>
 #include <vector>
 
 using namespace zodar;
@@ -252,4 +254,75 @@ TEST_CASE("texture arrays: every layer is sampled through the bindless 2D_ARRAY 
         CHECK(p[2] == colours[layer][2]);
         CHECK(p[3] == colours[layer][3]);
     }
+}
+
+namespace {
+
+ImageData solidImage(uint32_t size, uint8_t value, const char* name) {
+    ImageData image;
+    image.width = image.height = size;
+    image.name = name;
+    image.levels = {std::vector<uint8_t>(size_t(size) * size * 4, value)};
+    return image;
+}
+
+} // namespace
+
+TEST_CASE("texture array: a failure after some layer uploads were queued never destroys the image early") {
+    // Failure path: TextureArray uploads one layer per UploadBatch::uploadImage call; each call
+    // queues a copy and a layout transition that reference the VkImage and are replayed at
+    // submit. If staging fails for a later layer, the image used to be destroyed in the
+    // constructor's unwinding while earlier layers' commands were still queued (use-after-free
+    // at submit). Now the batch takes ownership (keepAlive) until its work has finished.
+    zodar::test::ValidationGuard guard;
+    BindlessRegistry registry(*gpu().context);
+    const uint32_t slotsBefore = registry.textureCount();
+    const std::vector<ImageData> layers{solidImage(4, 10, "a"), solidImage(4, 20, "b"), solidImage(4, 30, "c")};
+    {
+        UploadBatch batch(*gpu().upload);
+        batch.failStagingAfterForTesting(1); // layer 0 is staged and queued, layer 1 fails
+        try {
+            TextureArray array(batch, registry, layers, "PartialFailure");
+            FAIL("expected the injected staging failure");
+        } catch (const Error& e) {
+            CHECK(std::string(e.what()).find("injected for testing") != std::string::npos);
+        }
+        CHECK(batch.stagingBytes() == 4 * 4 * 4); // layer 0 was queued before the failure
+        CHECK(registry.textureCount() == slotsBefore); // the slot is released at once
+        batch.submit(); // replays layer 0's commands: the kept image must still exist
+    }
+    gpu().context->waitIdle();
+    gpu().context->collectGarbage();
+
+    // Single-upload resources fail before anything is queued; they also hand their image to
+    // the batch, and the submit stays valid.
+    {
+        UploadBatch batch(*gpu().upload);
+        batch.failStagingAfterForTesting(0);
+        CHECK_THROWS_AS(Texture(batch, registry, layers[0]), Error);
+        CHECK(batch.stagingBytes() == 0);
+        CHECK(registry.textureCount() == slotsBefore);
+        batch.submit();
+    }
+
+    // Bad input data (a layer with the wrong byte size) fails before any slot or upload.
+    std::vector<ImageData> bad = layers;
+    bad[2].levels[0].resize(10);
+    {
+        UploadBatch batch(*gpu().upload);
+        CHECK_THROWS_AS(TextureArray(batch, registry, bad, "BadBytes"), Error);
+        CHECK(batch.stagingBytes() == 0);
+        CHECK(registry.textureCount() == slotsBefore);
+        batch.submit();
+    }
+
+    // Without injection the same layers upload normally.
+    {
+        UploadBatch batch(*gpu().upload);
+        TextureArray array(batch, registry, layers, "Ok");
+        batch.submit();
+        CHECK(array.layerCount() == 3);
+        CHECK(registry.textureCount() == slotsBefore + 1);
+    }
+    gpu().context->waitIdle();
 }

@@ -31,6 +31,14 @@ TextureArray::TextureArray(UploadBatch& batch, BindlessRegistry& registry, std::
         ZODAR_ENSURE(l.width == first.width && l.height == first.height && l.format == first.format &&
                          l.colorSpace == first.colorSpace && l.levels.size() == first.levels.size(),
                      "texture array '" + name + "': layer '" + l.name + "' differs in size, format or mips");
+        // Byte sizes too (uploadImage checks them per layer, i.e. after earlier layers were
+        // queued): bad input data fails here, before anything is registered or recorded.
+        for (size_t i = 0; i < l.levels.size(); ++i) {
+            ZODAR_ENSURE(l.levels[i].size() == imageLevelSize(textureFormat(l.format, l.colorSpace), l.levelWidth(i),
+                                                              l.levelHeight(i)),
+                         "texture array '" + name + "': layer '" + l.name + "' mip " + std::to_string(i) +
+                             " has the wrong byte size");
+        }
     }
     m_format = textureFormat(first.format, first.colorSpace);
     VkPhysicalDeviceProperties device{};
@@ -52,19 +60,33 @@ TextureArray::TextureArray(UploadBatch& batch, BindlessRegistry& registry, std::
     // image is pending in `batch`, so destroying the image during unwinding is safe.
     m_index = registry.registerTexture(m_image.view());
     m_registry = &registry;
+    // One uploadImage per layer. Each call queues commands that reference the VkImage (the copy
+    // and the final layout transition, replayed when the batch is submitted). If a later layer
+    // fails (e.g. staging allocation), earlier layers' commands are already queued: the image
+    // must outlive the batch, so its ownership moves into the batch (keepAlive) instead of
+    // being destroyed here. The bindless slot is released at once (no shader uses it yet).
     try {
         for (uint32_t layer = 0; layer < desc.arrayLayers; ++layer) {
-        const ImageData& image = layers[std::min<size_t>(layer, layers.size() - 1)];
-        std::vector<ImageLevelData> levels;
-        for (size_t i = 0; i < image.levels.size(); ++i) {
-            levels.push_back({image.levelWidth(i), image.levelHeight(i), image.levels[i]});
-        }
-        batch.uploadImage(m_image, levels, layer);
+            const ImageData& image = layers[std::min<size_t>(layer, layers.size() - 1)];
+            std::vector<ImageLevelData> levels;
+            for (size_t i = 0; i < image.levels.size(); ++i) {
+                levels.push_back({image.levelWidth(i), image.levelHeight(i), image.levels[i]});
+            }
+            batch.uploadImage(m_image, levels, layer);
         }
     } catch (...) {
-        release();
+        abandon(batch);
         throw;
     }
+}
+
+void TextureArray::abandon(UploadBatch& batch) noexcept {
+    if (m_registry && m_index != UINT32_MAX) {
+        m_registry->releaseTexture(m_index);
+    }
+    m_registry = nullptr;
+    m_index = UINT32_MAX;
+    batch.keepAlive(std::move(m_image));
 }
 
 TextureArray::~TextureArray() {

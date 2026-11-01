@@ -251,9 +251,14 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
     its `SceneRenderer` (same contract as `AssetManager`).
   - GPU resource order: `Texture`, `TextureArray` and `Vec4Table` register their bindless slot
     before recording uploads, so a full bindless table throws before any copy into the image
-    is pending (tested). Remaining limitation: `TextureArray` records one upload per layer; if
-    staging allocation fails (out of memory) after some layers were recorded, those copies stay
-    pending while the image is destroyed (pre-existing, not reachable by input data).
+    is pending (tested). Partial uploads: `TextureArray` queues one upload per layer (copy +
+    layout transition referencing the `VkImage`, replayed at submit). It now validates every
+    layer's byte sizes before registering or queuing anything, and if a later layer still fails
+    (e.g. staging allocation), it releases the slot and hands the image to the batch
+    (`UploadBatch::keepAlive(GpuImage&&)`), which destroys it only after the batch's work has
+    finished. Regression test with injected staging failure after the first layer
+    (`UploadBatch::failStagingAfterForTesting`, `TextureTests.cpp`); the old code produced
+    `VUID-VkImageMemoryBarrier2-image-parameter` and a crash at submit.
   - Tests (`engine/tests/Gpu/VoxelMaterialTests.cpp`, lavapipe): table read back bit-exact;
     emissive blocks byte-identical to `zodar/unlit`; lit and fogged blocks identical to
     `zodar/pbr` on the same surface (tolerance 1 for other drivers); out-of-range layers use
