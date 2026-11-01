@@ -728,3 +728,8 @@
 - GeometryPool free-list -> GPU-driven terrain.
 - BC7 block textures via AssetPipeline.
 - Real-GPU benchmarks (RTX 4070); MSVC build; 1.4 validation with layers >= 1.4.304.
+
+## V4 implementation — regions and streaming
+- Step 1: CPU-only region coordinates and separate sparse named authored/runtime layers.
+  Region layout validates integral chunk columns per 64 m, including negative coordinates.
+  Focused test: 1 case / 7 assertions passed. Existing world path unchanged.

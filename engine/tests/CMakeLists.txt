@@ -25,6 +25,7 @@ add_executable(ZodarTests
     Renderer/UploadQueueTests.cpp
     Renderer/ClusterMathTests.cpp
     Renderer/ApiVersionTests.cpp
+    Scene/RegionTests.cpp
     Scene/VoxelTests.cpp
     Scene/VoxelRegressionTests.cpp
     Scene/VoxelShapeTests.cpp
