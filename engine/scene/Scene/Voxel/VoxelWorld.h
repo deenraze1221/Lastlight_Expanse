@@ -113,7 +113,8 @@ public:
     int lodFor(const ChunkCoord& chunk, const glm::vec3& observerChunkSpace) const;
 
     const StreamingSettings& settings() const { return m_settings; }
-    const VoxelPalette& palette() const { return m_palette; }
+    const VoxelPalette& palette() const { return m_table->palette(); }
+    const BlockTable& blocks() const { return *m_table; }
     VoxelWorldStats stats() const;
 
 private:
@@ -129,7 +130,7 @@ private:
         int meshedLod = -1;
         uint8_t meshedSeal = 0;
         uint64_t meshedVersion = 0;
-        // Fully solid voxel layers behind each face (Face order), 0..32. Lets sealing skip
+        // Full-cube voxel layers behind each face (Face order), 0..32. Lets sealing skip
         // boundaries that no LOD can open up.
         std::array<uint8_t, 6> solidDepth{};
     };
@@ -156,13 +157,15 @@ private:
     void unloadFarChunks(const glm::vec3& observerChunkSpace);
     bool neighborsReady(const ChunkCoord& coord) const;
     bool trivialMesh(const ChunkCoord& coord) const;
+    bool uniformCube(const VoxelChunk& chunk) const; // uniform, non-empty, full cube
     uint8_t sealMask(const ChunkCoord& coord, int lod) const;
     void scheduleMesh(const ChunkCoord& coord, Entry& entry, int lod, uint8_t seal);
     void touch(const ChunkCoord& coord, const glm::ivec3& local);
     bool inWorldY(int y) const { return y >= m_settings.minChunkY && y <= m_settings.maxChunkY; }
 
     std::shared_ptr<const IVoxelGenerator> m_generator;
-    VoxelPalette m_palette;
+    std::shared_ptr<const BlockTable> m_table; // immutable; read by mesh jobs
+    std::shared_ptr<const VoxelChunk> m_bedrock;
     StreamingSettings m_settings;
     JobSystem* m_jobs;
 

@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
+#include "Core/JobSystem.h"
 #include "Scene/Voxel/ChunkMesher.h"
+#include "Scene/Voxel/VoxelWorld.h"
 
 #include <cstring>
 #include <map>
@@ -271,4 +273,96 @@ TEST_CASE("shape mesher: registry cubes mesh like the legacy palette and merge a
     MeshStats stats;
     meshChunk(single(c), rotated, {}, &stats);
     CHECK(stats.quads == 6);
+}
+
+namespace {
+
+// Chunks with y <= fillTopChunk are uniformly `fill`; a single `floor` layer at world y = 0 when
+// `floorOnly`.
+class UniformGenerator final : public IVoxelGenerator {
+public:
+    UniformGenerator(Voxel fill, int fillTopChunk, bool floorOnly)
+        : m_fill(fill), m_top(fillTopChunk), m_floorOnly(floorOnly) {}
+    void generate(const ChunkCoord& coord, VoxelChunk& out) const override {
+        if (m_floorOnly) {
+            if (coord.y == 0) out.fillLayer(0, m_fill);
+            return;
+        }
+        if (coord.y <= m_top) out = VoxelChunk(m_fill);
+    }
+
+private:
+    Voxel m_fill;
+    int m_top;
+    bool m_floorOnly;
+};
+
+StreamingSettings tinyWorld() {
+    StreamingSettings s;
+    s.viewRadius = 2;
+    s.minChunkY = -1;
+    s.maxChunkY = 1;
+    s.lodDistances = {10.0f};
+    s.maxJobsPerUpdate = 1000;
+    s.maxJobsInFlight = 1000;
+    return s;
+}
+
+std::map<ChunkCoord, MeshData> settleWorld(VoxelWorld& world, const glm::vec3& observer) {
+    std::map<ChunkCoord, MeshData> live;
+    for (int i = 0; i < 64 && (i == 0 || !world.isSettled()); ++i) {
+        world.update(observer);
+        world.finishPendingWork();
+        for (ChunkMeshEvent& e : world.takeMeshEvents()) {
+            if (e.type == ChunkMeshEvent::Type::Remove) live.erase(e.coord);
+            else live[e.coord] = std::move(e.mesh);
+        }
+    }
+    REQUIRE(world.isSettled());
+    return live;
+}
+
+} // namespace
+
+TEST_CASE("voxel world: chunks full of shapes are not treated as solid") {
+    const Registry reg;
+    VoxelWorld cubes(std::make_shared<UniformGenerator>(reg.cube, 0, false), reg.palette, tinyWorld());
+    const auto cubeLive = settleWorld(cubes, {16, 40, 16});
+    CHECK(cubeLive.count({0, -1, 0}) == 0); // buried cube chunk: nothing to draw
+
+    VoxelWorld stairs(std::make_shared<UniformGenerator>(reg.id("stair"), 0, false), reg.palette, tinyWorld());
+    const auto stairLive = settleWorld(stairs, {16, 40, 16});
+    REQUIRE(stairLive.count({0, -1, 0}) == 1); // stairs leave openings: the chunk is meshed
+    CHECK_FALSE(stairLive.at({0, -1, 0}).indices.empty());
+}
+
+TEST_CASE("voxel world: below-world bedrock is a cube even when id 1 is a shape") {
+    const Registry base;
+    VoxelPalette p = base.palette;
+    p.blocks = {BlockState{}, BlockState{2, *base.lib->find("stair"), 0, 0}, BlockState{1, ShapeLibrary::kCube, 0, 0}};
+    const Voxel cubeId = 2;
+    StreamingSettings s = tinyWorld();
+    s.minChunkY = 0; // the floor chunk sits directly on bedrock
+    VoxelWorld world(std::make_shared<UniformGenerator>(cubeId, 0, true), p, s);
+    CHECK(world.blocks().firstCube() == cubeId);
+    const auto live = settleWorld(world, {16, 20, 16});
+    REQUIRE(live.count({0, 0, 0}) == 1);
+    CHECK(countFaces(live.at({0, 0, 0}), {0, -1, 0}, 1, 0.0f) == 0); // floor underside culled
+}
+
+TEST_CASE("voxel world: shape worlds mesh identically with worker threads") {
+    const Registry reg;
+    StreamingSettings s = tinyWorld();
+    s.lodDistances = {1.5f};
+    const auto gen = std::make_shared<UniformGenerator>(reg.id("wedge", 3), 0, false);
+    VoxelWorld inlineWorld(gen, reg.palette, s);
+    const auto expected = settleWorld(inlineWorld, {16, 40, 16});
+    JobSystem jobs(4);
+    VoxelWorld threaded(gen, reg.palette, s, &jobs);
+    const auto actual = settleWorld(threaded, {16, 40, 16});
+    REQUIRE(actual.size() == expected.size());
+    for (const auto& [coord, mesh] : expected) {
+        REQUIRE(actual.count(coord) == 1);
+        CHECK(sameBytes(actual.at(coord), mesh));
+    }
 }

@@ -10,17 +10,11 @@
 namespace zodar::voxel {
 namespace {
 
-// Below the world's lowest chunk layer reads as solid, so the underside of the world is
-// never meshed; above the highest layer reads as empty.
-const std::shared_ptr<const VoxelChunk>& bedrock() {
-    static const auto chunk = std::make_shared<const VoxelChunk>(Voxel(1));
-    return chunk;
-}
-
-std::array<uint8_t, 6> computeSolidDepth(const VoxelChunk& c) {
+// Full-cube voxel layers behind each face. Shape cells do not count: they may leave openings.
+std::array<uint8_t, 6> computeSolidDepth(const VoxelChunk& c, const BlockTable& table) {
     std::array<uint8_t, 6> out{};
     if (c.isUniform()) {
-        out.fill(c.uniformValue() != kEmpty ? uint8_t(kChunkSize) : uint8_t(0));
+        out.fill(table.isCube(c.uniformValue()) && c.uniformValue() != kEmpty ? uint8_t(kChunkSize) : uint8_t(0));
         return out;
     }
     for (int f = 0; f < 6; ++f) {
@@ -36,7 +30,8 @@ std::array<uint8_t, 6> computeSolidDepth(const VoxelChunk& c) {
                     p[axis] = layer;
                     p[(axis + 1) % 3] = a;
                     p[(axis + 2) % 3] = b;
-                    full = c.get(p.x, p.y, p.z) != kEmpty;
+                    const Voxel v = c.get(p.x, p.y, p.z);
+                    full = v != kEmpty && table.isCube(v);
                 }
             }
             if (!full) break;
@@ -49,7 +44,11 @@ std::array<uint8_t, 6> computeSolidDepth(const VoxelChunk& c) {
 } // namespace
 VoxelWorld::VoxelWorld(std::shared_ptr<const IVoxelGenerator> generator, VoxelPalette palette,
                        StreamingSettings settings, JobSystem* jobs)
-    : m_generator(std::move(generator)), m_palette(std::move(palette)), m_settings(std::move(settings)), m_jobs(jobs) {
+    : m_generator(std::move(generator)), m_table(std::make_shared<const BlockTable>(palette)),
+      m_settings(std::move(settings)), m_jobs(jobs) {
+    // Below the world's lowest chunk layer reads as a solid cube, so the underside of the world
+    // is never meshed; above the highest layer reads as empty.
+    m_bedrock = std::make_shared<const VoxelChunk>(m_table->firstCube());
     ZODAR_ENSURE(m_generator != nullptr, "VoxelWorld needs a generator");
     ZODAR_ENSURE(m_settings.voxelSize > 0.0f, "voxelSize must be positive");
     ZODAR_ENSURE(m_settings.viewRadius >= 0, "viewRadius must not be negative");
@@ -118,7 +117,7 @@ void VoxelWorld::update(const glm::vec3& observer) {
                 // Restore player edits instead of regenerating. Neighbour meshes that were built
                 // while this chunk was loaded saw the same data, so nothing else is touched.
                 entry.data = edit->second;
-                entry.solidDepth = computeSolidDepth(*entry.data);
+                entry.solidDepth = computeSolidDepth(*entry.data, *m_table);
                 continue;
             }
             entry.generating = true;
@@ -129,7 +128,7 @@ void VoxelWorld::update(const glm::vec3& observer) {
                     auto data = std::make_shared<VoxelChunk>();
                     m_generator->generate(coord, *data);
                     data->compact();
-                    const auto depth = computeSolidDepth(*data);
+                    const auto depth = computeSolidDepth(*data, *m_table);
                     std::lock_guard lock(m_resultMutex);
                     m_generateResults.push_back({coord, std::move(data), depth});
                 };
@@ -190,7 +189,7 @@ void VoxelWorld::scheduleMesh(const ChunkCoord& coord, Entry& entry, int lod, ui
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {
                 if (coord.y + dy < m_settings.minChunkY) {
-                    inputs[ChunkNeighborhood::slot(dx, dy, dz)] = bedrock();
+                    inputs[ChunkNeighborhood::slot(dx, dy, dz)] = m_bedrock;
                     continue;
                 }
                 auto it = m_chunks.find(coord.offset(dx, dy, dz));
@@ -212,7 +211,7 @@ void VoxelWorld::scheduleMesh(const ChunkCoord& coord, Entry& entry, int lod, ui
         for (size_t i = 0; i < inputs.size(); ++i) {
             nb.chunks[i] = inputs[i].get();
         }
-        MeshData mesh = meshChunk(nb, m_palette, options);
+        MeshData mesh = meshChunk(nb, *m_table, options);
         std::lock_guard lock(m_resultMutex);
         m_meshResults.push_back({coord, options.lod, options.sealFaces, version, std::move(mesh)});
     };
@@ -343,12 +342,16 @@ bool VoxelWorld::neighborsReady(const ChunkCoord& coord) const {
     return true;
 }
 
+bool VoxelWorld::uniformCube(const VoxelChunk& chunk) const {
+    return chunk.isUniform() && chunk.uniformValue() != kEmpty && m_table->isCube(chunk.uniformValue());
+}
+
 bool VoxelWorld::trivialMesh(const ChunkCoord& coord) const {
     const VoxelChunk& self = *m_chunks.at(coord).data;
     if (self.isUniform() && self.uniformValue() == kEmpty) {
         return true;
     }
-    if (!self.isUniform() || !self.isFull()) {
+    if (!uniformCube(self)) {
         return false;
     }
     // Solid chunk: invisible only if every face neighbour is solid as well (and none is sealed).
@@ -362,7 +365,7 @@ bool VoxelWorld::trivialMesh(const ChunkCoord& coord) const {
             return false;
         }
         const auto it = m_chunks.find(n);
-        if (it == m_chunks.end() || !it->second.data || !it->second.data->isUniform() || !it->second.data->isFull()) {
+        if (it == m_chunks.end() || !it->second.data || !uniformCube(*it->second.data)) {
             return false;
         }
     }
@@ -458,7 +461,7 @@ bool VoxelWorld::setVoxel(const glm::ivec3& voxel, Voxel value) {
     copy->set(l.x, l.y, l.z, value);
     copy->compact();
     it->second.data = copy;
-    it->second.solidDepth = computeSolidDepth(*copy);
+    it->second.solidDepth = computeSolidDepth(*copy, *m_table);
     m_edits[coord] = copy;
     // Neighbours read this chunk's boundary for faces, ambient occlusion and (at coarse LOD)
     // downsampled padding cells, so they are rebuilt when the voxel is within reach.
