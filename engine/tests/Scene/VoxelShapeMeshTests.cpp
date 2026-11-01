@@ -4,6 +4,7 @@
 #include "Scene/Voxel/ChunkMesher.h"
 #include "Scene/Voxel/VoxelWorld.h"
 
+#include <cmath>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -200,6 +201,74 @@ TEST_CASE("shape mesher: ambient occlusion follows aoOccluder") {
         if (v.normal.y > 0.5f) darkest = std::min(darkest, v.color.r / 0.8f);
     }
     CHECK(darkest < 1.0f);
+}
+
+TEST_CASE("shape mesher: exact AO values on shape polygons follow the documented rule") {
+    // Reference of the VOXELS §4 approximation: a polygon is shaded like a cube face along its
+    // dominant normal axis (ties: Y, then X); each corner samples the side, side and corner
+    // neighbours of the cell in front of it toward the nearest cell corner (corner coordinate
+    // < 0.5 picks -1). Occluders sit only on edge/corner neighbours, so no polygon is culled and
+    // the shape's vertices are the last ones of the mesh (cubes are emitted first).
+    const Registry reg;
+    const MeshOptions options;
+    const glm::ivec3 cell(8, 8, 8);
+    int checked = 0;
+    for (uint16_t s = 1; s < reg.lib->size(); ++s) {
+        for (int r = 0; r < 4; ++r) {
+            for (uint64_t pattern : {0x5A5A5ull, 0xF0F0Full, 0x33333ull, 0xFFFFFull}) {
+                VoxelChunk c;
+                std::vector<glm::ivec3> occ;
+                int bit = 0;
+                for (int dy = -1; dy <= 1; ++dy) {
+                    for (int dz = -1; dz <= 1; ++dz) {
+                        for (int dx = -1; dx <= 1; ++dx) {
+                            if (std::abs(dx) + std::abs(dy) + std::abs(dz) < 2) continue; // centre, face neighbours
+                            if ((pattern >> bit++) & 1u) occ.push_back(cell + glm::ivec3(dx, dy, dz));
+                        }
+                    }
+                }
+                for (const glm::ivec3& o : occ) c.set(o.x, o.y, o.z, reg.cube);
+                const Voxel id = Registry::id(s, r);
+                c.set(cell.x, cell.y, cell.z, id);
+                const MeshData m = meshChunk(single(c), reg.palette, options);
+                const Shape shape = rotateShape((*reg.lib)[s], r);
+                size_t corners = 0;
+                for (const auto& p : shape.polygons) corners += p.corners.size();
+                REQUIRE(m.vertices.size() >= corners);
+                size_t vi = m.vertices.size() - corners;
+                const auto occludes = [&](const glm::ivec3& q) {
+                    for (const glm::ivec3& o : occ) {
+                        if (o == q) return true;
+                    }
+                    return false;
+                };
+                for (const auto& p : shape.polygons) {
+                    const glm::vec3 an = glm::abs(p.normal);
+                    const int a = (an.y >= an.x && an.y >= an.z) ? 1 : an.x >= an.z ? 0 : 2;
+                    const int u = (a + 1) % 3;
+                    const int v = (a + 2) % 3;
+                    glm::ivec3 front = cell;
+                    front[a] += p.normal[a] > 0.0f ? 1 : -1;
+                    for (const glm::vec3& corner : p.corners) {
+                        glm::ivec3 du(0), dv(0);
+                        du[u] = corner[u] < 0.5f ? -1 : 1;
+                        dv[v] = corner[v] < 0.5f ? -1 : 1;
+                        const bool s1 = occludes(front + du);
+                        const bool s2 = occludes(front + dv);
+                        const bool sc = occludes(front + du + dv);
+                        const int ao = (s1 && s2) ? 0 : 3 - (int(s1) + int(s2) + int(sc));
+                        const Vertex& vert = m.vertices[vi++];
+                        CAPTURE(shape.name);
+                        CAPTURE(r);
+                        REQUIRE(vert.position == glm::vec3(cell) + corner);
+                        CHECK(vert.color.r == 0.8f * options.aoCurve[size_t(ao)]);
+                        ++checked;
+                    }
+                }
+            }
+        }
+    }
+    CHECK(checked > 1000);
 }
 
 TEST_CASE("shape mesher: texture layers and uvPerMetre") {

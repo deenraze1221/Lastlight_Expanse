@@ -121,6 +121,50 @@ TEST_CASE("voxel shapes: yaw rotation permutes faces and keeps volume") {
     CHECK(rotateShape(lib[*lib.find("stair")], -1).fullFaces() == rotateShape(lib[*lib.find("stair")], 3).fullFaces());
 }
 
+TEST_CASE("voxel shapes: coverage masks of every rotation match the rotated samples") {
+    // Sample (i, j) of face f lies at a 3D point on the face; one yaw step moves it to face
+    // yawFace(f). The rotated shape's mask bit there must equal the original bit (V1 follow-up:
+    // masks beyond the 4-step round trip).
+    const ShapeLibrary lib = ShapeLibrary::builtins();
+    const auto yawPoint = [](glm::vec3 p) { return glm::vec3(p.z, p.y, 1.0f - p.x); };
+    for (size_t i = 0; i < lib.size(); ++i) {
+        const Shape& s = lib[static_cast<uint16_t>(i)];
+        for (int steps = 1; steps < 4; ++steps) {
+            CAPTURE(s.name);
+            CAPTURE(steps);
+            const Shape r = rotateShape(s, steps);
+            for (int f = 0; f < 6; ++f) {
+                const int axis = f >> 1;
+                const int u = (axis + 1) % 3;
+                const int v = (axis + 2) % 3;
+                int rf = f;
+                for (int k = 0; k < steps; ++k) rf = yawFace(rf);
+                const int ra = rf >> 1;
+                const int ru = (ra + 1) % 3;
+                const int rv = (ra + 2) % 3;
+                for (int jj = 0; jj < 4; ++jj) {
+                    for (int ii = 0; ii < 4; ++ii) {
+                        glm::vec3 p;
+                        p[axis] = (f & 1) ? 1.0f : 0.0f;
+                        p[u] = (static_cast<float>(ii) + 0.5f) / 4.0f;
+                        p[v] = (static_cast<float>(jj) + 0.5f) / 4.0f;
+                        for (int k = 0; k < steps; ++k) p = yawPoint(p);
+                        CHECK(p[ra] == ((rf & 1) ? 1.0f : 0.0f));
+                        const int ri = static_cast<int>(p[ru] * 4.0f);
+                        const int rj = static_cast<int>(p[rv] * 4.0f);
+                        const bool original = (s.coverageMask[size_t(f)] >> (jj * 4 + ii)) & 1u;
+                        const bool rotated = (r.coverageMask[size_t(rf)] >> (rj * 4 + ri)) & 1u;
+                        CHECK(original == rotated);
+                    }
+                }
+            }
+        }
+    }
+    // Explicit value: one yaw step turns the stair's -X side (lower half + upper back quarter)
+    // into its +Z side (u = X, v = Y): rows 0-1 full, rows 2-3 only toward +X (the old back, +Z).
+    CHECK(rotateShape(lib[*lib.find("stair")], 1).coverageMask[size_t(Face::PosZ)] == (0x00FF | 0xCC00));
+}
+
 TEST_CASE("voxel shapes: invalid templates are rejected") {
     ShapeLibrary lib;
     CHECK_THROWS_AS(lib.add(unitBox("cube")), Error); // duplicate name
