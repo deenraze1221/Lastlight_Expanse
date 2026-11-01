@@ -114,7 +114,10 @@ int VoxelWorld::wantedLod(const ChunkCoord& coord) const {
 }
 
 void VoxelWorld::update(const glm::vec3& observer) {
+    ZODAR_ENSURE(m_failure.empty(), m_failure);
+    m_generator->updateStreaming(observer);
     integrateResults();
+    if (m_generator->deterministicStreaming() && m_generateInFlight + m_meshInFlight > 0) { m_settled=false; return; }
 
     m_observerChunkSpace = observer / chunkWorldSize();
     const ChunkCoord center = chunkAt(observer);
@@ -149,18 +152,26 @@ void VoxelWorld::update(const glm::vec3& observer) {
                 entry.structural = computeStructural(*entry.data, *m_table);
                 continue;
             }
+            if (!m_generator->ready(c.coord)) { continue; }
             entry.generating = true;
             ++m_generateInFlight;
             const ChunkCoord coord = c.coord;
             {
-                auto job = [this, coord] {
-                    auto data = std::make_shared<VoxelChunk>();
-                    m_generator->generate(coord, *data);
-                    data->compact();
-                    const auto depth = computeSolidDepth(*data, *m_table);
-                    const bool structural = computeStructural(*data, *m_table);
+                auto generator=m_generator->generatorFor(coord);
+                if (!generator) generator=m_generator;
+                auto job = [this, coord, generator=std::move(generator)] {
+                    GenerateResult result{coord, {}, {}, false, {}};
+                    try {
+                        auto data = std::make_shared<VoxelChunk>();
+                        generator->generate(coord, *data);
+                        data->compact();
+                        result.solidDepth=computeSolidDepth(*data,*m_table);
+                        result.structural=computeStructural(*data,*m_table);
+                        result.data=std::move(data);
+                    } catch (const std::exception& e) { result.error=e.what(); }
+                      catch (...) { result.error="unknown generation failure"; }
                     std::lock_guard lock(m_resultMutex);
-                    m_generateResults.push_back({coord, std::move(data), depth, structural});
+                    m_generateResults.push_back(std::move(result));
                 };
                 if (m_jobs) m_jobs->submit(std::move(job));
                 else job();
@@ -241,9 +252,12 @@ void VoxelWorld::scheduleMesh(const ChunkCoord& coord, Entry& entry, int lod, ui
         for (size_t i = 0; i < inputs.size(); ++i) {
             nb.chunks[i] = inputs[i].get();
         }
-        MeshData mesh = meshChunk(nb, *m_table, options);
+        MeshResult result{coord, options.lod, options.sealFaces, version, {}, {}};
+        try { result.mesh=meshChunk(nb,*m_table,options); }
+        catch (const std::exception& e) { result.error=e.what(); }
+        catch (...) { result.error="unknown mesh failure"; }
         std::lock_guard lock(m_resultMutex);
-        m_meshResults.push_back({coord, options.lod, options.sealFaces, version, std::move(mesh)});
+        m_meshResults.push_back(std::move(result));
     };
     if (m_jobs) m_jobs->submit(std::move(job));
     else job();
@@ -254,6 +268,8 @@ void VoxelWorld::integrateResults() {
     std::vector<MeshResult> meshes;
     {
         std::lock_guard lock(m_resultMutex);
+        if (m_generator->deterministicStreaming() &&
+            m_generateResults.size()+m_meshResults.size() != m_generateInFlight+m_meshInFlight) return;
         generated.swap(m_generateResults);
         meshes.swap(m_meshResults);
     }
@@ -270,6 +286,7 @@ void VoxelWorld::integrateResults() {
             continue; // unloaded while generating
         }
         it->second.generating = false;
+        if (!r.error.empty()) { m_failure=r.error; continue; }
         it->second.data = std::move(r.data);
         it->second.solidDepth = r.solidDepth;
         it->second.structural = r.structural;
@@ -284,6 +301,7 @@ void VoxelWorld::integrateResults() {
         }
         Entry& entry = it->second;
         entry.meshPending = false;
+        if (!r.error.empty()) { m_failure=r.error; continue; }
         if (r.inputsVersion != entry.inputsVersion || !m_wantedLod.contains(r.coord)) {
             ++m_staleDropped; // edited or left the view meanwhile; rescheduled if still wanted
             continue;
@@ -302,6 +320,7 @@ void VoxelWorld::integrateResults() {
             m_events.push_back({ChunkMeshEvent::Type::Upsert, r.coord, r.lod, chunkOrigin(r.coord), std::move(r.mesh)});
         }
     }
+    ZODAR_ENSURE(m_failure.empty(), m_failure);
 }
 
 void VoxelWorld::rebuildCandidates(const ChunkCoord& center, const glm::vec3& observerChunkSpace) {
@@ -335,6 +354,7 @@ void VoxelWorld::rebuildCandidates(const ChunkCoord& center, const glm::vec3& ob
 void VoxelWorld::unloadFarChunks(const glm::vec3& observerChunkSpace) {
     const float meshKeep = static_cast<float>(m_settings.viewRadius) + m_settings.unloadHysteresis;
     const float dataKeep = meshKeep + 1.5f;
+    const auto eventStart=m_events.size();
     for (auto it = m_chunks.begin(); it != m_chunks.end();) {
         const ChunkCoord& coord = it->first;
         Entry& entry = it->second;
@@ -354,6 +374,8 @@ void VoxelWorld::unloadFarChunks(const glm::vec3& observerChunkSpace) {
             ++it;
         }
     }
+    std::sort(m_events.begin()+static_cast<std::ptrdiff_t>(eventStart),m_events.end(),
+              [](const auto& a,const auto& b) { return a.coord < b.coord; });
 }
 
 bool VoxelWorld::neighborsReady(const ChunkCoord& coord) const {
@@ -491,10 +513,11 @@ bool VoxelWorld::setVoxel(const glm::ivec3& voxel, Voxel value) {
     auto copy = std::make_shared<VoxelChunk>(*it->second.data); // copy on write: jobs may read the old one
     copy->set(l.x, l.y, l.z, value);
     copy->compact();
+    const bool persisted = m_generator->recordEdit(voxel, value);
     it->second.data = copy;
     it->second.solidDepth = computeSolidDepth(*copy, *m_table);
     it->second.structural = computeStructural(*copy, *m_table);
-    m_edits[coord] = copy;
+    if (!persisted) m_edits[coord] = copy;
     // Neighbours read this chunk's boundary for faces, ambient occlusion and (at coarse LOD)
     // downsampled padding cells, so they are rebuilt when the voxel is within reach.
     touch(coord, l);

@@ -59,3 +59,61 @@ TEST_CASE("region: structures rotate, cross boundaries and compose layers") {
     CHECK(chunk.get(0,0,0) == 0); CHECK(chunk.get(1,0,0) == 0); CHECK(chunk.get(2,0,0) == 1);
     CHECK_THROWS_AS(parseStructure(serializeStructure(s)+"bad"), zodar::Error);
 }
+#include "Scene/Voxel/RegionStreamer.h"
+#include "Core/JobSystem.h"
+TEST_CASE("region: async load, edit during save and persistent air") {
+    struct Base : IVoxelGenerator { void generate(const ChunkCoord&, VoxelChunk& out) const override { out=VoxelChunk(1); } };
+    const auto root=std::filesystem::temp_directory_path()/"zodar-stream-test";
+    std::filesystem::remove_all(root);
+    RegionStreamer::Settings settings; settings.directory=root; settings.names={"","stone"};
+    settings.world.voxelSize=0.5f; settings.world.minChunkY=0; settings.world.maxChunkY=0; settings.world.viewRadius=0;
+    zodar::JobSystem jobs(3);
+    {
+        RegionStreamer stream(std::make_shared<Base>(),settings,&jobs);
+        for(int i=0;i<16 && !stream.ready({0,0,0});++i) { stream.updateStreaming({8,0,8}); jobs.waitIdle(); }
+        REQUIRE(stream.ready({0,0,0}));
+        CHECK(stream.recordEdit({0,0,0},0));
+        stream.updateStreaming({8,0,8}); // submit save of revision 1
+        CHECK(stream.recordEdit({1,0,0},0)); // revision 2 must remain dirty
+        stream.flush();
+        auto events=stream.takeEvents(); REQUIRE_FALSE(events.empty());
+        for(const auto& e:events) CHECK(e.outcome==RegionStreamer::Outcome::Success);
+        VoxelChunk c; stream.generate({0,0,0},c); CHECK(c.get(0,0,0)==0); CHECK(c.get(1,0,0)==0);
+    }
+    {
+        RegionStreamer stream(std::make_shared<Base>(),settings);
+        for(int i=0;i<16 && !stream.ready({0,0,0});++i) stream.updateStreaming({8,0,8});
+        REQUIRE(stream.ready({0,0,0})); VoxelChunk c; stream.generate({0,0,0},c);
+        CHECK(c.get(0,0,0)==0); CHECK(c.get(1,0,0)==0); CHECK(c.get(2,0,0)==1);
+    }
+    std::filesystem::remove_all(root);
+}
+TEST_CASE("region: world failures terminate inline and threaded requests") {
+    struct Broken : IVoxelGenerator {
+        void generate(const ChunkCoord&, VoxelChunk&) const override { throw std::runtime_error("injected generation failure"); }
+    };
+    StreamingSettings s; s.viewRadius=0; s.minChunkY=0; s.maxChunkY=0;
+    for(unsigned workers : {0u,2u}) {
+        zodar::JobSystem jobs(workers);
+        VoxelWorld world(std::make_shared<Broken>(),{},s,&jobs);
+        if(workers==0) CHECK_THROWS_AS(world.update({0,0,0}),zodar::Error);
+        else { world.update({0,0,0}); CHECK_THROWS_AS(world.finishPendingWork(),zodar::Error); }
+        CHECK(world.stats().generateInFlight==0);
+    }
+}
+TEST_CASE("region: cancelled loads and incompatible files emit terminal results") {
+    struct Base : IVoxelGenerator { void generate(const ChunkCoord&,VoxelChunk&) const override {} };
+    const auto root=std::filesystem::temp_directory_path()/"zodar-region-terminal";
+    std::filesystem::remove_all(root);
+    RegionStreamer::Settings settings; settings.directory=root; settings.names={""}; settings.world.viewRadius=0;
+    zodar::JobSystem jobs(2);
+    RegionStreamer stream(std::make_shared<Base>(),settings,&jobs);
+    stream.updateStreaming({0,0,0});
+    stream.updateStreaming({10000,0,10000}); jobs.waitIdle();
+    stream.updateStreaming({10000,0,10000});
+    const auto events=stream.takeEvents();
+    REQUIRE_FALSE(events.empty());
+    for(const auto& e:events) CHECK(e.outcome==RegionStreamer::Outcome::Cancelled);
+    stream.flush();
+    std::filesystem::remove_all(root);
+}

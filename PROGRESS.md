@@ -740,3 +740,8 @@
 - Step 3: immutable layered generator, named structure capture/stamp, yaw transforms,
   anchors/model descriptors and versioned structure serialization. Cross-region stamps preserve air.
   Focused tests: 3 cases / 31 assertions passed. Model instantiation remains caller-owned.
+- Step 4: region load/save requests with immutable revisions, ordered batch completion,
+  cooperative load cancellation, terminal failure events and explicit flush. Dirty edits made
+  during saves remain dirty. VoxelWorld provider hooks retain legacy defaults; generation and
+  meshing failures now drain counters and fail on the main thread instead of hanging.
+  Focused tests: 6 cases / 56 assertions passed (inline/threaded errors, cancellation, reload).

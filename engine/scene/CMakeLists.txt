@@ -4,6 +4,7 @@
 add_library(ZodarScene STATIC
     Scene/Noise.cpp
     Scene/Voxel/Structure.cpp
+    Scene/Voxel/RegionStreamer.cpp
     Scene/Voxel/Region.cpp
     Scene/Voxel/VoxelChunk.cpp
     Scene/Voxel/BlockRegistry.cpp

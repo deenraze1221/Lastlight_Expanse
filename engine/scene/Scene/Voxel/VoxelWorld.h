@@ -26,6 +26,12 @@ class IVoxelGenerator {
 public:
     virtual ~IVoxelGenerator() = default;
     virtual void generate(const ChunkCoord& coord, VoxelChunk& out) const = 0;
+    virtual void updateStreaming(const glm::vec3&) const {}
+    virtual std::shared_ptr<const IVoxelGenerator> generatorFor(const ChunkCoord&) const { return {}; }
+    virtual bool deterministicStreaming() const { return false; }
+    virtual bool ready(const ChunkCoord&) const { return true; }
+    // True when the provider owns persistence. Called before publishing an edit.
+    virtual bool recordEdit(const glm::ivec3&, Voxel) const { return false; }
 };
 
 struct StreamingSettings {
@@ -217,6 +223,7 @@ private:
         std::shared_ptr<VoxelChunk> data;
         std::array<uint8_t, 6> solidDepth;
         bool structural;
+        std::string error;
     };
     struct MeshResult {
         ChunkCoord coord;
@@ -224,6 +231,7 @@ private:
         uint8_t seal;
         uint64_t inputsVersion;
         MeshData mesh;
+        std::string error;
     };
 
     void integrateResults();
@@ -262,6 +270,7 @@ private:
     uint64_t m_totalGenerated = 0;
     uint64_t m_totalMeshed = 0;
     uint64_t m_staleDropped = 0;
+    std::string m_failure;
 };
 
 } // namespace zodar::voxel
