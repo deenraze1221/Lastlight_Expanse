@@ -379,8 +379,11 @@ BlockTable::BlockTable(const VoxelPalette& palette) : m_palette(palette) {
         const std::string where = "Block state " + std::to_string(id) + ": ";
         ZODAR_ENSURE(b.material < palette.colors.size(), where + "material " + std::to_string(b.material) + " out of range");
         ZODAR_ENSURE(b.rotation < 4, where + "rotation " + std::to_string(b.rotation) + " out of range (0..3)");
+        ZODAR_ENSURE((b.flags & ~BlockState::kKnownFlags) == 0,
+                     where + "unknown flag bits " + std::to_string(b.flags & ~BlockState::kKnownFlags));
         m_material[id] = b.material;
         m_stateFlags[id] = b.flags;
+        m_anyStructural = m_anyStructural || (b.flags & BlockState::kStructural) != 0;
         if (b.shape == ShapeLibrary::kCube) {
             m_flags[id] = kLegacyCubeFlags;
             m_fill[id] = 8;

@@ -12,6 +12,20 @@ namespace zodar::voxel {
 namespace {
 
 // Full-cube voxel layers behind each face. Shape cells do not count: they may leave openings.
+// The chunk contains a BlockState::kStructural block (conservative LOD).
+bool computeStructural(const VoxelChunk& c, const BlockTable& table) {
+    if (!table.anyStructural()) return false;
+    if (c.isUniform()) return table.structural(c.uniformValue());
+    for (int y = 0; y < kChunkSize; ++y) {
+        for (int z = 0; z < kChunkSize; ++z) {
+            for (int x = 0; x < kChunkSize; ++x) {
+                if (table.structural(c.get(x, y, z))) return true;
+            }
+        }
+    }
+    return false;
+}
+
 std::array<uint8_t, 6> computeSolidDepth(const VoxelChunk& c, const BlockTable& table) {
     std::array<uint8_t, 6> out{};
     if (c.isUniform()) {
@@ -57,6 +71,8 @@ VoxelWorld::VoxelWorld(std::shared_ptr<const IVoxelGenerator> generator, VoxelPa
     ZODAR_ENSURE(std::is_sorted(m_settings.lodDistances.begin(), m_settings.lodDistances.end()),
                  "lodDistances must be ascending");
     ZODAR_ENSURE(m_settings.lodDistances.size() <= static_cast<size_t>(kMaxLod), "too many LOD levels");
+    ZODAR_ENSURE(std::isfinite(m_settings.structuralLod0Distance) && m_settings.structuralLod0Distance >= 0.0f,
+                 "structuralLod0Distance must be finite and not negative");
 }
 
 VoxelWorld::~VoxelWorld() {
@@ -86,6 +102,17 @@ int VoxelWorld::lodFor(const ChunkCoord& chunk, const glm::vec3& observerChunkSp
     return static_cast<int>(m_settings.lodDistances.size());
 }
 
+int VoxelWorld::wantedLod(const ChunkCoord& coord) const {
+    if (m_settings.structuralLod0Distance > 0.0f) {
+        const auto it = m_chunks.find(coord);
+        if (it != m_chunks.end() && it->second.structural) {
+            const glm::vec3 center = glm::vec3(coord.x, coord.y, coord.z) + 0.5f;
+            if (glm::length(center - m_observerChunkSpace) < m_settings.structuralLod0Distance) return 0;
+        }
+    }
+    return lodFor(coord, m_observerChunkSpace);
+}
+
 void VoxelWorld::update(const glm::vec3& observer) {
     integrateResults();
 
@@ -97,7 +124,7 @@ void VoxelWorld::update(const glm::vec3& observer) {
     }
     // LODs follow the exact observer position, not just its chunk.
     for (auto& [coord, lod] : m_wantedLod) {
-        lod = lodFor(coord, m_observerChunkSpace);
+        lod = wantedLod(coord);
     }
 
     const float meshRadius = static_cast<float>(m_settings.viewRadius);
@@ -119,6 +146,7 @@ void VoxelWorld::update(const glm::vec3& observer) {
                 // while this chunk was loaded saw the same data, so nothing else is touched.
                 entry.data = edit->second;
                 entry.solidDepth = computeSolidDepth(*entry.data, *m_table);
+                entry.structural = computeStructural(*entry.data, *m_table);
                 continue;
             }
             entry.generating = true;
@@ -130,8 +158,9 @@ void VoxelWorld::update(const glm::vec3& observer) {
                     m_generator->generate(coord, *data);
                     data->compact();
                     const auto depth = computeSolidDepth(*data, *m_table);
+                    const bool structural = computeStructural(*data, *m_table);
                     std::lock_guard lock(m_resultMutex);
-                    m_generateResults.push_back({coord, std::move(data), depth});
+                    m_generateResults.push_back({coord, std::move(data), depth, structural});
                 };
                 if (m_jobs) m_jobs->submit(std::move(job));
                 else job();
@@ -243,6 +272,7 @@ void VoxelWorld::integrateResults() {
         it->second.generating = false;
         it->second.data = std::move(r.data);
         it->second.solidDepth = r.solidDepth;
+        it->second.structural = r.structural;
     }
     for (MeshResult& r : meshes) {
         --m_meshInFlight;
@@ -292,7 +322,7 @@ void VoxelWorld::rebuildCandidates(const ChunkCoord& center, const glm::vec3& ob
                 }
                 m_candidates.push_back({coord, glm::length(c - observerChunkSpace), horizontal});
                 if (horizontal <= meshRadius) {
-                    m_wantedLod[coord] = lodFor(coord, observerChunkSpace);
+                    m_wantedLod[coord] = wantedLod(coord);
                 }
             }
         }
@@ -463,6 +493,7 @@ bool VoxelWorld::setVoxel(const glm::ivec3& voxel, Voxel value) {
     copy->compact();
     it->second.data = copy;
     it->second.solidDepth = computeSolidDepth(*copy, *m_table);
+    it->second.structural = computeStructural(*copy, *m_table);
     m_edits[coord] = copy;
     // Neighbours read this chunk's boundary for faces, ambient occlusion and (at coarse LOD)
     // downsampled padding cells, so they are rebuilt when the voxel is within reach.

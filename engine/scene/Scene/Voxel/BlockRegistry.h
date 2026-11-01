@@ -105,6 +105,10 @@ private:
 struct BlockState {
     static constexpr uint8_t kNoCollision = 1u << 0;
     static constexpr uint8_t kTransparent = 1u << 1; // reserved: not supported by the mesher yet
+    // Architecture: chunks containing such a block keep LOD 0 within
+    // StreamingSettings::structuralLod0Distance (conservative LOD, VOXELS §5).
+    static constexpr uint8_t kStructural = 1u << 2;
+    static constexpr uint8_t kKnownFlags = kNoCollision | kTransparent | kStructural; // others: BlockTable rejects
 
     uint16_t material = 0; // index into VoxelPalette::colors / faceLayers
     uint16_t shape = ShapeLibrary::kCube;
@@ -179,6 +183,9 @@ public:
     uint8_t stateFlags(Voxel v) const { return v < m_stateFlags.size() ? m_stateFlags[v] : uint8_t(0); }
     // Solid for collision queries: not empty and without BlockState::kNoCollision.
     bool collides(Voxel v) const { return v != kEmpty && !(stateFlags(v) & BlockState::kNoCollision); }
+    bool structural(Voxel v) const { return (stateFlags(v) & BlockState::kStructural) != 0; }
+    // Some id carries BlockState::kStructural (fast path for chunks without any).
+    bool anyStructural() const { return m_anyStructural; }
     // Rotated geometry of a non-cube id, else nullptr.
     const Shape* shape(Voxel v) const;
     // Smallest cube id (>= 1); an out-of-range id when the registry has no cube block.
@@ -194,6 +201,7 @@ private:
 
     VoxelPalette m_palette;
     bool m_legacy = true;
+    bool m_anyStructural = false;
     Voxel m_firstCube = 1;
     std::vector<uint8_t> m_flags;
     std::vector<uint16_t> m_material;

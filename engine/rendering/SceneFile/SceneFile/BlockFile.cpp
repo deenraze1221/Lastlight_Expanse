@@ -140,7 +140,7 @@ BlockFileData parseBlockFile(std::string_view json, std::string_view file, const
             const Json& b = (*blocks)[i];
             const std::string path = detail::child("/blocks", i);
             if (!detail::requireObject(b, path, issues)) continue;
-            detail::checkKeys(b, path, {"name", "material", "shape", "rotations", "collision"}, issues);
+            detail::checkKeys(b, path, {"name", "material", "shape", "rotations", "collision", "structural"}, issues);
             BlockDefinitionData bd;
             if (detail::readString(b, "name", path, bd.name, issues, true)) {
                 if (validName(bd.name, detail::child(path, "name"), issues) && !names.insert(bd.name).second) {
@@ -164,6 +164,7 @@ BlockFileData parseBlockFile(std::string_view json, std::string_view file, const
             }
             bd.rotations = static_cast<uint8_t>(rotations);
             detail::readBool(b, "collision", path, bd.collision, issues);
+            detail::readBool(b, "structural", path, bd.structural, issues);
             ids += bd.rotations;
             if (ids > kMaxIds) {
                 issues.add(path, "too many block ids (at most 65534 including rotation variants)");
@@ -203,11 +204,13 @@ std::string serializeBlockFile(const BlockFileData& data) {
     root["materials"] = std::move(materials);
     Json blocks = Json::array();
     for (const BlockDefinitionData& b : data.blocks) {
-        blocks.push_back(Json{{"name", b.name},
-                              {"material", b.material},
-                              {"shape", b.shape},
-                              {"rotations", b.rotations},
-                              {"collision", b.collision}});
+        Json j{{"name", b.name},
+               {"material", b.material},
+               {"shape", b.shape},
+               {"rotations", b.rotations},
+               {"collision", b.collision}};
+        if (b.structural) j["structural"] = true; // written only when set: older output unchanged
+        blocks.push_back(std::move(j));
     }
     root["blocks"] = std::move(blocks);
     return root.dump(2) + "\n";
@@ -330,8 +333,9 @@ BlockCatalogue buildBlockCatalogue(const BlockFileData& data, const std::filesys
             const auto id = static_cast<voxel::Voxel>(c.palette.blocks.size());
             if (!c.ids.emplace(name, id).second) issues.add(path + "/name", "duplicate block name '" + name + "'");
             c.names.push_back(name);
-            c.palette.blocks.push_back(
-                {material->second, *shape, r, b.collision ? uint8_t(0) : voxel::BlockState::kNoCollision});
+            const auto flags = static_cast<uint8_t>((b.collision ? 0u : voxel::BlockState::kNoCollision) |
+                                                    (b.structural ? voxel::BlockState::kStructural : 0u));
+            c.palette.blocks.push_back({material->second, *shape, r, flags});
         }
     }
     issues.throwIfAny();

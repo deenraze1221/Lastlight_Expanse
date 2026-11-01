@@ -36,6 +36,10 @@ struct StreamingSettings {
     // LOD by 3D distance from the observer to the chunk centre, in chunks:
     // distance < lodDistances[i] selects LOD i; farther chunks use lodDistances.size().
     std::vector<float> lodDistances{3.0f, 6.0f, 12.0f};
+    // Conservative LOD (VOXELS §5): chunks containing a block with BlockState::kStructural use
+    // LOD 0 while their centre is closer than this (3D, chunks); farther away they follow
+    // lodDistances. 0 (default) disables it: LOD choices are exactly the distance rule.
+    float structuralLod0Distance = 0.0f;
     float unloadHysteresis = 1.5f;      // extra chunks before meshes/data are dropped
     uint32_t maxJobsPerUpdate = 48;     // generation + meshing jobs scheduled per update()
     uint32_t maxJobsInFlight = 256;
@@ -171,7 +175,8 @@ public:
     ChunkCoord chunkAt(const glm::vec3& worldPosition) const;
     glm::vec3 chunkOrigin(const ChunkCoord& coord) const;
     float chunkWorldSize() const { return m_settings.voxelSize * static_cast<float>(kChunkSize); }
-    // LOD a chunk would use for an observer in `observerChunk` (exposed for tests and tools).
+    // Distance LOD a chunk would use for an observer in `observerChunk` (exposed for tests and
+    // tools). Structural chunks may use a finer LOD (StreamingSettings::structuralLod0Distance).
     int lodFor(const ChunkCoord& chunk, const glm::vec3& observerChunkSpace) const;
 
     const StreamingSettings& settings() const { return m_settings; }
@@ -195,6 +200,7 @@ private:
         // Full-cube voxel layers behind each face (Face order), 0..32. Lets sealing skip
         // boundaries that no LOD can open up.
         std::array<uint8_t, 6> solidDepth{};
+        bool structural = false; // contains a BlockState::kStructural block
     };
     struct Candidate {
         ChunkCoord coord;
@@ -205,6 +211,7 @@ private:
         ChunkCoord coord;
         std::shared_ptr<VoxelChunk> data;
         std::array<uint8_t, 6> solidDepth;
+        bool structural;
     };
     struct MeshResult {
         ChunkCoord coord;
@@ -218,6 +225,7 @@ private:
     void rebuildCandidates(const ChunkCoord& center, const glm::vec3& observerChunkSpace);
     void unloadFarChunks(const glm::vec3& observerChunkSpace);
     bool neighborsReady(const ChunkCoord& coord) const;
+    int wantedLod(const ChunkCoord& coord) const; // lodFor + conservative LOD for structural chunks
     bool trivialMesh(const ChunkCoord& coord) const;
     bool uniformCube(const VoxelChunk& chunk) const; // uniform, non-empty, full cube
     uint8_t sealMask(const ChunkCoord& coord, int lod) const;

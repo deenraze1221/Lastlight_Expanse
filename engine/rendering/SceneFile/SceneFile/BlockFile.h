@@ -26,7 +26,8 @@
 //     "blocks": [
 //       { "name": "concrete", "material": "concrete" },
 //       { "name": "stair", "material": "concrete", "shape": "stair", "rotations": 4 },
-//       { "name": "grate", "material": "panel", "shape": "slab_low", "collision": false } ] }
+//       { "name": "grate", "material": "panel", "shape": "slab_low", "collision": false },
+//       { "name": "wall", "material": "concrete", "structural": true } ] }
 //
 // Block ids follow the file order: id 0 is empty, the first block is id 1. "rotations": 4
 // expands one definition into four consecutive ids named "<name>", "<name>@1", "<name>@2",
@@ -52,6 +53,7 @@ struct BlockDefinitionData {
     std::string shape = "cube"; // shape library name
     uint8_t rotations = 1;      // 1 or 4 (expanded into name@1..@3)
     bool collision = true;      // false: BlockState::kNoCollision
+    bool structural = false;    // true: BlockState::kStructural (conservative LOD, VOXELS §5)
     bool operator==(const BlockDefinitionData&) const = default;
 };
 

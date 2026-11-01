@@ -8,6 +8,8 @@
 //      VOXELS §5, not fixed in V3).
 #include <doctest/doctest.h>
 
+#include "Core/Error.h"
+#include "Core/JobSystem.h"
 #include "Scene/Voxel/ChunkMesher.h"
 #include "Scene/Voxel/VoxelWorld.h"
 #include "../Support/MeshHash.h"
@@ -163,4 +165,108 @@ TEST_CASE("voxel LOD seams: rays across LOD borders of a shape world hit the sur
     MESSAGE("seam rays ", rays, " misses ", misses);
     CHECK(rays > 0);
     CHECK(misses == 0);
+}
+
+namespace {
+
+// The shape registry with BlockState::kStructural on `ids` (all other flags unchanged).
+VoxelPalette withStructural(const ShapeRegistry& reg, std::initializer_list<Voxel> ids) {
+    VoxelPalette p = reg.palette;
+    for (Voxel id : ids) p.blocks[id].flags |= BlockState::kStructural;
+    return p;
+}
+
+float chunkDistance(const ChunkCoord& c, const glm::vec3& observerChunkSpace) {
+    return glm::length(glm::vec3(c.x, c.y, c.z) + 0.5f - observerChunkSpace);
+}
+
+} // namespace
+
+TEST_CASE("block table: unknown flag bits are rejected, known flags accepted") {
+    const ShapeRegistry reg;
+    VoxelPalette p = reg.palette;
+    p.blocks[1].flags = BlockState::kNoCollision | BlockState::kStructural | BlockState::kTransparent;
+    const BlockTable ok(p);
+    CHECK(ok.structural(1));
+    CHECK_FALSE(ok.collides(1));
+    CHECK(ok.anyStructural());
+    CHECK_FALSE(BlockTable(reg.palette).anyStructural());
+    for (uint8_t bit = 3; bit < 8; ++bit) {
+        p.blocks[1].flags = static_cast<uint8_t>(1u << bit);
+        CAPTURE(bit);
+        CHECK_THROWS_AS(BlockTable{p}, zodar::Error);
+    }
+}
+
+TEST_CASE("voxel LOD regression: structural flags change nothing while structuralLod0Distance is 0") {
+    const ShapeRegistry reg;
+    const auto gen = std::make_shared<QueryTerrain>(7, QueryTerrain::Mode::Shapes, reg.shapeCount(), reg.noCollisionOffset);
+    VoxelWorld world(gen, withStructural(reg, {reg.cube}), test::queryWorldSettings(1.0f));
+    CHECK(liveHash(settleLive(world, {8, 8, 8})) == 0x1823C9036434EA3Aull); // the pre-V3 golden
+}
+
+TEST_CASE("voxel LOD: structural chunks keep LOD 0 inside structuralLod0Distance") {
+    const ShapeRegistry reg;
+    const auto gen = std::make_shared<QueryTerrain>(7, QueryTerrain::Mode::Shapes, reg.shapeCount(), reg.noCollisionOffset);
+    auto settings = test::queryWorldSettings(1.0f);
+    settings.structuralLod0Distance = 1.8f;
+    const glm::vec3 observer{8, 8, 8};
+    const glm::vec3 obsChunk = observer / 32.0f;
+
+    SUBCASE("every chunk structural: LOD 0 inside the range, distance LOD outside; seams stay closed") {
+        VoxelWorld world(gen, withStructural(reg, {reg.cube}), settings);
+        const auto live = settleLive(world, observer);
+        int forced = 0;
+        int farther = 0;
+        for (const auto& [c, m] : live) {
+            CAPTURE(c.x);
+            CAPTURE(c.y);
+            CAPTURE(c.z);
+            const float d = chunkDistance(c, obsChunk);
+            if (d < 1.8f) {
+                CHECK(m.lod == 0);
+                forced += world.lodFor(c, obsChunk) > 0 ? 1 : 0;
+            } else {
+                CHECK(m.lod == world.lodFor(c, obsChunk));
+                farther += m.lod > 0 ? 1 : 0;
+            }
+        }
+        CHECK(forced > 0);  // the setting changed some chunks ...
+        CHECK(farther > 0); // ... and others still use distance LOD
+        const auto [rays, misses] = probeSeams(live, 30.0f, -20.0f);
+        MESSAGE("structural seam rays ", rays, " misses ", misses);
+        CHECK(rays > 0);
+        CHECK(misses == 0);
+        // Same result with worker threads.
+        JobSystem jobs(3);
+        VoxelWorld threaded(gen, withStructural(reg, {reg.cube}), settings, &jobs);
+        CHECK(liveHash(settleLive(threaded, observer)) == liveHash(live));
+    }
+    SUBCASE("only chunks that contain a structural block are affected; edits update the LOD") {
+        // Structural only on the kNoCollision cube (id 2), which the hashed shape world never
+        // generates: before any edit every chunk uses distance LOD (output = the pre-V3 golden).
+        const Voxel rare = reg.ghostCube;
+        VoxelWorld world(gen, withStructural(reg, {rare}), settings);
+        auto live = settleLive(world, observer);
+        CHECK(liveHash(live) == 0x1823C9036434EA3Aull);
+        std::optional<ChunkCoord> lod1Chunk;
+        for (const auto& [c, m] : live) {
+            CHECK(m.lod == world.lodFor(c, obsChunk));
+            if (!lod1Chunk && c.y == 0 && m.lod == 1 && chunkDistance(c, obsChunk) < 1.8f) lod1Chunk = c;
+        }
+        REQUIRE(lod1Chunk.has_value());
+        // Placing a structural block above the terrain switches its chunk to LOD 0 ...
+        const glm::ivec3 cell = lod1Chunk->originVoxel() + glm::ivec3(5, 30, 5);
+        REQUIRE(world.setVoxel(cell, rare));
+        live = settleLive(world, observer, std::move(live));
+        CHECK(live.at(*lod1Chunk).lod == 0);
+        // ... and removing it restores the distance LOD.
+        REQUIRE(world.setVoxel(cell, kEmpty));
+        live = settleLive(world, observer, std::move(live));
+        CHECK(live.at(*lod1Chunk).lod == 1);
+    }
+    SUBCASE("invalid settings are rejected") {
+        settings.structuralLod0Distance = -1.0f;
+        CHECK_THROWS_AS(VoxelWorld(gen, reg.palette, settings), zodar::Error);
+    }
 }

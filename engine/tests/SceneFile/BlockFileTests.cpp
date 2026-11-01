@@ -338,3 +338,39 @@ TEST_CASE("block file: layer checks use a square reference layer and validate th
     CHECK(count[0].path == "/materials");
     CHECK(count[0].message.find("4 texture-array layers exceed the limit of 3") == 0);
 }
+
+TEST_CASE("block file: \"structural\" sets BlockState::kStructural on every rotation variant") {
+    const ShapeLibrary lib = ShapeLibrary::builtins();
+    const std::string text = wrap(R"({"name": "a", "textures": "a.png"})",
+                                  R"({"name": "wall", "material": "a", "structural": true},
+                                     {"name": "ramp", "material": "a", "shape": "wedge", "rotations": 4,
+                                      "structural": true, "collision": false},
+                                     {"name": "floor", "material": "a", "structural": false},
+                                     {"name": "plain", "material": "a"})");
+    const BlockFileData data = parseBlockFile(text, "s.blocks.json", &lib);
+    REQUIRE(data.blocks.size() == 4);
+    CHECK(data.blocks[0].structural);
+    CHECK(data.blocks[1].structural);
+    CHECK_FALSE(data.blocks[2].structural);
+    CHECK_FALSE(data.blocks[3].structural);
+    const BlockCatalogue c = buildBlockCatalogue(data, "dir");
+    CHECK(c.palette.blocks[*c.find("wall")].flags == BlockState::kStructural);
+    for (const char* n : {"ramp", "ramp@1", "ramp@2", "ramp@3"}) {
+        CAPTURE(n);
+        CHECK(c.palette.blocks[*c.find(n)].flags == (BlockState::kStructural | BlockState::kNoCollision));
+    }
+    CHECK(c.palette.blocks[*c.find("floor")].flags == 0);
+    const BlockTable table(c.palette);
+    CHECK(table.structural(*c.find("ramp@2")));
+    CHECK_FALSE(table.structural(*c.find("plain")));
+    // Round trip: written only when set, so files without it serialize as before.
+    const std::string out = serializeBlockFile(data);
+    CHECK(parseBlockFile(out, "s.blocks.json") == data);
+    size_t count = 0;
+    for (size_t pos = out.find("\"structural\""); pos != std::string::npos; pos = out.find("\"structural\"", pos + 1)) ++count;
+    CHECK(count == 2u);
+    CHECK(serializeBlockFile(parseBlockFile(kBlocks, "a.blocks.json")).find("structural") == std::string::npos);
+    // Type errors carry the JSON path.
+    CHECK(hasIssue(issuesOf(wrap(R"({"name": "a", "textures": "a.png"})", R"({"name": "x", "material": "a", "structural": 1})")),
+                   "/blocks/0/structural", "expected true or false"));
+}
