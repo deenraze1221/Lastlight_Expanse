@@ -7,11 +7,14 @@
 namespace zodar::voxel {
 namespace {
 
-// Padded cell grid for one LOD: (n + 2)^3 cells, the outer layer taken from neighbours.
+// Padded cell grid for one LOD: (n + 2)^3 cells, the outer layer taken from neighbours. Each
+// cell keeps its voxel id and BlockTable::cellFlags (full faces, AO occluder, cube). At LOD > 0
+// every non-empty cell is meshed as a cube (shapes render as cubes there until V3).
 class CellGrid {
 public:
-    CellGrid(const ChunkNeighborhood& nb, int lod, uint8_t sealFaces)
-        : m_n(kChunkSize >> lod), m_p(m_n + 2), m_cells(static_cast<size_t>(m_p) * m_p * m_p, kEmpty) {
+    CellGrid(const ChunkNeighborhood& nb, const BlockTable& table, int lod, uint8_t sealFaces)
+        : m_n(kChunkSize >> lod), m_p(m_n + 2), m_cells(static_cast<size_t>(m_p) * m_p * m_p, kEmpty),
+          m_flags(m_cells.size(), uint8_t(0)) {
         const int s = 1 << lod;
         const VoxelChunk* center = nb.center();
         const bool uniformCenter = center && center->isUniform();
@@ -24,10 +27,18 @@ public:
                         v = center->uniformValue();
                     } else if (s == 1) {
                         v = nb.get(x, y, z);
+                    } else if (table.allCubes()) {
+                        v = downsample<false>(nb, table, x * s, y * s, z * s, s);
                     } else {
-                        v = downsample(nb, x * s, y * s, z * s, s);
+                        v = downsample<true>(nb, table, x * s, y * s, z * s, s);
                     }
-                    m_cells[index(x, y, z)] = v;
+                    const size_t i = index(x, y, z);
+                    m_cells[i] = v;
+                    if (v != kEmpty) {
+                        const uint8_t f = s == 1 ? table.cellFlags(v) : kCubeFlags;
+                        m_flags[i] = f;
+                        m_hasShapes = m_hasShapes || (inside && !(f & BlockInfo::kCube));
+                    }
                 }
             }
         }
@@ -45,29 +56,43 @@ public:
                     c[(axis + 1) % 3] = a;
                     c[(axis + 2) % 3] = b;
                     m_cells[index(c.x, c.y, c.z)] = kEmpty;
+                    m_flags[index(c.x, c.y, c.z)] = 0;
                 }
             }
         }
     }
 
+    static constexpr uint8_t kCubeFlags = kAllFaces | BlockInfo::kAoOccluder | BlockInfo::kCube;
+
     int size() const { return m_n; }
+    bool hasShapes() const { return m_hasShapes; }
     Voxel at(const glm::ivec3& c) const { return m_cells[index(c.x, c.y, c.z)]; }
-    bool solid(const glm::ivec3& c) const { return at(c) != kEmpty; }
+    uint8_t flags(const glm::ivec3& c) const { return m_flags[index(c.x, c.y, c.z)]; }
+    // The cell's face `face` (Face order) is fully covered.
+    bool covers(const glm::ivec3& c, int face) const { return (flags(c) & faceBit(face)) != 0; }
+    bool occludes(const glm::ivec3& c) const { return (flags(c) & BlockInfo::kAoOccluder) != 0; }
 
 private:
     size_t index(int x, int y, int z) const {
         return (static_cast<size_t>(y + 1) * m_p + static_cast<size_t>(z + 1)) * m_p + static_cast<size_t>(x + 1);
     }
 
-    static Voxel downsample(const ChunkNeighborhood& nb, int x0, int y0, int z0, int s) {
-        int solidCount = 0;
+    // Majority rule weighted by fill (cubes 8/8, shapes their fill eighths); the cell takes
+    // the topmost non-empty voxel.
+    template <bool kWeighted>
+    static Voxel downsample(const ChunkNeighborhood& nb, const BlockTable& table, int x0, int y0, int z0, int s) {
+        int filled = 0;
         Voxel top = kEmpty;
         for (int y = y0 + s - 1; y >= y0; --y) {
             for (int z = z0; z < z0 + s; ++z) {
                 for (int x = x0; x < x0 + s; ++x) {
                     const Voxel v = nb.get(x, y, z);
                     if (v != kEmpty) {
-                        ++solidCount;
+                        if constexpr (kWeighted) {
+                            filled += table.fill(v);
+                        } else {
+                            filled += 8;
+                        }
                         if (top == kEmpty) {
                             top = v;
                         }
@@ -75,12 +100,14 @@ private:
                 }
             }
         }
-        return solidCount * 2 >= s * s * s ? top : kEmpty;
+        return filled * 2 >= s * s * s * 8 ? top : kEmpty;
     }
 
     int m_n;
     int m_p;
     std::vector<Voxel> m_cells;
+    std::vector<uint8_t> m_flags;
+    bool m_hasShapes = false;
 };
 
 bool uniformAo(uint32_t aoBits) {
@@ -90,6 +117,12 @@ bool uniformAo(uint32_t aoBits) {
 } // namespace
 
 MeshData meshChunk(const ChunkNeighborhood& neighborhood, const VoxelPalette& palette, const MeshOptions& options,
+                   MeshStats* stats) {
+    const BlockTable table(palette);
+    return meshChunk(neighborhood, table, options, stats);
+}
+
+MeshData meshChunk(const ChunkNeighborhood& neighborhood, const BlockTable& table, const MeshOptions& options,
                    MeshStats* stats) {
     ZODAR_ENSURE(neighborhood.center() != nullptr, "meshChunk needs the centre chunk");
     ZODAR_ENSURE(options.lod >= 0 && options.lod <= kMaxLod, "LOD out of range: " + std::to_string(options.lod));
@@ -103,10 +136,12 @@ MeshData meshChunk(const ChunkNeighborhood& neighborhood, const VoxelPalette& pa
         return mesh; // nothing solid
     }
 
-    const CellGrid grid(neighborhood, options.lod, options.sealFaces);
+    const CellGrid grid(neighborhood, table, options.lod, options.sealFaces);
+    const VoxelPalette& palette = table.palette();
     const int n = grid.size();
     const float cellSize = static_cast<float>(1 << options.lod) * options.voxelSize;
     std::vector<uint32_t> mask(static_cast<size_t>(n) * n);
+    const float uvFactor = cellSize / options.voxelSize;
 
     for (int face = 0; face < 6; ++face) {
         const int a = face >> 1;
@@ -132,23 +167,23 @@ MeshData meshChunk(const ChunkNeighborhood& neighborhood, const VoxelPalette& pa
                     cell[u] = i;
                     cell[v] = j;
                     uint32_t key = 0;
-                    const Voxel voxel = grid.at(cell);
                     const glm::ivec3 nbCell = cell + aDir;
-                    if (voxel != kEmpty && !grid.solid(nbCell)) {
+                    if ((grid.flags(cell) & BlockInfo::kCube) && !grid.covers(nbCell, face ^ 1)) {
                         uint32_t aoBits = 0xFFu;
                         if (options.ambientOcclusion) {
                             aoBits = 0;
                             const int su[4] = {-1, 1, 1, -1};
                             const int sv[4] = {-1, -1, 1, 1};
                             for (int c = 0; c < 4; ++c) {
-                                const bool s1 = grid.solid(nbCell + uDir * su[c]);
-                                const bool s2 = grid.solid(nbCell + vDir * sv[c]);
-                                const bool sc = grid.solid(nbCell + uDir * su[c] + vDir * sv[c]);
+                                const bool s1 = grid.occludes(nbCell + uDir * su[c]);
+                                const bool s2 = grid.occludes(nbCell + vDir * sv[c]);
+                                const bool sc = grid.occludes(nbCell + uDir * su[c] + vDir * sv[c]);
                                 const uint32_t ao = (s1 && s2) ? 0u : 3u - (uint32_t(s1) + uint32_t(s2) + uint32_t(sc));
                                 aoBits |= ao << (2 * c);
                             }
                         }
-                        key = (static_cast<uint32_t>(voxel) << 8) | aoBits;
+                        // Material + 1 keeps the key non-zero for material 0.
+                        key = ((static_cast<uint32_t>(table.material(grid.at(cell))) + 1u) << 8) | aoBits;
                         any = true;
                     }
                     mask[static_cast<size_t>(j) * n + i] = key;
@@ -194,10 +229,10 @@ MeshData meshChunk(const ChunkNeighborhood& neighborhood, const VoxelPalette& pa
                     localStats.faces += static_cast<uint32_t>(w * h);
 
                     // Emit the quad: corners (u0,v0), (u1,v0), (u1,v1), (u0,v1).
-                    const auto voxelId = static_cast<Voxel>(key >> 8);
-                    const glm::vec4 color = palette.color(voxelId);
+                    const uint32_t material = (key >> 8) - 1u;
+                    const glm::vec4 color = palette.color(material);
                     const int faceKind = a != 1 ? 1 : positive ? 0 : 2;
-                    const float layerAlpha = palette.hasLayers() ? palette.layer(voxelId, faceKind) : color.a;
+                    const float layerAlpha = palette.hasLayers() ? palette.layer(material, faceKind) : color.a;
                     const auto base = static_cast<uint32_t>(mesh.vertices.size());
                     const int cu[4] = {i, i + w, i + w, i};
                     const int cv[4] = {j, j, j + h, j + h};
@@ -212,7 +247,7 @@ MeshData meshChunk(const ChunkNeighborhood& neighborhood, const VoxelPalette& pa
                         vert.position = p * cellSize;
                         vert.normal = normal;
                         vert.tangent = tangent;
-                        vert.uv0 = glm::vec2(p[u], p[v]) * (cellSize / options.voxelSize);
+                        vert.uv0 = glm::vec2(p[u], p[v]) * uvFactor;
                         const float shade = options.aoCurve[ao[c]];
                         vert.color = glm::vec4(glm::vec3(color) * shade, layerAlpha);
                         mesh.vertices.push_back(vert);

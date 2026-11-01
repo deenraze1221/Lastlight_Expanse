@@ -167,6 +167,8 @@ public:
     // Smallest cube id (>= 1); an out-of-range id when the registry has no cube block.
     Voxel firstCube() const { return m_firstCube; }
     bool legacy() const { return m_legacy; }
+    // No id uses a non-cube shape (cube-only fast paths).
+    bool allCubes() const { return m_rotated.empty(); }
 
     const VoxelPalette& palette() const { return m_palette; }
 

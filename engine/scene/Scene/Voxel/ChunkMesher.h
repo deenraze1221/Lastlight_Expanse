@@ -30,7 +30,8 @@ struct ChunkNeighborhood {
 struct MeshOptions {
     // Level of detail: cells are 2^lod voxels wide (lod 0 = full resolution, kMaxLod = one
     // cell per chunk). A cell is solid when at least half of its voxels are; it takes the
-    // material of its topmost solid voxel (the surface seen from above).
+    // material of its topmost solid voxel (the surface seen from above). Shapes count with
+    // their fill fraction and are meshed as cubes at LOD > 0.
     int lod = 0;
     float voxelSize = 1.0f; // world units per voxel
     // Bit (1 << Face): treat the neighbour on that side as empty, which emits the chunk's
@@ -47,12 +48,17 @@ struct MeshStats {
     uint32_t faces = 0; // unmerged voxel faces the quads represent
 };
 
-// Greedy mesher with per-vertex ambient occlusion. Coplanar faces with the same material
+// Greedy mesher with per-vertex ambient occlusion. Coplanar cube faces with the same material
 // and uniform occlusion are merged into one quad; faces with varying occlusion are emitted
 // individually so the interpolated AO stays exact. Triangles are flipped along the AO
-// gradient to avoid the usual anisotropy. Output is in chunk-local world units (the chunk
-// origin is the caller's transform), one submesh with material index 0, CCW front faces.
-// The result is deterministic for identical inputs.
+// gradient to avoid the usual anisotropy. A face is culled when the neighbour cell fully
+// covers the touching face; AO counts neighbours whose block is an AO occluder. Output is in
+// chunk-local world units (the chunk origin is the caller's transform), one submesh with
+// material index 0, CCW front faces. The result is deterministic for identical inputs; for
+// legacy (cube-only) palettes it is identical to the pre-registry mesher.
+MeshData meshChunk(const ChunkNeighborhood& neighborhood, const BlockTable& table, const MeshOptions& options,
+                   MeshStats* stats = nullptr);
+// Convenience overload: builds the BlockTable from `palette` for this call.
 MeshData meshChunk(const ChunkNeighborhood& neighborhood, const VoxelPalette& palette, const MeshOptions& options,
                    MeshStats* stats = nullptr);
 
