@@ -31,6 +31,7 @@ void validate(const RegionData& d) {
     size_t total = 0;
     for (const auto* layer : {&d.authored, &d.runtime}) {
         for (const auto& [coord, cells] : *layer) {
+            ZODAR_ENSURE(std::abs(int64_t(coord.x))<=31250000 && std::abs(int64_t(coord.y))<=31250000 && std::abs(int64_t(coord.z))<=31250000,"region coordinate overflow");
             ZODAR_ENSURE(layout.regionOf(coord) == d.coord && coord.y >= d.minY && coord.y <= d.maxY,
                          "chunk outside region");
             ZODAR_ENSURE(!cells.empty(), "empty override chunk");
@@ -72,14 +73,21 @@ std::string serializeRegion(const RegionData& d) {
     for (const auto* layer : {&d.authored, &d.runtime}) {
         out << layer->size() << '\n';
         for (const auto& [coord, cells] : *layer) {
+            std::set<size_t> used;
+            for(const auto& [i,name]:cells) used.insert(ids.at(name));
+            std::vector<size_t> palette(used.begin(),used.end());
+            std::map<size_t,size_t> local;
+            for(size_t i=0;i<palette.size();++i) local[palette[i]]=i;
             struct Run { uint32_t first, length; size_t name; };
             std::vector<Run> runs;
             for (const auto& [i, name] : cells) {
-                if (!runs.empty() && runs.back().first + runs.back().length == i && runs.back().name == ids.at(name))
+                if (!runs.empty() && runs.back().first + runs.back().length == i && runs.back().name == local.at(ids.at(name)))
                     ++runs.back().length;
-                else runs.push_back({i, 1, ids.at(name)});
+                else runs.push_back({i, 1, local.at(ids.at(name))});
             }
-            out << coord.x << ' ' << coord.y << ' ' << coord.z << ' ' << runs.size() << '\n';
+            out << coord.x << ' ' << coord.y << ' ' << coord.z << ' ' << palette.size();
+            for(auto id:palette) out<<' '<<id;
+            out<<' '<<runs.size()<<'\n';
             for (const auto& r : runs) out << r.first << ' ' << r.length << ' ' << r.name << '\n';
         }
     }
@@ -114,12 +122,17 @@ RegionData parseRegion(std::string_view bytes, uint64_t maxMemory) {
             ZODAR_ENSURE(bool(in >> coord.x >> coord.y >> coord.z), "invalid chunk coordinate");
             auto [it, inserted] = layer->try_emplace(coord);
             ZODAR_ENSURE(inserted, "duplicate region chunk");
+            const auto paletteSize=count(in,names.size());
+            ZODAR_ENSURE(paletteSize>0,"empty chunk palette");
+            std::vector<size_t> palette(paletteSize);
+            std::set<size_t> uniqueIds;
+            for(auto& id:palette) { id=count(in,names.size()-1); ZODAR_ENSURE(uniqueIds.insert(id).second,"duplicate chunk palette entry"); }
             const auto runs = count(in, kChunkVolume);
             uint64_t end = 0;
             for (size_t r = 0; r < runs; ++r) {
                 const auto first = count(in, kChunkVolume - 1);
                 const auto length = count(in, kChunkVolume);
-                const auto id = count(in, names.size() - 1);
+                const auto id = palette[count(in, palette.size() - 1)];
                 ZODAR_ENSURE(length > 0 && first >= end && first + length <= kChunkVolume,
                              "invalid or overlapping region run");
                 memory += length * (128 + names[id].size());

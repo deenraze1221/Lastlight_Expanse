@@ -157,8 +157,8 @@
   incorrectly (environment, recorded in its failure log); the second run passed.
 - **V3 done** on `claude/v3-voxel-collision` (from `main` `27e7788`, 6 commits + audit fix
   `f8f5bd4`); awaits final approval and merge. See "Handoff (Phase V3 session)".
-- **Next session: V4 — structures, regions, layered generators (engine)**; waits for the
-  user's go (and the V3 review/merge). Order: V4–V5 → D3–D6 → D7 → V6 → D8.
+- **V4 implemented** on `v4/regions-streaming` from verified `main` `5dc46b7`.
+  Six commits; full Debug/Release gate passed. See V4 handoff below. V5 not started.
 - World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`) approved in principle
   (2026-11-01), planning only; its proposals (areas, bunker boundary, optional NPCs, story
   items, post-D8 track order) await the user's review — see its "Unresolved decisions".
@@ -715,7 +715,8 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Phase V and D per `docs/PHASE_D_PLAN.md`: V4 next, then V5 → D3–D6 → D7 → V6 → D8.
+1. Review V4 on `v4/regions-streaming`; no merge performed. Subsequent approved roadmap:
+   V5 → D3–D6 → D7 → V6 → D8 (none started here).
    Streaming budgets, FBX/audio import and skins stay in later phases. Highlands keeps its
    legacy 256²/512² terrain textures (regression scene, not migrated; VOXELS §12).
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
@@ -751,3 +752,52 @@
   plus deferred releases until timeline destruction. Defaults preserve legacy behavior.
   Focused: 7 CPU cases / 61 assertions; 1 GPU case / 13 assertions; validation 0/0.
   Byte estimates cover managed payloads conservatively, not driver allocator granularity/RSS.
+- Step 6: generic ZodarVoxelTool and zodar.py voxels info/capture/stamp, CLI integration test,
+  live-world capture, catalogue-aware structure rotations, cross-region unload/reload collision
+  and structural LOD integration, deterministic logical mesh event comparison (0/3 workers),
+  explicit repaired retry after a failed save. No game source/assets changed.
+  Focused CPU: 9 cases / 114 assertions; synthetic integration ~185–200 ms Debug on this host.
+  CLI integration passes. Full Debug/Release gate and Highlands comparison pending.
+- First gate attempt: Debug failed on three pre-existing GCC 14 nodiscard warnings in
+  PaletteTests exception assertions (also noted in the V3 handoff for Clang). Added explicit
+  void casts inside those assertions; no warning suppression or assertion removal. Focused
+  palette tests passed. Gate failure remains in /workspace/v4-gate/gate-failures.log.
+
+
+## Handoff (Phase V4, 2026-11-01)
+- Base: verified remote main `5dc46b7c48f36122f156a6d5a685b68633c401f7`.
+  Branch `v4/regions-streaming`; six implementation commits; no game/ changes or merge.
+- Engine API: RegionData/RegionLayout, palette/RLE .zregion and .zstruct codecs,
+  LayeredGenerator and structure capture/stamp/rotation, RegionStreamer provider and
+  generic ZodarVoxelTool / zodar.py voxels commands. Full usage/limits in VOXELS V4 section.
+- Deterministic immutable content and logical batch order; frame timing remains async.
+  Authored/runtime sparse overrides stay separate, including explicit air and name@N variants.
+  Pending snapshots, CPU result/events and GPU deferred releases participate in admission.
+  Failed requests terminate; dirty saves remain retained until explicit repaired retry succeeds.
+- Verification on GCC 14 / Mesa 25.0.7 / LLVM 19.1.7: tools/gate.sh Debug 37/37 and
+  Release 37/37, warnings-as-errors; 285 engine cases passed, 2 pre-existing timing cases
+  skipped; 75 GPU cases and 7 game cases passed. V1–V3 goldens unchanged.
+  Both Highlands screenshots exactly:
+  `5ddd23b4cf86dfd551dfad44e349fcefb2594f31a2c37b72f6d9c00f68045776`.
+  Both run reports: 0 validation errors and 0 warnings. Original Mesa `61ab33fa…` retained.
+- Focused V4 tests: 10 CPU cases / 116 assertions, GPU admission/deferred release case
+  13 assertions, real CLI info/capture/stamp including bad arguments and file preservation.
+  Gate passed on code commit b8bfeff; subsequent amendment updates documentation only.
+- Release informational timings, same host: player collision box query 0.254 us;
+  Selection ray 0.725 us; Collision ray 0.640 us (targets 5 / 20 us). Existing opt-in timing
+  test passed. Region unload/edit/save/reload + structural LOD/collision smoke across inline
+  and 3 workers: 15.9 ms Release, 216.9 ms Debug during gate. Not hardware GPU benchmarks.
+- First gate failed on pre-existing PaletteTests nodiscard warnings under GCC 14. Three
+  explicit void casts preserved exception assertions. Original failure retained; corrected
+  gate passed without suppressing warnings. Logs: /workspace/toolchain/v4-gate-corrected.log,
+  /workspace/v4-gate/{debug,release}.{build,ctest,highlands}.log and gate-failures.log.
+- Cloud gate setup: source /workspace/toolchain/activate.sh; set CMAKE_TOOLCHAIN_FILE to
+  /workspace/toolchain/headless.cmake (SDL_X11=OFF, SDL_UNIX_CONSOLE_BUILD=ON),
+  CMAKE_BUILD_PARALLEL_LEVEL=4, ZODAR_GATE_BUILD_ROOT=/workspace/v4-gate and
+  ZODAR_GATE_HIGHLANDS_SHA256 to the full local hash above. Each tree owns its FetchContent cache.
+- Limits: one writer/directory, atomic rename without fsync or cross-region transactions;
+  owners must flush before destroying edited providers; budgets cover managed payload
+  estimates, not RSS/driver padding. Requested radius must fit budgets (no automatic radius
+  reduction). Disk capture includes stored overrides only; live capture includes generated
+  voxels. Model descriptors remain caller-instantiated. No Windows/MSVC validation this session.
+  No V5 work, large-scale V6 benchmark, packed vertices or GPU-driven voxel renderer.

@@ -149,6 +149,9 @@ public:
 
     // Voxel access in world voxel coordinates. Unloaded chunks read as empty.
     Voxel getVoxel(const glm::ivec3& voxel) const;
+    bool hasChunkData(ChunkCoord coord) const {
+        const auto it=m_chunks.find(coord); return it!=m_chunks.end() && bool(it->second.data);
+    }
     // Edits a loaded voxel; returns false if its chunk has no data. Affected meshes
     // (including neighbours sharing the boundary) are rebuilt by later updates.
     bool setVoxel(const glm::ivec3& voxel, Voxel value);

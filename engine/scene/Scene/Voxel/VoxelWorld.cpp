@@ -165,12 +165,12 @@ void VoxelWorld::update(const glm::vec3& observer) {
                 continue;
             }
             if (!m_generator->ready(c.coord)) { continue; }
+            const ChunkCoord coord = c.coord;
+            auto generator=m_generator->generatorFor(coord);
+            if (!generator) generator=m_generator;
             entry.generating = true;
             ++m_generateInFlight;
-            const ChunkCoord coord = c.coord;
             {
-                auto generator=m_generator->generatorFor(coord);
-                if (!generator) generator=m_generator;
                 auto job = [this, coord, generator=std::move(generator)] {
                     GenerateResult result{coord, {}, {}, false, {}};
                     try {
@@ -805,6 +805,7 @@ VoxelWorldStats VoxelWorld::stats() const {
             s.lodHistogram[std::clamp(entry.meshedLod, 0, kMaxLod)]++;
         }
     }
+    s.cpuBytes=128*(m_chunks.size()+m_edits.size())+m_events.capacity()*sizeof(ChunkMeshEvent);
     std::set<const VoxelChunk*> counted;
     for(const auto& [coord,entry]:m_chunks) if(entry.data && counted.insert(entry.data.get()).second) s.cpuBytes+=entry.data->memoryBytes()+sizeof(VoxelChunk);
     for(const auto& [coord,data]:m_edits) if(counted.insert(data.get()).second) s.cpuBytes+=data->memoryBytes()+sizeof(VoxelChunk);

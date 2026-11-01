@@ -406,3 +406,118 @@ the cube-only mesher hash test green.
 - Architecture collision comes from voxel queries; `colliders.json` keeps imported-model boxes only
   until `Collider` components exist (D6/D7).
 - The exploration mode and the walkthrough test run on the voxel bunker.
+
+## V4 region API and storage (engine)
+
+`Scene/Voxel/Region.h`, `Structure.h` and `RegionStreamer.h` extend the existing world.
+No application selects this provider automatically. Highlands retains its legacy generator.
+
+### Ownership and startup
+
+Create an immutable base generator (optionally `LayeredGenerator` for ordered structure stamps).
+Create `RegionStreamer::Settings` with a directory, stable `BlockCatalogue::names`, a
+`baseIdentity` identifying generator version/seed/structure content, and world settings.
+Use the same world settings for `VoxelWorld`. Supply the same `JobSystem` to both.
+Keep JobSystem alive until world and provider destruction. Main-thread methods must not overlap.
+
+```cpp
+RegionStreamer::Settings regionSettings;
+regionSettings.directory = saveDirectory;
+regionSettings.names = catalogue.names;
+regionSettings.baseIdentity = generatorFingerprint;
+regionSettings.world = worldSettings;
+auto provider = std::make_shared<RegionStreamer>(baseGenerator, regionSettings, &jobs);
+VoxelWorld world(provider, catalogue.palette, worldSettings, &jobs);
+// Each frame: world.update(observer); consume world.takeMeshEvents().
+// Before releasing the world/provider: provider->flush(); inspect/report any failure.
+```
+
+Regions cover 64×64 m and the complete configured Y range. `RegionLayout` accepts grids
+with 1..1024 integral chunk columns per region (4 at 0.5 m, 2 at 1 m). Floor division handles
+negative coordinates. Chunks remain 32³ cells. The provider requests regions covering the
+chunk view plus meshing neighbors. It admits data nearest-first with coordinate tie-breaks.
+All requested region data must be ready before chunk generation begins; insufficient budgets
+report pressure instead of producing incomplete collision geometry. Collision queries retain
+V3's `MissingChunks` contract during loading. Collision always reads full-resolution cells.
+
+### Layers, names and formats
+
+`RegionData::authored` and `runtime` are separate sparse cell overrides. Absence means inherit;
+an empty block name explicitly means air. Base/structure data is never serialized as a whole
+world. Files store override chunks only. Redundant overrides are retained; they are not silently
+pruned because an explicit override also expresses authoring intent.
+
+`.zregion` version 1 is canonical locale-independent text: schema/version, coordinates, cell
+size, inclusive chunk Y bounds, baseline identity, sorted block-name table, then authored and
+runtime chunk records. Each chunk has a local palette indexing that name table and ordered
+`first,length,palette-index` runs. Cell order is x-fastest, then z, then y, matching VoxelChunk.
+A full uniform override is one run. Absent cells/chunks inherit. Parsing bounds file size,
+counts, allocation estimates, coordinates, overlapping runs, palette references and names.
+
+`.zstruct` version 1 stores dimensions, origin, a name palette and sparse RLE in the same
+x/z/y order, named cell anchors and model asset descriptors. `captureStructure` requires loaded
+data throughout the box. `rotateStructure` takes catalogue names: blocks with four states use
+exact `name@1..@3` yaw names; single-state blocks keep their names. Rotation is right-handed
+about +Y. Model descriptors use continuous cell coordinates; model instantiation stays with
+the caller's scene integration. Capture collects voxels only; callers add model/anchor metadata.
+Stamps clip to each target region. Callers stamp every intersected region; this is not a
+cross-file transaction. Runtime overrides continue to win over stamped authored data.
+
+All names resolve before a loaded region is published. Unknown names, baseline/grid changes
+and malformed files fail; they never become different numeric blocks. Definition files may be
+reordered once using this name-based path, but raw-id fixtures and legacy worlds still require
+stable IDs. Keep existing catalogues append-only unless every affected persistence path uses names.
+
+### Async, budgets and failure handling
+
+Workers receive immutable snapshots. Region requests commit in request-ID order as complete
+logical batches; generation/meshing batches use fixed coordinate order. Worker completion order
+and worker count do not select content or reorder a batch. Frame visibility is not deterministic.
+Observer motion may cancel obsolete loads; completed logical events already published remain valid.
+Every region request yields Success, Cancelled or Failure in `takeEvents()`. Voxel generation
+and mesh exceptions drain counters and become main-thread failures, including inline mode.
+
+Saves retain immutable revision snapshots. Completing an older save cannot clear newer dirty
+state. Dirty regions stay pinned until saved. `flush()` waits and checks persistence; it throws
+on failure or budget pressure. Repair the reported cause before `retryFailures()` and another
+flush. Destruction waits for submitted requests but does not implicitly flush unscheduled dirty
+edits. Owners must successfully flush before dropping edited worlds.
+
+Region limits default to 256 MiB and four simultaneous 32 MiB request reservations. Decode and
+edits must fit one quarter of a request reservation. Region accounting includes retained old
+snapshots, pending work reservations, names and event metadata. CPU world payload admission is
+opt-in through `cpuBudgetBytes` (zero preserves legacy behavior). It includes retained edits,
+mesh input/result reservations and unconsumed events. Undrained events intentionally exert
+backpressure. Excess edits are rejected before publication; accepted edits are never evicted.
+
+Use `StreamedMeshSet::tryUpsert` with an application upload budget. False preserves the live mesh;
+the caller must retain and retry the CPU event. Stats include drawable/pending buffers, estimated
+pending staging and deferred buffer payloads until their deletion callbacks run. Byte budgets
+cover managed payload estimates, not process RSS, allocator fragmentation, Vulkan allocation
+padding or unrelated resources. Region and world budgets are separate; reserve headroom for
+both. Old/new meshes overlap during replacement. No GPU-driven renderer or packed vertices added.
+
+### Tools and checks
+
+```
+python3 tools/zodar.py voxels info FILE
+python3 tools/zodar.py voxels capture REGION OUT.zstruct X Y Z SX SY SZ
+python3 tools/zodar.py voxels stamp REGION STRUCT OUT.zregion X Y Z YAW BLOCKS.json
+```
+
+Disk capture includes stored overrides only, composed authored then runtime. Inherited terrain
+is unavailable from a diff file alone and is omitted; use `captureStructure` on a live world
+for a complete voxel capture. Stamp writes one destination region; repeat for other intersected
+regions. Model descriptors are preserved in templates but not instantiated by this offline tool.
+
+The existing test gate covers all V1–V3 goldens, region/structure codecs, CLI, cancellation,
+failed save recovery, memory pressure, inline/three-worker logical event equivalence, structural
+LOD and collision after unload/reload. GPU tests check rejected replacement and deferred bytes.
+Local Highlands baseline (Mesa 25.0.7/LLVM 19.1.7, 640×360, 90 deterministic frames):
+`5ddd23b4cf86dfd551dfad44e349fcefb2594f31a2c37b72f6d9c00f68045776`.
+Original Mesa baseline remains `61ab33fa…`; do not replace either with another driver's image.
+
+Limitations: one writer per region directory; atomic file replacement but no fsync/power-loss
+transaction guarantee; no cross-region atomic saves; no streaming model-entity lifecycle;
+no save migration for changed generator identity. The V3 stepped-collision and coarse-wall LOD
+limitations remain. Large-scale benchmarks and renderer optimizations remain V6 work.

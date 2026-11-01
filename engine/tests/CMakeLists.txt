@@ -222,3 +222,8 @@ if(ZODAR_GPU_TESTS)
     set_tests_properties(gpu.zodarbench_unique_smoke gpu.zodarbench_city_smoke gpu.zodarbench_city_cpu_path_smoke
                          gpu.zodarbench_highest_api_smoke PROPERTIES TIMEOUT 300)
 endif()
+
+if(TARGET ZodarVoxelTool AND Python3_Interpreter_FOUND)
+    add_test(NAME tools.voxel_cli
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/VoxelCliTests.py $<TARGET_FILE:ZodarVoxelTool>)
+endif()

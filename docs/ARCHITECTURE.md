@@ -681,3 +681,15 @@ registered with `MaterialSystem::registerShader`; games implement their own look
 - Swapchain recreation uses `vkDeviceWaitIdle`; `VK_EXT_swapchain_maintenance1` present fences
   would remove the stall and the theoretical semaphore-reuse gap on recreate.
 - One window per process (`Platform` owns SDL init).
+
+### Phase V4 regions and streaming
+
+CPU region data, name-palette/RLE codecs, structure transforms and an opt-in `RegionStreamer`
+live in `Zodar::Scene`. They depend on Core/Assets only; catalogue names are injected from
+SceneFile, so there is no reverse rendering dependency. VoxelWorld provider hooks preserve
+existing generators. Regions own persistence; 32³ chunks retain meshing/collision ownership.
+Authored/runtime sparse overrides remain separate, including explicit air. Workers consume
+immutable snapshots; ordered batches publish terminal outcomes and revision-checked saves.
+Budgets apply backpressure before admission; dirty saves remain pinned. StreamedMeshSet adds
+optional upload admission and deferred payload accounting without changing legacy upsert callers.
+See VOXELS "V4 region API and storage" for format, lifecycle and failure contracts.

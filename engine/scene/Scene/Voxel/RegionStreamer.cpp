@@ -12,6 +12,10 @@ RegionStreamer::RegionStreamer(std::shared_ptr<const IVoxelGenerator> base, Sett
     ZODAR_ENSURE(!m_settings.names.empty() && m_settings.names.front().empty(), "region streamer requires stable names");
     ZODAR_ENSURE(m_settings.world.minChunkY <= m_settings.world.maxChunkY && m_settings.world.viewRadius >= 0,
                  "invalid region world bounds");
+    m_names=std::make_shared<const BlockNames>(m_settings.names);
+    std::set<std::string> unique;
+    ZODAR_ENSURE(m_settings.names.size()<=65535,"too many block names");
+    for(const auto& name:m_settings.names) ZODAR_ENSURE(name.size()<=1024 && unique.insert(name).second,"invalid block names");
     std::filesystem::create_directories(m_settings.directory);
 }
 RegionStreamer::~RegionStreamer() {
@@ -103,7 +107,12 @@ void RegionStreamer::updateStreaming(const glm::vec3& observer) const {
         else ++it;
     }
     m_pressure=false;
-    for (const auto& coord : m_wanted) {
+    std::vector<RegionCoord> ordered(m_wanted.begin(),m_wanted.end());
+    std::sort(ordered.begin(),ordered.end(),[&](auto a,auto b) {
+        auto distance=[&](auto c) { const double x=double(c.x)*64+32-observer.x,z=double(c.z)*64+32-observer.z; return x*x+z*z; };
+        const auto da=distance(a),db=distance(b); return da!=db ? da<db : a<b;
+    });
+    for (const auto& coord : ordered) {
         if (memoryBytes()+m_settings.requestBytes > m_settings.maxBytes) { m_pressure=true; break; }
         if (m_requests.size() >= m_settings.maxRequests) break;
         auto& e=m_entries[coord];
@@ -111,19 +120,20 @@ void RegionStreamer::updateStreaming(const glm::vec3& observer) const {
     }
 }
 bool RegionStreamer::ready(const ChunkCoord& coord) const {
+    for(const auto& wanted:m_wanted) { const auto e=m_entries.find(wanted); if(e==m_entries.end() || !e->second.data) return false; }
     const auto it=m_entries.find(m_layout.regionOf(coord)); return it!=m_entries.end() && bool(it->second.data);
 }
 std::shared_ptr<const IVoxelGenerator> RegionStreamer::generatorFor(const ChunkCoord& coord) const {
     struct Snapshot final : IVoxelGenerator {
         std::shared_ptr<const IVoxelGenerator> base;
         std::shared_ptr<const RegionData> data;
-        BlockNames names;
+        std::shared_ptr<const BlockNames> names;
         void generate(const ChunkCoord& c,VoxelChunk& out) const override {
-            base->generate(c,out); applyRegionLayer(data->authored,c,out,names); applyRegionLayer(data->runtime,c,out,names);
+            base->generate(c,out); applyRegionLayer(data->authored,c,out,*names); applyRegionLayer(data->runtime,c,out,*names);
         }
     };
     auto snapshot=std::make_shared<Snapshot>(); snapshot->base=m_base;
-    snapshot->data=m_entries.at(m_layout.regionOf(coord)).data; snapshot->names=m_settings.names;
+    snapshot->data=m_entries.at(m_layout.regionOf(coord)).data; snapshot->names=m_names;
     return snapshot;
 }
 void RegionStreamer::generate(const ChunkCoord& coord, VoxelChunk& out) const {
@@ -160,7 +170,9 @@ void RegionStreamer::flush() const {
 }
 std::vector<RegionStreamer::Event> RegionStreamer::takeEvents() { std::vector<Event> out; out.swap(m_events); return out; }
 uint64_t RegionStreamer::memoryBytes() const {
-    uint64_t bytes=m_requests.size()*m_settings.requestBytes;
+    uint64_t bytes=m_requests.size()*m_settings.requestBytes+128*m_entries.size()+m_events.capacity()*sizeof(Event)+m_snapshots.capacity()*sizeof(std::weak_ptr<const RegionData>);
+    for(const auto& name:m_settings.names) bytes+=2*(sizeof(std::string)+name.capacity());
+    for(const auto& event:m_events) bytes+=event.error.capacity();
     std::set<const RegionData*> counted;
     for(auto it=m_snapshots.begin();it!=m_snapshots.end();) {
         if(auto data=it->lock()) { if(counted.insert(data.get()).second) bytes+=regionMemoryBytes(*data); ++it; }

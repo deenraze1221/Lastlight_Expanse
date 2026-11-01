@@ -18,7 +18,7 @@ struct Structure {
     std::vector<StructureModel> models;
 };
 Structure captureStructure(const VoxelWorld& world, glm::ivec3 min, glm::ivec3 size, const BlockNames& names);
-Structure rotateStructure(const Structure& source, uint8_t yaw);
+Structure rotateStructure(const Structure& source, uint8_t yaw, const BlockNames& names);
 // Returns only cells in this region; callers stamp all intersected regions before publication.
 void stampStructure(RegionData& region, const Structure& structure, glm::ivec3 position, bool runtime = false);
 std::string serializeStructure(const Structure& structure);

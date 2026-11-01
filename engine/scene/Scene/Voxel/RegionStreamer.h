@@ -27,6 +27,8 @@ public:
     void generate(const ChunkCoord& coord, VoxelChunk& out) const override;
     // Flush schedules dirty saves and waits. Throws on failure; dirty state stays retained.
     void flush() const;
+    // Explicit retry only after repairing the reported I/O/configuration failure.
+    void retryFailures() { m_failed.clear(); }
     std::vector<Event> takeEvents();
     uint64_t memoryBytes() const;
     size_t residentRegions() const;
@@ -41,6 +43,7 @@ private:
     std::filesystem::path path(RegionCoord coord) const;
     std::shared_ptr<const IVoxelGenerator> m_base;
     Settings m_settings;
+    std::shared_ptr<const BlockNames> m_names;
     JobSystem* m_jobs;
     RegionLayout m_layout;
     mutable std::mutex m_mutex;

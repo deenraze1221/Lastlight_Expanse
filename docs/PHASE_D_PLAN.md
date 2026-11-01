@@ -1,7 +1,7 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
 Status: **approved; D1 and D2 done; Phase V inserted (V0, V1, V2 and V3 done 2026-11-01).**
-Next session: V4. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
+V4 engine implementation: `v4/regions-streaming` (unmerged), Debug/Release gate passed. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`. Area-by-area production after
 D8 (completion levels, checklist, tracks): `docs/WORLD_PRODUCTION_ROADMAP.md`.
@@ -391,6 +391,8 @@ generic; Lastlight content only in V5. Every session: Highlands screenshot byte-
   (V3 handoff).
 
 ### V4 — Structures, regions, layered generators (engine)
+Implementation verified on `v4/regions-streaming`; not merged. Usage, failure contracts and
+limits: VOXELS "V4 region API and storage"; results: PROGRESS V4 handoff.
 - `*.zstruct` templates (stamp with rotation, capture), `*.zregion` storage (palette + RLE,
   diff-only, versioned, async), generator composition (base → structures → authored →
   runtime edits), `zodar.py` voxel commands (info, capture, stamp). Region = 64 × 64 m.

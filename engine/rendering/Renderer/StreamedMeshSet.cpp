@@ -31,6 +31,8 @@ void StreamedMeshSet::retire(std::shared_ptr<GpuMesh> mesh) {
 
 StreamedMeshSet::Stats StreamedMeshSet::stats() const {
     auto result=m_stats; result.deferredBytes=*m_deferredBytes; result.gpuBytes+=result.deferredBytes;
+    // Superseded uploads can retain staging outside slots until the retirement callback.
+    result.stagingBytes+=result.deferredBytes;
     return result;
 }
 bool StreamedMeshSet::tryUpsert(uint64_t key,const MeshData& mesh,const glm::mat4& transform,

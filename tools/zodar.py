@@ -297,6 +297,11 @@ def cmd_assets(args):
     return subprocess.run([str(exe)] + action + args.rest + args.extra).returncode
 
 
+def cmd_voxels(args):
+    exe = executable(args, "ZodarVoxelTool")
+    return subprocess.run([str(exe)] + args.rest + args.extra).returncode
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="zodar.py", description=__doc__.split("\n")[0])
     parser.add_argument("--preset", default=os.environ.get("ZODAR_PRESET", "gpu-tests"))
@@ -336,6 +341,10 @@ def main(argv=None):
     p.add_argument("action", choices=["list", "check"])
     p.add_argument("rest", nargs=argparse.REMAINDER, help="[--registry F] [--json] [--report F] [--strict]")
     p.set_defaults(func=cmd_assets)
+
+    p = sub.add_parser("voxels", help="region/structure info, capture stored overrides, stamp")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
+    p.set_defaults(func=cmd_voxels)
 
     p = sub.add_parser("explore", help="walk the bunker in first person (game window, Windows/Linux)")
     p.set_defaults(func=cmd_explore)

@@ -105,10 +105,10 @@ TEST_CASE("palette: colours, swatches and the --palette argument") {
     CHECK(p.contains(0xff0000));
     CHECK_FALSE(p.contains(0x0000ff));
     CHECK(loadPalette({{}, {"#0000ff", "#0000FF"}}, d.dir, "x").colors == std::vector<uint32_t>{0x0000ffu});
-    CHECK_THROWS_WITH_AS(loadPalette({"missing.png", {}}, d.dir, "m"), doctest::Contains("missing.png"), Error);
-    CHECK_THROWS_WITH_AS(loadPalette({{}, {"red"}}, d.dir, "m"), doctest::Contains("malformed colour 'red'"), Error);
+    CHECK_THROWS_WITH_AS((void)loadPalette({"missing.png", {}}, d.dir, "m"), doctest::Contains("missing.png"), Error);
+    CHECK_THROWS_WITH_AS((void)loadPalette({{}, {"red"}}, d.dir, "m"), doctest::Contains("malformed colour 'red'"), Error);
     writeRgbaPng(d.dir / "clear.png", 1, 1, {0x12345600});
-    CHECK_THROWS_WITH_AS(loadPalette({"clear.png", {}}, d.dir, "m"), doctest::Contains("has no colours"), Error);
+    CHECK_THROWS_WITH_AS((void)loadPalette({"clear.png", {}}, d.dir, "m"), doctest::Contains("has no colours"), Error);
 }
 
 TEST_CASE("palette: assets.json forms, validation and round-trip; no palette = unchanged files") {

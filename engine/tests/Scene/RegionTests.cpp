@@ -42,12 +42,13 @@ TEST_CASE("region: canonical RLE, layers, explicit air and reordered ids") {
 TEST_CASE("region: structures rotate, cross boundaries and compose layers") {
     Structure s; s.size = {2,1,1}; s.cells[{0,0,0}] = "stair"; s.cells[{1,0,0}] = "";
     s.anchors.push_back({"entry", {0,0,0}}); s.models.push_back({"crate", {0.5f,0,0.5f}, 0});
-    auto r = rotateStructure(s, 1);
+    const BlockNames names={"", "stair", "stair@1", "stair@2", "stair@3"};
+    auto r = rotateStructure(s, 1, names);
     CHECK(r.cells.at({0,0,1}) == "stair@1");
     CHECK(r.anchors[0].cell == glm::ivec3(0,0,1));
     CHECK(r.models[0].yaw == 1);
     CHECK(serializeStructure(parseStructure(serializeStructure(s))) == serializeStructure(s));
-    CHECK(serializeStructure(rotateStructure(rotateStructure(s, 1), 3)) == serializeStructure(s));
+    CHECK(serializeStructure(rotateStructure(rotateStructure(s, 1,names), 3,names)) == serializeStructure(s));
     RegionData left, right; right.coord = {1,0};
     stampStructure(left, s, {127,0,0}); stampStructure(right,s,{127,0,0});
     CHECK(left.authored.at({3,0,0}).at(31) == "stair");
@@ -134,4 +135,83 @@ TEST_CASE("region: budget pressure blocks admission and oversized decode") {
     world.update({0,0,0});
     CHECK(world.stats().memoryPressure); CHECK(world.stats().generateInFlight==0);
     std::filesystem::remove_all(root);
+}
+#include <chrono>
+#include <iostream>
+TEST_CASE("region: streamed world collision, structural LOD and logical events match worker counts") {
+    struct Base : IVoxelGenerator {
+        void generate(const ChunkCoord& c,VoxelChunk& out) const override {
+            if(c.y==0) out.fillLayer(0,1);
+        }
+    };
+    std::vector<std::tuple<ChunkCoord,int,int>> expected;
+    const auto start=std::chrono::steady_clock::now();
+    for(unsigned workers:{0u,3u}) {
+        const auto root=std::filesystem::temp_directory_path()/("zodar-region-integration-"+std::to_string(workers));
+        std::filesystem::remove_all(root);
+        zodar::JobSystem jobs(workers);
+        RegionStreamer::Settings s; s.directory=root; s.names={"","stone"};
+        s.world.voxelSize=0.5f; s.world.viewRadius=1; s.world.minChunkY=0; s.world.maxChunkY=0;
+        s.world.maxJobsPerUpdate=8; s.world.maxJobsInFlight=8; s.world.structuralLod0Distance=3;
+        s.world.lodDistances={0.01f}; s.world.cpuBudgetBytes=256*1024*1024;
+        auto generator=std::make_shared<RegionStreamer>(std::make_shared<Base>(),s,&jobs);
+        VoxelPalette palette; palette.colors={glm::vec4(0),glm::vec4(1)};
+        palette.shapes=std::make_shared<ShapeLibrary>(ShapeLibrary::builtins()); palette.blocks.resize(2);
+        palette.blocks[1]={1,ShapeLibrary::kCube,0,BlockState::kStructural};
+        std::vector<std::tuple<ChunkCoord,int,int>> events;
+        {
+            VoxelWorld world(generator,palette,s.world,&jobs);
+            auto settle=[&](glm::vec3 observer) {
+                for(int i=0;i<200;++i) {
+                    world.update(observer); world.finishPendingWork();
+                    for(const auto& e:world.takeMeshEvents()) {
+                        events.emplace_back(e.coord,int(e.type),e.lod);
+                        if(e.type==ChunkMeshEvent::Type::Upsert) CHECK(e.lod==0);
+                    }
+                    if(world.isSettled()) return;
+                }
+                FAIL("region world did not settle");
+            };
+            settle({8,1,8});
+            REQUIRE(world.setVoxel({1,0,1},0)); settle({8,1,8}); generator->flush();
+            std::vector<SolidBox> boxes;
+            CHECK(world.collectSolidBoxes({{0.6f,0.1f,0.6f},{0.9f,0.4f,0.9f}},boxes)==QueryStatus::Complete);
+            CHECK(boxes.empty());
+            settle({1024,1,1024}); settle({8,1,8});
+            CHECK(world.getVoxel({1,0,1})==kEmpty);
+            CHECK(world.stats().editedChunks==0); // persistent provider owns the edits
+            const auto captured=captureStructure(world,{0,0,0},{2,1,2},s.names);
+            CHECK(captured.cells.at({1,0,1}).empty());
+            CHECK(world.stats().cpuBytes<=s.world.cpuBudgetBytes);
+            generator->flush();
+        }
+        if(workers==0) expected=events; else CHECK(events==expected);
+        generator.reset(); std::filesystem::remove_all(root);
+    }
+    std::cout<<"Region integration (inline + 3 workers): "
+             <<std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()<<" ms\n";
+}
+TEST_CASE("region: failed save retains edits until explicit repaired retry") {
+    struct Base : IVoxelGenerator { void generate(const ChunkCoord&,VoxelChunk& c) const override { c=VoxelChunk(1); } };
+    const auto root=std::filesystem::temp_directory_path()/"zodar-region-save-failure";
+    std::filesystem::remove_all(root);
+    RegionStreamer::Settings s; s.directory=root; s.names={"","stone"}; s.world.viewRadius=0;
+    s.world.minChunkY=0; s.world.maxChunkY=0;
+    RegionStreamer stream(std::make_shared<Base>(),s);
+    for(int i=0;i<16 && !stream.ready({0,0,0});++i) stream.updateStreaming({0,0,0});
+    REQUIRE(stream.ready({0,0,0})); stream.takeEvents();
+    REQUIRE(stream.recordEdit({0,0,0},0));
+    const auto blocked=root/"0_0.zregion"; std::filesystem::create_directory(blocked);
+    CHECK_THROWS_AS(stream.flush(),zodar::Error);
+    auto events=stream.takeEvents(); REQUIRE(events.size()==1);
+    CHECK(events[0].save); CHECK(events[0].outcome==RegionStreamer::Outcome::Failure);
+    VoxelChunk chunk; stream.generate({0,0,0},chunk); CHECK(chunk.get(0,0,0)==0);
+    std::filesystem::remove(blocked); stream.retryFailures(); stream.flush();
+    CHECK(loadRegion(blocked).runtime.at({0,0,0}).at(0).empty());
+    std::filesystem::remove_all(root);
+}
+TEST_CASE("region: extreme structure translations reject before integer overflow") {
+    Structure s; s.cells[{0,0,0}]=""; s.origin={-1000000000,0,0}; RegionData region;
+    CHECK_THROWS_AS(stampStructure(region,s,{2000000000,0,0}),zodar::Error);
+    CHECK(region.authored.empty());
 }

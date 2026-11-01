@@ -1,14 +1,26 @@
 #include "Scene/Voxel/Structure.h"
 #include "Core/Error.h"
 #include <cmath>
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
+#include <set>
 namespace zodar::voxel {
 namespace {
+glm::ivec3 translated(glm::ivec3 local,glm::ivec3 position,glm::ivec3 origin) {
+    glm::ivec3 result;
+    for(int a=0;a<3;++a) {
+        const int64_t value=int64_t(local[a])+position[a]-origin[a];
+        ZODAR_ENSURE(value>=-1000000000 && value<=1000000000,"structure coordinate overflow");
+        result[a]=static_cast<int>(value);
+    }
+    return result;
+}
 void check(const Structure& s) {
     int64_t volume = 1;
     for (int a = 0; a < 3; ++a) {
         ZODAR_ENSURE(s.size[a] > 0 && s.size[a] <= 1024, "invalid structure size");
+        ZODAR_ENSURE(std::abs(int64_t(s.origin[a]))<=1000000000,"invalid structure origin");
         volume *= s.size[a];
     }
     ZODAR_ENSURE(volume <= 1048576 && s.cells.size() <= static_cast<size_t>(volume), "structure too large");
@@ -17,9 +29,11 @@ void check(const Structure& s) {
                      && name.size() <= 1024, "invalid structure cell");
     ZODAR_ENSURE(s.anchors.size() <= 4096 && s.models.size() <= 4096, "too many structure attachments");
     std::map<std::string, bool> anchors;
-    for (const auto& a : s.anchors)
+    for (const auto& a : s.anchors) {
+        for(int axis=0;axis<3;++axis) ZODAR_ENSURE(std::abs(int64_t(a.cell[axis]))<=1000000000,"invalid anchor coordinate");
         ZODAR_ENSURE(!a.name.empty() && a.name.size() <= 1024 && anchors.emplace(a.name, true).second,
                      "invalid or duplicate structure anchor");
+    }
     for (const auto& m : s.models)
         ZODAR_ENSURE(!m.asset.empty() && m.asset.size() <= 1024 && m.yaw < 4 &&
                      std::isfinite(m.position.x) && std::isfinite(m.position.y) && std::isfinite(m.position.z),
@@ -37,7 +51,7 @@ std::string rotatedName(std::string name, uint8_t yaw) {
     return r == 0 ? name : name + "@" + std::to_string(r);
 }
 }
-Structure rotateStructure(const Structure& source, uint8_t yaw) {
+Structure rotateStructure(const Structure& source, uint8_t yaw, const BlockNames& names) {
     check(source); ZODAR_ENSURE(yaw < 4, "invalid structure yaw");
     Structure out = source;
     for (uint8_t r = 0; r < yaw; ++r) {
@@ -56,16 +70,21 @@ Structure rotateStructure(const Structure& source, uint8_t yaw) {
         }
         std::swap(out.size.x, out.size.z);
     }
-    for (auto& [p, name] : out.cells) name = rotatedName(name, yaw);
+    for (auto& [p, name] : out.cells) {
+        ZODAR_ENSURE(std::find(names.begin(),names.end(),name)!=names.end(), "unknown structure block");
+        auto base=name.substr(0,name.find('@'));
+        if(std::find(names.begin(),names.end(),base+"@1")!=names.end()) {
+            name=rotatedName(name,yaw);
+            ZODAR_ENSURE(std::find(names.begin(),names.end(),name)!=names.end(), "missing block rotation variant");
+        }
+    }
     return out;
 }
 Structure captureStructure(const VoxelWorld& world, glm::ivec3 min, glm::ivec3 size, const BlockNames& names) {
     Structure out; out.size = size; check(out);
     for (int y=0; y<size.y; ++y) for (int z=0; z<size.z; ++z) for (int x=0; x<size.x; ++x) {
-        const auto p = min + glm::ivec3(x,y,z);
-        std::vector<SolidBox> boxes;
-        const auto pos = glm::vec3(p) * world.settings().voxelSize;
-        ZODAR_ENSURE(world.collectSolidBoxes({pos, pos}, boxes) == QueryStatus::Complete, "capture touches missing chunks");
+        const auto p = translated({x,y,z},min,{0,0,0});
+        ZODAR_ENSURE(world.hasChunkData(chunkOf(p)), "capture touches missing chunks");
         const auto id = world.getVoxel(p);
         ZODAR_ENSURE(id < names.size(), "capture block has no stable name");
         out.cells[{x,y,z}] = names[id];
@@ -76,7 +95,7 @@ void stampStructure(RegionData& region, const Structure& s, glm::ivec3 position,
     check(s); RegionLayout layout(region.voxelSize);
     auto& layer = runtime ? region.runtime : region.authored;
     for (const auto& [p, name] : s.cells) {
-        const auto v = position + glm::ivec3(p.x,p.y,p.z) - s.origin;
+        const auto v = translated({p.x,p.y,p.z},position,s.origin);
         const auto coord = chunkOf(v);
         if (layout.regionOf(coord) != region.coord || coord.y < region.minY || coord.y > region.maxY) continue;
         const auto l = localOf(v);
@@ -86,8 +105,22 @@ void stampStructure(RegionData& region, const Structure& s, glm::ivec3 position,
 std::string serializeStructure(const Structure& s) {
     check(s); std::ostringstream out; out.imbue(std::locale::classic());
     out << std::setprecision(9) << "zodar.structure 1\n" << s.size.x << ' ' << s.size.y << ' ' << s.size.z << ' '
-        << s.origin.x << ' ' << s.origin.y << ' ' << s.origin.z << '\n' << s.cells.size() << '\n';
-    for (const auto& [p,n] : s.cells) out << p.x << ' ' << p.y << ' ' << p.z << ' ' << std::quoted(n) << '\n';
+        << s.origin.x << ' ' << s.origin.y << ' ' << s.origin.z << '\n';
+    std::set<std::string> unique{""};
+    for(const auto& [p,name]:s.cells) unique.insert(name);
+    std::map<std::string,size_t> ids;
+    out<<unique.size()<<'\n';
+    for(const auto& name:unique) { ids[name]=ids.size(); out<<std::quoted(name)<<'\n'; }
+    std::map<uint32_t,size_t> linear;
+    for(const auto& [p,name]:s.cells) linear[uint32_t(p.x+s.size.x*(p.z+s.size.z*p.y))]=ids.at(name);
+    struct Run { uint32_t first,length; size_t id; };
+    std::vector<Run> runs;
+    for(const auto& [i,id]:linear) {
+        if(!runs.empty() && runs.back().first+runs.back().length==i && runs.back().id==id) ++runs.back().length;
+        else runs.push_back({i,1,id});
+    }
+    out<<runs.size()<<'\n';
+    for(const auto& r:runs) out<<r.first<<' '<<r.length<<' '<<r.id<<'\n';
     out << s.anchors.size() << '\n';
     for (const auto& a : s.anchors) out << std::quoted(a.name) << ' ' << a.cell.x << ' ' << a.cell.y << ' ' << a.cell.z << '\n';
     out << s.models.size() << '\n';
@@ -101,10 +134,26 @@ Structure parseStructure(std::string_view bytes) {
     ZODAR_ENSURE(bool(in >> schema >> version) && schema == "zodar.structure" && version == 1, "unsupported structure");
     ZODAR_ENSURE(bool(in >> s.size.x >> s.size.y >> s.size.z >> s.origin.x >> s.origin.y >> s.origin.z), "bad structure header");
     auto count = [&in](size_t max) { size_t n=0; ZODAR_ENSURE(bool(in >> n) && n <= max, "bad structure count"); return n; };
-    const auto cells = count(1048576);
-    for (size_t i=0; i<cells; ++i) {
-        ChunkCoord p; std::string name;
-        ZODAR_ENSURE(bool(in >> p.x >> p.y >> p.z >> std::quoted(name)) && s.cells.emplace(p,name).second, "bad structure cell");
+    check(s);
+    const auto palette=count(65535);
+    ZODAR_ENSURE(palette>0,"structure requires air palette");
+    std::vector<std::string> names(palette);
+    std::set<std::string> unique;
+    for(auto& name:names) ZODAR_ENSURE(bool(in>>std::quoted(name)) && name.size()<=1024 && unique.insert(name).second,"bad structure palette");
+    ZODAR_ENSURE(names.front().empty(),"structure palette zero must be air");
+    const auto runs=count(1048576);
+    const auto volume=uint32_t(s.size.x*s.size.y*s.size.z);
+    size_t end=0;
+    uint64_t memory=0;
+    for(size_t r=0;r<runs;++r) {
+        const auto first=count(volume-1), length=count(volume), id=count(palette-1);
+        ZODAR_ENSURE(length>0 && first>=end && first+length<=volume,"bad structure run");
+        memory+=length*(128+names[id].size()); ZODAR_ENSURE(memory<=128*1024*1024,"structure memory limit exceeded");
+        end=first+length;
+        for(size_t i=first;i<end;++i) {
+            const int x=int(i%size_t(s.size.x)), z=int((i/size_t(s.size.x))%size_t(s.size.z)), y=int(i/size_t(s.size.x*s.size.z));
+            s.cells[{x,y,z}]=names[id];
+        }
     }
     const auto anchors = count(4096);
     for (size_t i=0; i<anchors; ++i) { StructureAnchor a; ZODAR_ENSURE(bool(in >> std::quoted(a.name) >> a.cell.x >> a.cell.y >> a.cell.z), "bad anchor"); s.anchors.push_back(a); }
@@ -119,7 +168,7 @@ LayeredGenerator::LayeredGenerator(std::shared_ptr<const IVoxelGenerator> base, 
     for (const auto& stamp : stamps) {
         check(stamp.structure);
         for (const auto& [p,n] : stamp.structure.cells) {
-            const auto v = stamp.position + glm::ivec3(p.x,p.y,p.z) - stamp.structure.origin;
+            const auto v = translated({p.x,p.y,p.z},stamp.position,stamp.structure.origin);
             const auto l = localOf(v);
             m_structures[chunkOf(v)][static_cast<uint32_t>(VoxelChunk::index(l.x,l.y,l.z))] = n;
         }
