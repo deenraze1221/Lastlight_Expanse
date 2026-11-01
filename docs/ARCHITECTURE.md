@@ -428,7 +428,7 @@ Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
   pipeline): weapons, characters, mutants, furniture, generators, machinery, computers,
   vehicles, equipment and decorative props.
   Shared materials standard, lighting and renderer.
-- Engine grid is configurable (`cellSize`); Lastlight uses 0.5 m cells (Full Block = 2×2×2
+- Engine grid is configurable (`StreamingSettings::voxelSize`, name kept in V1); Lastlight uses 0.5 m cells (Full Block = 2×2×2
   cells, Half Block / Slab 2×2×1, Vertical Half Block 1×2×2, Sub-block = 1 cell). Highlands
   keeps 1 m cells and its own rendering path (regression scene, not migrated).
 - Extend, do not duplicate: 16-bit cell ids stay (`VoxelChunk`), `VoxelPalette` grows into the
@@ -452,6 +452,18 @@ Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
 - Performance work (packed voxel vertices, GPU-driven chunks, model/prop instancing) only after
   benchmarks (V6).
 - Phase order: V0 → V1–V5 → D3–D6 → D7 (voxel bunker) → V6 → D8.
+
+### Phase V1 implementation notes (2026-11-01)
+- `Scene/Voxel/BlockRegistry.h`: `VoxelPalette` (moved from `ChunkMesher.h`) is the block
+  registry; `colors`/`faceLayers` are the material table. Empty `blocks` = legacy mode (cube,
+  material = id), so existing palettes need no changes. `BlockTable` is the immutable per-id
+  lookup (built once per `VoxelWorld`, shared read-only by mesh jobs).
+- Shapes are data (`ShapeTemplate` polygons + boxes + `aoOccluder`); coverage, masks, normals
+  and fill are derived and validated at registration; rotation = 4 yaw steps (flip reserved).
+- Mesher: per-cell flags (full faces, AO occluder, cube) in the padded grid; greedy cube path
+  unchanged (key = material + 1); separate unmerged shape path at LOD 0; shapes render as cubes
+  at LOD > 0 until V3. Cube-only output byte-identical (golden hash tests, engine + Highlands).
+- `VoxelWorld` opacity shortcuts (solid depth, trivial meshes, bedrock) count full cubes only.
 
 ## World production (approved in principle, 2026-11-01; planning only)
 

@@ -16,7 +16,8 @@ remaining Phase C items listed under Phase C). **Phase C2 done** (async loads: J
 decode, budgeted async uploads, ready on acquire, `update`/`waitAll`, cancellation). **Phase C3
 done** (`assets.json` registry, `ZodarAssetTool` / `zodar.py import|assets list|check`, JSON report).
 **Phase C4 done** (scene `modelRenderer` by registry id or path; texture standards 32 default /
-64 max; lossless pixel-art compilation). **Phase C7 done** (palette validation).
+64 max (engine defaults; Lastlight's final standard per GDD §3 A1 becomes configurable in V2);
+lossless pixel-art compilation). **Phase C7 done** (palette validation).
 
 Goal: ZODAR is driven by Claude Code (code, CLI, files, logs, screenshots), not by a visual
 editor. Every engine capability must be reachable through documented C++ APIs, text data
@@ -103,7 +104,8 @@ Make every app start, run, capture and report the same way.
 - **C1 done:** `AssetManager` (synchronous loads; PNG/JPEG textures, glTF 2.0 models, material
   files with texture slots, scene materials), `AssetCache<T>`/`AssetHandle<T>` ref counting,
   release through the deletion queue, `MaterialSystem::releaseMaterial`, failure states with
-  messages, `SamplerDesc::pixelArt()`, texture size standards (revised in C4: 32 default, 64 max, 8/16 allowed; warnings).
+  messages, `SamplerDesc::pixelArt()`, texture size standards (revised in C4: 32 default, 64 max, 8/16 allowed; warnings; engine defaults only, Lastlight:
+GDD §3 A1, 8/16 not approved, configurable per game in V2).
 - **C2 done:** async loads (`load*Async`, `createSceneMaterialsAsync`, `update`, `waitAll`).
 - **C3 done:** `AssetRegistry` + `ZodarAssetTool` (`zodar.py import`, `assets list|check`).
 - **C4 done:** scene-file `modelRenderer` (registry id or `.gltf`/`.glb` path), `ModelRenderer`
@@ -188,10 +190,10 @@ networking (DEAD SECTOR M7 stays on the engine roadmap but after Phase E).
 ## 4. Suggested order of the next sessions
 1. ~~A1 `Application` + headless mode; migrate the game.~~ Done.
 2. ~~A2 standard CLI, PNG capture, run report JSON.~~ Done.
-3. **A3 (next)** CMake presets + `tools/zodar.py` + RUNNING guide; migrate ModelViewer/ZodarBench.
-4. B1 EnTT world, Transform hierarchy, renderer bridge.
-5. B2 scene/material JSON + reflection + round-trip tests.
+3. ~~A3 CMake presets + `tools/zodar.py` + RUNNING guide; migrate ModelViewer/ZodarBench.~~ Done.
+4. ~~B1 EnTT world, Transform hierarchy, renderer bridge.~~ Done.
+5. ~~B2 scene/material JSON + reflection + round-trip tests.~~ Done. (C1–C7 done.)
 6. D1 unified GLB/glTF pipeline for Blockbench and Blender (done); D2 game asset layout + static
-   bunker (done); Phase V: V0 docs + GDD Amendment 1 (done), **V1 (next)**..V5, then D3..D6, D7
+   bunker (done); Phase V: V0 docs + GDD Amendment 1 (done), V1 (done), **V2 (next)**..V5, then D3..D6, D7
    (voxel bunker), V6 (performance), D8 per
    `docs/PHASE_D_PLAN.md`.

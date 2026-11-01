@@ -1,7 +1,7 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **approved; D1 and D2 done; Phase V inserted (V0 done, 2026-11-01).** Next session:
-V1. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
+Status: **approved; D1 and D2 done; Phase V inserted (V0 done, V1 done 2026-11-01).** Next
+session: V2. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`. Area-by-area production after
 D8 (completion levels, checklist, tracks): `docs/WORLD_PRODUCTION_ROADMAP.md`.
@@ -323,7 +323,11 @@ generic; Lastlight content only in V5. Every session: Highlands screenshot byte-
   synthetic chunks) on the current code, then extend.
 - `VoxelPalette` → block registry (id → material, shape, rotation); `ShapeTemplate` library
   with the built-in shapes (§3); mesher shape path, face-occlusion culling, shape AO; mesh
-  option `uvPerMetre`; configurable `cellSize` naming in `StreamingSettings`.
+  option `uvPerMetre`; configurable cell size (kept as `StreamingSettings::voxelSize`).
+- **Done (2026-11-01).** Decisions: `voxelSize` name kept (docs fixed); stair risers 0.25 m
+  (half a cell); 4 yaw rotations, flip reserved; explicit `aoOccluder` per shape; shapes render
+  as cubes at LOD > 0 until V3; ≤ 5 % cube-only meshing regression; CPU golden hash tests,
+  screenshot comparison stays a separate visual check. See `PROGRESS.md` (V1 handoff).
 - Tests: hash unchanged; per-shape geometry, rotation, culling against full/partial faces,
   chunk-boundary shapes, determinism.
 

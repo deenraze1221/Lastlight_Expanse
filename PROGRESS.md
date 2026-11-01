@@ -131,12 +131,53 @@
 - **Phase V0 done (2026-11-01):** hybrid voxel + model architecture approved and documented;
   GDD Amendment 1. See the V0 handoff below.
 
+- **Integration (2026-11-01):** D1, D2, V0 (+ roadmap docs) fast-forwarded into `main`
+  (`2090cbd..ad2283d`, no history rewrite). V1 developed on `claude/v1-voxel-foundation`
+  (not merged into `main`).
+
+- **Phase V1 done (2026-11-01):** block registry, shape library, mesher shapes (engine).
+  See the V1 handoff below.
+
 ## Current task
-- **Next session: V1 — block registry, shape library, mesher shapes (engine).** Not started;
-  waits for the user's go. Order: V1–V5 → D3–D6 → D7 → V6 → D8.
+- **Next session: V2 — block definitions, materials, texture standards (engine).** Not
+  started; waits for the user's go (and the V1 branch review/merge). Order: V2–V5 → D3–D6 →
+  D7 → V6 → D8.
 - World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`) approved in principle
   (2026-11-01), planning only; its proposals (areas, bunker boundary, optional NPCs, story
   items, post-D8 track order) await the user's review — see its "Unresolved decisions".
+
+## Handoff (Phase V1 session, 2026-11-01)
+- Branch `claude/v1-voxel-foundation` (from `main` `ad2283d`), one commit per step:
+  1. golden hash tests of the legacy cube mesher, captured before any change (engine:
+     integer-hashed terrain, all LODs, AO, voxelSize 0.5, sealing, layers, streamed world;
+     game: Highlands seed 1337 chunks + palette/layers; `LastlightGameTests` compiles the
+     generator sources, the game executable is unchanged) + skipped benchmark case
+     `voxel bench: cube-only meshChunk`;
+  2. `Scene/Voxel/BlockRegistry.h/.cpp`, `Shapes.cpp`: `VoxelPalette` (moved from
+     `ChunkMesher.h`) + `BlockState`, `ShapeTemplate`/`Shape`/`ShapeLibrary` (9 built-ins + cube),
+     `rotateShape`, `BlockTable`;
+  3. mesher on `BlockTable` (full-face culling, `aoOccluder`, material merge key, fill-weighted
+     LOD with a cube-only fast path) — hashes unchanged;
+  4. shape path (LOD 0), `MeshOptions::uvPerMetre`, `MeshStats::shapePolygons`;
+  5. `VoxelWorld`: one `BlockTable`, opacity shortcuts count full cubes only, bedrock = first
+     cube id, `blocks()` accessor;
+  6. docs (VOXELS, ARCHITECTURE, PHASE_D_PLAN, roadmap, CLAUDE.md, this file).
+- Decisions (user, 2026-11-01): `voxelSize` kept (no `cellSize` rename; docs fixed); stair
+  risers 0.25 m (half a cell); 4 yaw rotations, flip reserved; explicit `aoOccluder` per
+  shape; shapes render as cubes at LOD > 0 (until V3); ≤ 5 % cube-only meshing regression;
+  CPU geometry/hash tests, screenshot comparison stays a separate visual check; doc conflicts
+  fixed without changing approved requirements (VOXELS §2/§3/§9, PHASE_D_PLAN V1,
+  AI_FIRST_ROADMAP §4 and texture-standard notes, stale "Next steps").
+- Performance (bench workload, callgrind instruction counts; wall time on this shared VM
+  varied ±50 %): meshChunk 4.036e9 → 4.183e9 after step 3 (+3.7 %); final: see verification.
+- Verification: full Debug + Release ctest pending at the time of this commit (recorded in the next commit).
+- Not done (by plan): `*.blocks.json`, materials, texture standards, voxel shader (V2);
+  shape-aware collision/raycasts, conservative LOD, `structural` flag (V3); regions and
+  structures (V4); bunker migration (V5). Golden hashes assume x86-64 without FMA contraction
+  (GCC/Clang/MinGW defaults); MSVC unverified.
+- **V2 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/guide/VOXELS.md` §3/§9,
+  `docs/PHASE_D_PLAN.md` (V2), `docs/guide/ASSETS.md`, `Scene/Voxel/BlockRegistry.h`,
+  `Assets/TextureStandards.*`, `AssetRegistry.*`.
 
 ## Handoff (Phase V0 session, 2026-11-01)
 - Done (documentation only, no code): GDD Amendment 1 (§2 region = 64 × 64 m, handcrafted
@@ -507,9 +548,9 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Phase D sessions D1..D8 per `docs/PHASE_D_PLAN.md` (next: D1). Streaming budgets, FBX/audio
-   import and skins stay in later phases. Optional D2b: re-author terrain textures to 32×32
-   (currently 256²/512², violate the 64 max).
+1. Phase V and D per `docs/PHASE_D_PLAN.md`: V2 next, then V3–V5 → D3–D6 → D7 → V6 → D8.
+   Streaming budgets, FBX/audio import and skins stay in later phases. Highlands keeps its
+   legacy 256²/512² terrain textures (regression scene, not migrated; VOXELS §12).
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
 3. S5 shadows when scheduled.
 
