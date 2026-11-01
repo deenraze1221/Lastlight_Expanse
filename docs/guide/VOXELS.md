@@ -2,7 +2,9 @@
 
 Status: **approved architecture (V0, 2026-11-01); V1 implemented (block registry, shape
 library, mesher shapes; §2–5 marked *(exists)*); V2 implemented (`*.blocks.json`, block
-catalogue, texture standards, `zodar/voxel`; §3/§9); V3–V6 not started.** This guide is the
+catalogue, texture standards, `zodar/voxel`; §3/§9); V3 implemented (collision boxes,
+`collectSolidBoxes`, shape-aware raycasts, `kStructural` + conservative LOD; §3/§5/§6); V4–V6
+not started.** This guide is the
 binding specification for Phase V (V1–V6, `docs/PHASE_D_PLAN.md`). Sections marked
 *(exists)* describe current code; everything else is the target. Update this file when a
 V-session implements or changes a part, so later sessions read the guide instead of the code.
@@ -62,7 +64,8 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
   `VoxelPalette::kFallbackMaterial` (magenta, texture layer 0), never a real material (V2).
 - `BlockState` (per id) *(exists)*: `material`, `shape` (index into the shape library),
   `rotation` (**4 yaw steps only**, 90° right-handed about +Y: one step turns +X into −Z;
-  flip reserved, V1 decision), flags (`kNoCollision`; `kTransparent` reserved, not meshed).
+  flip reserved, V1 decision), flags (`kNoCollision`; `kTransparent` reserved, not meshed;
+  `kStructural`, V3: conservative LOD, §5). `BlockTable` rejects any other flag bit (V3).
 - `BlockTable` *(exists)*: immutable per-id lookup built once from a palette (validates
   material/shape/rotation, resolves rotated geometry, full-face bits, fill, AO occluder);
   `VoxelWorld` builds one and shares it with mesh jobs.
@@ -76,7 +79,12 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
   - **face-occlusion info** (derived): per face `Full`, `Partial` (+ 4 × 4 coverage mask for
     later use) or `None`, from the area of the polygons lying on that face;
   - **collision definition**: a list of cell-local boxes (exact for boxy shapes, a stepped
-    approximation for curves and slopes; used from V3);
+    approximation for curves and slopes; used by collision queries and Collision raycasts,
+    §6) *(exists, V3)*;
+  - point-in-solid test `Shape::contains` *(exists, V3)*: majority vote of three
+    crossing-parity rays in fixed generic directions against the fan triangles (libm-free,
+    deterministic; a ray grazing an edge spoils only its own vote). Points within about 1e-6 of
+    the surface may go either way;
   - fill fraction (derived from the enclosed volume, in eighths, for LOD) and an explicit
     `aoOccluder` flag (V1 decision).
   - Validation (`zodar::Error`): corners inside the cell, planar non-degenerate polygons,
@@ -102,6 +110,27 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
 | `panel_thin` (1/8-cell plate on −Z; 4 orientations by rotation) | −Z | 1/8 | no |
 
   Games register more.
+- **Collision boxes of the built-in shapes (V3 rule)** *(exists)*: box shapes (`cube`,
+  `slab_low`, `slab_high`, `stair`, `panel_thin`) are exact. Slopes and arches are treated as a
+  height field along a step axis (Y for `wedge` and the corners, Z for the arch pieces at
+  rotation 0); the height is quantised into **4 equal levels** and the footprint region whose
+  true height lies in level k gets a box up to the level midpoint (2k + 1) / 8. Per column the
+  error along the step axis is at most **1/8 cell** (6.25 cm at 0.5 m cells) and the largest
+  over- and under-coverage are equal ("balanced" = minimax; the volumes differ slightly for the
+  corners and arches). The step count is internal (`kCollisionSteps` in `Shapes.cpp`), not API.
+
+| Shape | Boxes | Level footprints (rotation 0) |
+| --- | --- | --- |
+| `wedge` | 4 | z in [k, k + 1] / 4, top (2k + 1) / 8 |
+| `corner_inner` | 7 | L-bands max(x, z) in [k, k + 1] / 4 |
+| `corner_outer` | 7 | bands min(x, z) in [k, k + 1] / 4 |
+| `quarter_round` | 4 | y-bands where the arc's z lies in level k; z from 0 to the midpoint |
+| `quarter_round_inner` | 4 | same bands; z from the midpoint to 1 |
+
+  Tested for every shape × rotation (`VoxelShapeTests.cpp`): boxes inside the cell, exact for
+  box shapes, every wrongly covered sample within 1/8 cell of the surface, over- and
+  under-covered volume each < 6 % (measured ≤ 5 %). Custom shapes keep the registration checks
+  (boxes inside the cell, non-empty); the error rule is for the built-ins.
 - Data format: `*.blocks.json` (game content: materials and block states by name), loaded by
   the engine, registered in `assets.json` (new asset type, dependencies = textures) and
   validated by the asset checks (sizes, palette, density). Block names map to stable ids
@@ -126,7 +155,9 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
     texels with alpha < 1). Material index = file order (`VoxelPalette::colors`/`faceLayers`).
   - Blocks: `material`, `shape` (shape-library name, default `cube`; custom shapes are
     registered in code with `ShapeLibrary::add`, not in JSON (V2 decision)), `rotations` 1 or
-    4, `collision` (default true; false = `kNoCollision`).
+    4, `collision` (default true; false = `kNoCollision`), `structural` (default false; true =
+    `kStructural`, V3; written by the serializer only when true, schema version stays 1). Flags
+    apply to every `name@N` variant.
   - `BlockCatalogue` (`buildBlockCatalogue` / `loadBlockCatalogue`): registry palette, names,
     texture-array layers (first-use order, deduplicated by texture + PBR parameters, so a
     texture reused with other parameters gets its own layer), per-layer parameters and the
@@ -180,19 +211,67 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
 
 - Existing: cells of 2^lod voxels, majority rule, boundary sealing between LODs *(exists)*.
 - Shapes count by fill fraction in the majority rule *(exists)*. At LOD > 0 every solid cell
-  is meshed as a cube of its material (temporary, V1 decision; conservative LOD in V3).
-- **Conservative LOD:** chunks that contain authored structures (or any cell flagged
-  `structural`) never drop below LOD 0 inside the interior range, so thin walls (0.5 m) never
-  disappear or open up. Terrain-only chunks keep distance LOD.
-- No visible cracks: existing sealing between LODs, plus chunk-boundary tests with shapes.
+  is meshed as a cube of its material (V1 decision, kept in V3).
+- **Conservative LOD** *(exists, V3)*: chunks that contain a block with `kStructural` use LOD 0
+  while their centre is closer than `StreamingSettings::structuralLod0Distance` (3D, chunks;
+  **default 0 = off**, so LOD choices are exactly the distance rule). Farther away they follow
+  `lodDistances`. The flag is explicit only (V3 decision: non-cube shapes do not imply it);
+  V4 structures may set it. The per-chunk flag is computed with generation, edit restore and
+  `setVoxel` (skipped when no id is structural). Terrain-only chunks keep distance LOD.
+- No visible cracks *(tested, V3)*: seam probes (rays across every LOD border of a streamed
+  shape world, incl. forced LOD 0 next to LOD 1/2 neighbours) all hit the surface
+  (`VoxelLodTests.cpp`). Default settings reproduce the pre-V3 mesh event golden hash.
+- **Known limitations (documented, not fixed in V3; no mesher change):**
+  - shapes render as cubes of their material at LOD > 0 (inside `structuralLod0Distance`
+    structural chunks stay at LOD 0, so this only shows farther away);
+  - the majority rule removes one-cell (0.5 m) walls from LOD 2 (16 of 64 voxels) and can
+    thicken or thin features at LOD 1; pinned by a characterisation test;
+  - beyond `structuralLod0Distance` thin structural walls follow the same rule.
 
-## 6. Collision and raycasts *(extends VoxelWorld::raycast)*
+## 6. Collision and raycasts *(exists, V3; extends VoxelWorld::raycast)*
 
 - Collision is queried from the grid, not from generated meshes:
-  `VoxelWorld::collectSolidBoxes(aabb, out)` returns world boxes for cube cells (merged along
-  rows) and the template boxes of shape cells.
-- `raycast` becomes shape-aware (cube cells as today; shape cells test their boxes). Until V3
-  it treats every non-empty cell as a full cell *(exists)*.
+  `QueryStatus VoxelWorld::collectSolidBoxes(const WorldBox& query, std::vector<SolidBox>& out)`
+  returns world boxes (`min`, `max`, `value`) of every colliding cell whose cell box touches
+  the query (**closed intervals**: touching faces and corners count):
+  - cube cells merged into runs of equal ids along X, within one chunk, clipped to the query's
+    cell range; shape cells add their rotated collision boxes that touch the query;
+  - `kNoCollision` cells are skipped; ids beyond the registry are cubes;
+  - deterministic order: chunks by (y, z, x), cells by (y, z, x), then box index;
+  - **appends** to `out` (never clears). `Complete` = every touched chunk had data.
+    `MissingChunks` = some chunk inside the world's Y range had no data: `out` still holds
+    the boxes of all loaded chunks (valid, same order), missing chunks contribute nothing, the
+    caller decides. Chunks outside the Y range read as empty (like `getVoxel`), not missing;
+  - an invalid query (NaN/infinite coordinate, min > max, beyond ±1e9 cells) throws
+    `zodar::Error`.
+- `raycast(origin, direction, maxDistance, RaycastOptions{mode})`:
+  - **cube cells** are hit when the ray enters them, bit-identical to pre-V3 (golden tables
+    for legacy and cube-registry worlds, `VoxelQueryTests.cpp`);
+  - `RaycastMode::Selection` (default): shapes by the **exact rotated polygons**, front faces
+    only (back faces and faces with |dot(dir, n)| < 1e-7 are ignored), barycentric tolerance
+    1e-6 (shared edges and fan diagonals never leak), hits within the cell's traversal
+    interval ±1e-5 cell and within `maxDistance`; `kNoCollision` blocks are hit (grates stay
+    selectable);
+  - `RaycastMode::Collision`: `kNoCollision` cells skipped, shapes by their collision boxes
+    (slab test), the same boxes as `collectSolidBoxes`;
+  - **origin inside a solid** (cube cell, `Shape::contains`, or a collision box in Collision
+    mode): hit at distance 0, `normal` and `surfaceNormal` (0, 0, 0); origin in a shape's empty
+    part: the ray continues;
+  - **ties**: nearest t, then lower polygon index, then lower fan triangle (boxes: entry axis
+    X, Y, Z, then box index);
+  - `RaycastHit`: `voxel`, `normal` (cube: entered face; shape: dominant axis of the surface
+    normal, ties Y then X, so `voxel + normal` is the placement cell), `distance`, `value`,
+    plus `point` and `surfaceNormal` (V3).
+  - **Boundary behaviour (documented, B4):** a ray lying exactly in a cube face plane enters
+    that cell (floor rule of the traversal); a ray sliding along a shape face is not stopped by
+    it, but it stops at the closed edge of the next face it touches (e.g. the next cell's
+    riser edge; shape faces between cells are not culled for queries); a ray exactly on a cell
+    boundary walks the cells on the positive side (floor), like cubes.
+  - Determinism: libm-free float arithmetic in fixed order; worker threads give identical
+    results (tested). Shape-world raycast tables hash only discrete fields; distances are
+    checked against a marching reference with tolerances (cross-compiler safe).
+- Informational timings (never asserted): `ZodarTests --no-skip -tc='voxel query timing*'`
+  (Release); results in `PROGRESS.md`.
 - Lastlight composes this with imported-model colliders behind its `CollisionWorld` interface
   (`game/src/Physics`); architecture never needs hand-made collider boxes.
 - Phase E (Jolt): per-chunk static compound of merged boxes, rebuilt on edit.

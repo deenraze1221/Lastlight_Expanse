@@ -155,11 +155,60 @@
   built and run in the same container (Release, `61ab33fa…`). Flake counts: see the V2
   handoff. The gate's first run failed at configure because I seeded the FetchContent cache
   incorrectly (environment, recorded in its failure log); the second run passed.
-- **Next session: V3 — voxel collision, raycasts, conservative LOD (engine)**; waits for the
-  user's go (and the V2 review/merge). Order: V3–V5 → D3–D6 → D7 → V6 → D8.
+- **V3 done** on `claude/v3-voxel-collision` (from `main` `27e7788`, 6 commits); awaits review
+  and merge. See "Handoff (Phase V3 session)".
+- **Next session: V4 — structures, regions, layered generators (engine)**; waits for the
+  user's go (and the V3 review/merge). Order: V4–V5 → D3–D6 → D7 → V6 → D8.
 - World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`) approved in principle
   (2026-11-01), planning only; its proposals (areas, bunker boundary, optional NPCs, story
   items, post-D8 track order) await the user's review — see its "Unresolved decisions".
+
+## Handoff (Phase V3 session, 2026-11-01)
+- Branch `claude/v3-voxel-collision` from `main` `27e7788`, one commit per approved step:
+  1. baseline tests on the pre-V3 code: raycast golden tables (872 rays; legacy 1 m, registry
+     cubes incl. `kNoCollision` 0.5 m, shape world), streamed shape-world LOD hash, LOD seam
+     probe, one-cell-wall LOD 2 limitation, exact shape AO values, rotated coverage masks;
+     shared worlds `engine/tests/Support/VoxelTestWorlds.h`;
+  2. balanced 4-level stepped collision boxes (wedge 4, corners 7, arches 4; box shapes exact;
+     ≤ 1/8 cell per column) + `Shape::contains` (three-ray parity vote, libm-free);
+  3. `VoxelWorld::collectSolidBoxes` + `QueryStatus` (closed intervals, X-merged cube runs per
+     chunk, partial results kept, invalid queries throw); `BlockTable::stateFlags/collides`;
+  4. shape-aware `raycast` (`RaycastOptions{Selection | Collision}`, `RaycastHit::point` and
+     `surfaceNormal`; cube path unchanged);
+  5. `BlockState::kStructural`, JSON `"structural"`, unknown flag bits rejected,
+     `StreamingSettings::structuralLod0Distance` (default 0);
+  6. docs (VOXELS §3/§5/§6, ARCHITECTURE, PHASE_D_PLAN, CLAUDE.md) + skipped timing case.
+- Decisions (user): D1–D7 and B1–B4 as recorded in `docs/PHASE_D_PLAN.md` (V3). Implementation
+  notes: "balanced" = equal maximum over/under coverage per column (level midpoints); volumes
+  differ slightly for corners/arches (measured over ≤ 5 %, under ≤ 5 %). Ray origins: inside
+  test is `Shape::contains`, not triangle facing. Raycast tolerances: grazing |dot| < 1e-7,
+  barycentric 1e-6, cell interval ±1e-5.
+- Verification (container Mesa lavapipe, validation on): `tools/gate.sh` Debug + Release
+  (`-DZODAR_WARNINGS_AS_ERRORS=ON`, GPU tests on) **36/36 + 36/36**, Highlands sha256
+  `61ab33fa…` in both (= pre-V3 baseline `27e7788`, gate run in a clean worktree in the same
+  container: 36/36 + 36/36, `61ab33fa…`), 0 validation messages. The gate log names commit
+  `59d0e5d` because it started before step 6 was committed; the tree it built already held step
+  6's test file (docs-only otherwise). Clang 18 Release: ZodarTests 275 cases green (all engine
+  goldens incl. the V3 tables); only the 3 pre-existing `PaletteTests.cpp` `-Wunused-result`
+  warnings. No intermittent failure seen this session (one gate run per tree, no retries).
+  Not verified: MinGW, MSVC.
+- Golden hashes: all existing ones unchanged (cube-only mesher, streamed world, catalogue
+  `0x2444B9C0D80D2BD6`, Highlands). New: raycast legacy `0x3A17179597B60B05`, registry cubes
+  `0x476C840510DCF433` (both bit-exact incl. distance bits, recorded pre-V3); shape-world
+  discrete tables Selection `0x53599CECA851519C`, Collision `0x3490C3C2CAD63E7D`; LOD shape
+  world `0x1823C9036434EA3A` (pre-V3, also with structural blocks at default settings).
+- Informational timings (Release, `ZodarTests --no-skip -tc='voxel query timing*'`, run while
+  other builds were active; not asserted): player box query (0.6 × 1.8 × 0.6 m, 0.5 m cells)
+  0.34 µs (GCC) / 0.36 µs (Clang); ray ≤ 64 m Selection 1.43 / 0.87 µs, Collision 1.35 /
+  0.71 µs. Targets 5 µs / 20 µs.
+- Remaining limitations (VOXELS §5/§6): shapes render as cubes at LOD > 0 (structural chunks
+  inside `structuralLod0Distance` stay at LOD 0); majority rule drops one-cell walls at LOD 2;
+  a ray lying exactly in a shape face plane stops at the next touching face's edge; rays on
+  cell boundaries follow the floor rule (like cubes); `Shape::contains` is ambiguous within
+  ~1e-6 of a surface; collision is stepped (≤ 1/8 cell), true slope contact waits for Phase E.
+- **V4 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/guide/VOXELS.md` §3, §7, §8,
+  `docs/PHASE_D_PLAN.md` (V4), `engine/scene/Scene/Voxel/VoxelWorld.h`, `VoxelChunk.h`,
+  `engine/rendering/SceneFile/SceneFile/BlockFile.h`.
 
 ## Handoff (Phase V2 session, 2026-11-01)
 - Branch `claude/v2-block-format` (from `main` `620ad40` + docs `7226731`), one commit per step:
@@ -653,7 +702,7 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Phase V and D per `docs/PHASE_D_PLAN.md`: V3 next, then V4–V5 → D3–D6 → D7 → V6 → D8.
+1. Phase V and D per `docs/PHASE_D_PLAN.md`: V4 next, then V5 → D3–D6 → D7 → V6 → D8.
    Streaming budgets, FBX/audio import and skins stay in later phases. Highlands keeps its
    legacy 256²/512² terrain textures (regression scene, not migrated; VOXELS §12).
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.

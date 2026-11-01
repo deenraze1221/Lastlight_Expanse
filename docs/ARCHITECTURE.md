@@ -499,6 +499,20 @@ Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
   `TextureArray` pre-validates layer byte sizes. Test seam:
   `UploadBatch::failStagingAfterForTesting`.
 
+### Phase V3 implementation notes (2026-11-01)
+- Collision and picking query the voxel grid, never meshes: `VoxelWorld::collectSolidBoxes`
+  (closed-interval box query, X-merged cube runs, rotated shape boxes, `QueryStatus` with
+  partial results kept) and `raycast` with `RaycastOptions{Selection | Collision}`.
+- Cube cells keep the pre-V3 traversal bit-exactly; shapes add exact polygon hits (Selection)
+  or box hits (Collision). Inside/outside of ray origins uses `Shape::contains` (three-ray
+  parity vote), never the facing of the nearest triangle.
+- Built-in slope/arch collision boxes follow one rule (4 height levels, box top at the level
+  midpoint, ≤ 1/8 cell error, equal max over/under coverage); the step count stays internal.
+- `BlockState::kStructural` (JSON `"structural"`) + `StreamingSettings::structuralLod0Distance`
+  (default 0 = off) = conservative LOD; unknown flag bits are rejected by `BlockTable`.
+- No mesher or AO change: LOD > 0 shape rendering and majority-rule thin-wall loss remain
+  documented limitations (VOXELS §5).
+
 ## World production (approved in principle, 2026-11-01; planning only)
 
 `docs/WORLD_PRODUCTION_ROADMAP.md`: Engine Complete, Area Production Complete (with a separate

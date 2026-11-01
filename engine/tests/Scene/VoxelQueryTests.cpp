@@ -14,6 +14,7 @@
 #include "../Support/VoxelTestWorlds.h"
 
 #include <bit>
+#include <chrono>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -747,4 +748,43 @@ TEST_CASE("voxel raycast: collision flags and collision mode") {
             }
         }
     }
+}
+
+// Informational timings (skipped by default; never a CI failure). Run in Release:
+//   ZodarTests --no-skip -tc='voxel query timing*'
+// Targets from the V3 plan (not asserted): player box query < 5 us, 64 m ray < 20 us.
+TEST_CASE("voxel query timing: player box queries and 64 m rays" * doctest::skip()) {
+    const ShapeRegistry reg;
+    const auto gen = std::make_shared<QueryTerrain>(7, QueryTerrain::Mode::Shapes, reg.shapeCount(), reg.noCollisionOffset);
+    VoxelWorld world(gen, reg.palette, test::queryWorldSettings(0.5f));
+    test::settleWorld(world, {4, 4, 4});
+    const auto rays = testRays(0.5f);
+    std::vector<SolidBox> out;
+    size_t guard = 0;
+    double bestBox = 1e30;
+    double bestSel = 1e30;
+    double bestCol = 1e30;
+    for (int rep = 0; rep < 7; ++rep) {
+        auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 4096; ++i) {
+            const uint64_t r = hash3(i, 9, 9, 1);
+            const glm::vec3 feet(float(r % 64) * 0.25f - 8.0f, float((r >> 8) % 24) * 0.25f, float((r >> 16) % 64) * 0.25f - 8.0f);
+            out.clear();
+            (void)world.collectSolidBoxes({feet - glm::vec3(0.3f, 0.0f, 0.3f), feet + glm::vec3(0.3f, 1.8f, 0.3f)}, out);
+            guard += out.size();
+        }
+        bestBox = std::min(bestBox, std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() / 4096.0);
+        for (RaycastMode mode : {RaycastMode::Selection, RaycastMode::Collision}) {
+            t0 = std::chrono::steady_clock::now();
+            for (const Ray& r : rays) {
+                guard += world.raycast(r.origin, r.direction, 64.0f, {mode}) ? 1 : 0;
+            }
+            const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() /
+                              static_cast<double>(rays.size());
+            (mode == RaycastMode::Selection ? bestSel : bestCol) = std::min(mode == RaycastMode::Selection ? bestSel : bestCol, us);
+        }
+    }
+    MESSAGE("player box query ", bestBox, " us (target < 5), ray Selection ", bestSel, " us, Collision ", bestCol,
+            " us (target < 20, rays up to 64 m)");
+    CHECK(guard > 0);
 }

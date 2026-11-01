@@ -1,7 +1,7 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **approved; D1 and D2 done; Phase V inserted (V0, V1 and V2 done 2026-11-01).** Next
-session: V3. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
+Status: **approved; D1 and D2 done; Phase V inserted (V0, V1, V2 and V3 done 2026-11-01).**
+Next session: V4. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`. Area-by-area production after
 D8 (completion levels, checklist, tracks): `docs/WORLD_PRODUCTION_ROADMAP.md`.
@@ -379,6 +379,16 @@ generic; Lastlight content only in V5. Every session: Highlands screenshot byte-
      culling or collision).
   3. Shapes still render as cubes at LOD > 0 and raycasts treat shape cells as full cells
      (V1 decisions); both end with this session.
+- **Done (2026-11-01)** on `claude/v3-voxel-collision` (6 commits). Decisions (user): D1 exact
+  polygon raycast for selection + collision-box mode; D2 `point` + `surfaceNormal`, legacy
+  `normal` kept; D3 Selection hits `kNoCollision` blocks, Collision skips them; D4 balanced
+  4-level stepped boxes, generator internal; D5 explicit `kStructural` only; D6
+  `structuralLod0Distance` default 0; D7 `QueryStatus` Complete/MissingChunks with partial
+  results kept; B1 unknown flag bits rejected; B2 touching boxes included; B3 invalid queries
+  throw; B4 cube/shape grazing difference accepted and tested. Follow-ups 1 and 2 done; 3:
+  raycasts are shape-aware; shapes still render as cubes at LOD > 0 outside
+  `structuralLod0Distance` (documented limitation, no mesher change). See `PROGRESS.md`
+  (V3 handoff).
 
 ### V4 — Structures, regions, layered generators (engine)
 - `*.zstruct` templates (stamp with rotation, capture), `*.zregion` storage (palette + RLE,
