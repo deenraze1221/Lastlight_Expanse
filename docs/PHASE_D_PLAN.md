@@ -340,9 +340,36 @@ generic; Lastlight content only in V5. Every session: Highlands screenshot byte-
 - Tests: schema errors, round-trip, checks per class (32/64/128, ≥ 256 rejected), GPU render
   of a block material byte-exact.
 
+- Follow-ups from the V1 review (2026-11-01; minor, not blocking):
+  1. `ShapeLibrary::add`: validate that every polygon is star-shaped from `corners[0]` (each
+     fan triangle oriented with the polygon normal); today a malformed custom polygon yields
+     overlapping triangles without an error. Needed before games register shapes.
+  2. Face coverage is area-based: overlapping boundary polygons whose areas sum to 1 would be
+     reported `Full`. Detect overlap (e.g. per-triangle mask/area union) or reject it.
+  3. Registry fallback: ids beyond `blocks` use material = id, which can hit a real material
+     instead of the fallback colour. `*.blocks.json` validation should make unknown ids an
+     error or map them to an explicit fallback material.
+  4. Document in VOXELS §4: face-kind/UV axis tie rule (dominant axis prefers Y, then X) and
+     the √2 texture stretch along 45° slopes (planar projection); revisit with the voxel shader.
+  5. Tests: UVs of sloped polygons (and `uvPerMetre` on them).
+  6. Verify the golden mesher hashes (engine + Highlands) with Clang 18 and MinGW (only GCC 13
+     Debug/Release verified); MSVC when available.
+  7. Cleanups: shared test hash helper for engine/game tests; `<utility>` include in
+     `Shapes.cpp` for `std::swap`.
+
 ### V3 — Voxel collision, raycasts, conservative LOD (engine)
 - `collectSolidBoxes(aabb)` (merged cube rows + shape boxes), shape-aware raycast, structural
   flag + conservative LOD, crack tests with shapes across LODs.
+- Follow-ups from the V1 review (2026-11-01; minor, not blocking):
+  1. Built-in collision boxes (`wedge`, `corner_inner`, `corner_outer`, `quarter_round`,
+     `quarter_round_inner`) are stepped approximations that both over- and under-cover the
+     geometry. Decide the rule (conservative inside/outside or mixed), document it per shape
+     and test boxes against the polygon geometry.
+  2. Tests: exact AO values on shape polygons (approximation in VOXELS §4); coverage masks of
+     rotated shapes beyond the 4-step round trip (masks become relevant for partial-face
+     culling or collision).
+  3. Shapes still render as cubes at LOD > 0 and raycasts treat shape cells as full cells
+     (V1 decisions); both end with this session.
 
 ### V4 — Structures, regions, layered generators (engine)
 - `*.zstruct` templates (stamp with rotation, capture), `*.zregion` storage (palette + RLE,

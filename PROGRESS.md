@@ -139,8 +139,11 @@
   See the V1 handoff below.
 
 ## Current task
-- **Next session: V2 — block definitions, materials, texture standards (engine).** Not
-  started; waits for the user's go (and the V1 branch review/merge). Order: V2–V5 → D3–D6 →
+- **V1 merged:** `main` fast-forwarded `ad2283d..620ad40` (2026-11-01, no history rewrite)
+  after the final V1 review (no critical issues). Minor review findings are recorded as
+  follow-ups under V2 and V3 in `docs/PHASE_D_PLAN.md`.
+- **Next session: V2 — block definitions, materials, texture standards (engine)** on branch
+  `claude/v2-block-format` (from `main` `620ad40`). Not started; waits for the user's go. Order: V2–V5 → D3–D6 →
   D7 → V6 → D8.
 - World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`) approved in principle
   (2026-11-01), planning only; its proposals (areas, bunker boundary, optional NPCs, story
