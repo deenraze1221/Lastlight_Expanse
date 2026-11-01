@@ -196,9 +196,13 @@ Use `linear` for smooth textures (sky, UI gradients, effects).
 
 ## Texture size standards
 
-32×32 is the default for every asset; 64×64 is the absolute maximum for all assets
-(characters, weapons and unique assets included); 8×8 and 16×16 are allowed for tiny details.
-Anything else (above 64, non-square, not a power of two) loads unchanged but adds a warning to
+**Implemented (engine default today):** 32×32 is the default for every asset; 64×64 is the
+absolute maximum; 8×8 and 16×16 are allowed for tiny details. **Lastlight's final standard
+(GDD §3 Amendment 1, ART_DIRECTION §2):** 64×64 standard for environment, blocks, furniture,
+props and equipment; 32×32 small details; 128×128 only characters and weapons; ≥ 256×256
+prohibited without an approved exception. Session V2 makes the standard configurable per
+registry (sizes per asset class, density target) so Lastlight can enforce it; registries
+without a standard (examples, fixtures) keep the engine default. Anything else (above 64, non-square, not a power of two) loads unchanged but adds a warning to
 `TextureAsset::warnings` / `ModelAsset::warnings`, the log and `zodar.py assets check`
 (`Assets/TextureStandards.h`, `checkTextureSizes`). Textures are never resized automatically.
 

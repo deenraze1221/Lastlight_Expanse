@@ -1,7 +1,8 @@
 # ZODAR — AI-First Engine Roadmap
 
 **Status:** **Phase C complete; Phase D planned and approved (8 sessions,
-`docs/PHASE_D_PLAN.md`); D1 and D2 done, next D3.** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
+`docs/PHASE_D_PLAN.md`); D1 and D2 done; Phase V (hybrid voxel + model foundation,
+`docs/guide/VOXELS.md`) inserted, V0 done; next V1. Order: V1–V5 → D3–D6 → D7 → V6 → D8.** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
 (`zodar::Application`, `FixedTimestep`, headless/deterministic modes, game migrated).
 **Phase A2 done** (standard CLI + `runMain`, PNG screenshots, capture sequences, `--camera`,
 run report JSON). **Phase A3 done** (CMake presets, `tools/zodar.py`, `docs/guide/RUNNING.md`,
@@ -174,7 +175,9 @@ compressed, ≤ 20 MB each).
 ### Rendering work interleaved
 S5 shadows (needed by the Lastlight look and Phase B light components), S6 tonemapping/TAA,
 compact voxel vertices, GeometryPool free-list (GPU-driven terrain), then S7+ per the existing
-ROADMAP.md.
+ROADMAP.md. Phase V (GDD Amendment 1) needs S5 shadows, S7 AO and S8 volumetric fog for the
+target look (recommended before D7); compact voxel vertices and GPU-driven chunks are V6
+items, done only after benchmarks (`docs/guide/VOXELS.md` §9).
 
 ## 3. Explicitly out of scope (for now)
 Visual editor, scene-graph GUI, standalone SDK/installer, marketplace, scripting language,
@@ -187,5 +190,6 @@ networking (DEAD SECTOR M7 stays on the engine roadmap but after Phase E).
 4. B1 EnTT world, Transform hierarchy, renderer bridge.
 5. B2 scene/material JSON + reflection + round-trip tests.
 6. D1 unified GLB/glTF pipeline for Blockbench and Blender (done); D2 game asset layout + static
-   bunker (done); **D3 (next)**, then D4..D8 per
+   bunker (done); Phase V: V0 docs + GDD Amendment 1 (done), **V1 (next)**..V5, then D3..D6, D7
+   (voxel bunker), V6 (performance), D8 per
    `docs/PHASE_D_PLAN.md`.

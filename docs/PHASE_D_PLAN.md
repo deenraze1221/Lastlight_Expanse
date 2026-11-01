@@ -1,6 +1,7 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **approved; D1 and D2 done (2026-11-01).** Next session: D3. Roadmap summary:
+Status: **approved; D1 and D2 done; Phase V inserted (V0 done, 2026-11-01).** Next session:
+V1. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`.
 
@@ -303,15 +304,77 @@ handoff block described under "Session workflow".
 - Acceptance: Debug + Release 0 warnings, all ctest green, 0 validation messages; highlands
   screenshot byte-identical to pre-Phase D.
 
+## Phase V — hybrid voxel + model foundation (approved 2026-11-01)
+
+Specification: `docs/guide/VOXELS.md` (binding); GDD §2/§3 Amendment 1. Engine sessions stay
+generic; Lastlight content only in V5. Every session: Highlands screenshot byte-identical
+(Debug + Release), cube-only mesher hash test green, 0 warnings, 0 validation messages.
+
+### V0 — Documentation and GDD amendment (done 2026-11-01)
+- GDD Amendment 1 (§2 regions + handcrafted world, §3 geometry, block definitions, texture
+  standard); ART_DIRECTION §1–5; ARCHITECTURE "Phase V decisions"; this plan; roadmap;
+  MODELING; ASSETS; new `docs/guide/VOXELS.md`. No code.
+
+### V1 — Block registry, shape library, mesher shapes (engine)
+- Read: `docs/guide/VOXELS.md` §2–5, `engine/scene/Scene/Voxel/*.h`, `ChunkMesher.cpp`,
+  `engine/tests/Scene/VoxelTests.cpp`.
+- First step: add the cube-only mesher hash regression test (Highlands generator chunks and
+  synthetic chunks) on the current code, then extend.
+- `VoxelPalette` → block registry (id → material, shape, rotation); `ShapeTemplate` library
+  with the built-in shapes (§3); mesher shape path, face-occlusion culling, shape AO; mesh
+  option `uvPerMetre`; configurable `cellSize` naming in `StreamingSettings`.
+- Tests: hash unchanged; per-shape geometry, rotation, culling against full/partial faces,
+  chunk-boundary shapes, determinism.
+
+### V2 — Block definitions, materials, texture standards (engine)
+- Read: VOXELS §3/§9, `docs/guide/ASSETS.md`, `Assets/TextureStandards.*`, `AssetRegistry.*`.
+- `*.blocks.json` loader + registry asset type (dependencies, palette and size checks);
+  configurable texture standards per registry (`"textureStandards"`: sizes per asset class,
+  density target); engine `zodar/voxel` shader (texture arrays + PBR + fog); engine defaults
+  unchanged for existing registries.
+- Tests: schema errors, round-trip, checks per class (32/64/128, ≥ 256 rejected), GPU render
+  of a block material byte-exact.
+
+### V3 — Voxel collision, raycasts, conservative LOD (engine)
+- `collectSolidBoxes(aabb)` (merged cube rows + shape boxes), shape-aware raycast, structural
+  flag + conservative LOD, crack tests with shapes across LODs.
+
+### V4 — Structures, regions, layered generators (engine)
+- `*.zstruct` templates (stamp with rotation, capture), `*.zregion` storage (palette + RLE,
+  diff-only, versioned, async), generator composition (base → structures → authored →
+  runtime edits), `zodar.py` voxel commands (info, capture, stamp). Region = 64 × 64 m.
+
+### V5 — Bunker on voxels (game)
+- Read: GDD §3 (A1), §10; `game/assets/README.md`, `game/tools/make_greybox_kit.py`,
+  `game/src/Bunker/*`.
+- Lastlight block catalogue (`game/assets/blocks/*.blocks.json`, 64×64 textures, palette);
+  bunker architecture written as a structure (0.5 m walls, 4.0 m ceiling, 4 m corridor,
+  existing rooms and areas); props stay models (re-textured to 64×64); architecture modules
+  and their `colliders.json` entries removed; registry texture standard per A1.
+- Exploration mode + walkthrough test on the voxel bunker; `CollisionWorld` composes voxel
+  queries and prop boxes.
+
+### V6 — Performance and 4 × 4 km benchmark (engine, after D7)
+- Benchmark first (ZodarBench region-scale scenario); then only measured needs: packed voxel
+  vertices, GPU-driven chunk rendering, prop instancing, region I/O.
+
+### Effect on D3–D8
+- D3–D6 scope unchanged (no voxel dependency).
+- D7 plays on the voxel bunker (after V5): architecture collision from voxel queries; the
+  planned `Collider` components cover props only. The temporary exploration walker is
+  replaced by the D7 `PlayerController`.
+- D8 additionally audits the Phase V systems.
+
 ## Dependencies
 
 ```
-D1 -> D2 ----------------------------> D7 -> D8
-D3 -> D4 ----------------------------^
-D3 -> D5 -> D6 ----------------------^
+D1 -> D2 -> V0 -> V1 -> V2 -> V3 -> V4 -> V5 ---> D7 -> V6 -> D8
+D3 -> D4 ---------------------------------------^
+D3 -> D5 -> D6 ---------------------------------^
 ```
 
-Executed in order D1..D8, one session each. No parallel agents edit code.
+Executed in the order V0, V1..V5, D3..D6, D7, V6, D8, one session each (D3–D6 do not depend
+on Phase V; they follow it by decision). No parallel agents edit code.
 
 ## Session workflow (token use and context)
 

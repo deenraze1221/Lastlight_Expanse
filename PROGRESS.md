@@ -128,11 +128,31 @@
   (`zodar.py explore`); `--level highlands` regression scene byte-identical. See the D2
   handoffs below.
 
+- **Phase V0 done (2026-11-01):** hybrid voxel + model architecture approved and documented;
+  GDD Amendment 1. See the V0 handoff below.
+
 ## Current task
-- **Next session: D3 — input action maps (engine).** Not started; waits for the user's go.
-- Open question from the user (2026-11-01, during D2): raise all 32×32 textures to 64×64.
-  Conflicts with GDD §3 (32×32 default, 64×64 maximum) and the 32 texels/m density target;
-  not done, awaiting the user's decision.
+- **Next session: V1 — block registry, shape library, mesher shapes (engine).** Not started;
+  waits for the user's go. Order: V1–V5 → D3–D6 → D7 → V6 → D8.
+
+## Handoff (Phase V0 session, 2026-11-01)
+- Done (documentation only, no code): GDD Amendment 1 (§2 region = 64 × 64 m, handcrafted
+  world with procedural generation as an authoring tool; §3 hybrid geometry, 0.5 m grid, Full
+  Block / Half Block (Slab) / Vertical Half Block / Sub-block, extensible shapes, imported
+  models for props, final texture standard 32/64/128, ≥ 256 prohibited); new
+  `docs/guide/VOXELS.md` (binding spec); ART_DIRECTION §1–5; ARCHITECTURE "Phase V
+  decisions"; PHASE_D_PLAN (Phase V sessions, dependencies, effect on D7/D8); roadmap;
+  MODELING; ASSETS; CLAUDE.md; `game/assets/README.md` (pending changes).
+- Decisions (user, 2026-11-01): see GDD A1 and VOXELS.md; bunker on voxels: 4 m corridor,
+  4.0 m ceiling, 0.5 m walls; Highlands stays the 1 m regression scene.
+- Implemented state unchanged: engine texture checks still enforce 32 default / 64 maximum
+  (configurable per game in V2); game textures are 32×32 (re-made at 64×64 in V5).
+- Open questions for the user: may tiny details use 8×8/16×16 (not in the final table)?
+- **V1 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/guide/VOXELS.md` §2–5,
+  `docs/PHASE_D_PLAN.md` (Phase V, V1), `engine/scene/Scene/Voxel/*.h`,
+  `engine/scene/Scene/Voxel/ChunkMesher.cpp`, `engine/tests/Scene/VoxelTests.cpp`.
+- **V1 first step:** add the cube-only mesher hash regression test on the current code (must
+  pass unchanged), then the block registry and shape path.
 
 ## Handoff (D2 revision: modern shelter + exploration mode, 2026-11-01)
 - User requests during D2 (after commit 4663edd): (1) redesign the bunker as a spacious,

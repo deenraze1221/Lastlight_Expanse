@@ -1,7 +1,14 @@
 # Modeling: Blockbench and Blender to glTF (Phase D1)
 
 One pipeline, two tools. Both export `.glb` into the same registry, check and hot-reload path
-and follow one art standard (`docs/ART_DIRECTION.md`). Registry, check and loading details:
+and follow one art standard (`docs/ART_DIRECTION.md`).
+
+**Scope (GDD §3 Amendment 1, 2026-11-01):** models are for props and detailed assets
+(weapons, characters, mutants, furniture, generators, machinery, computers, terminals,
+vehicles, doors and frames, lights, signs, equipment, decoration). Walls, floors, ceilings,
+stairs, terrain and other architecture are voxel blocks (`docs/guide/VOXELS.md`), not models.
+The D2 architecture modules (`floor`, `wall`, `doorway`, `corner`, `pillar`, `beam`,
+`stairs`, `ceiling`, …) are temporary and move to voxels in V5. Registry, check and loading details:
 `docs/guide/ASSETS.md`. The engine reads glTF only; it never parses `.bbmodel` or `.blend`
 files and treats every export the same way. `asset.generator` is read only to report the
 source tool (`blockbench`, `blender` or `other`).
@@ -15,7 +22,7 @@ a real export in this repository.
 
 | | Blockbench (primary) | Blender (secondary) |
 | --- | --- | --- |
-| Use | Props, items, weapons, characters, creatures, modular kit pieces | Large or curved architecture, organic shapes |
+| Use | Weapons, characters, mutants, furniture, equipment, props | Complex models (machinery, vehicles, blast-door frames), organic shapes |
 | Units | 16 Blockbench units = 1 block = 1 m | 1 unit = 1 m |
 | Source files | `.bbmodel` (plain JSON, normal Git) | `.blend` (regular Git: compressed, ≤ 20 MB, textures not packed) |
 
@@ -51,8 +58,12 @@ triangle budgets, bounds).
   too and imports identically).
 - Keep the default scale (16 units = 1 m). The bounds check warns below 1/16 m or above
   64 m, which catches a model exported at the wrong scale.
-- Textures: PNG, 32×32 by default, 64×64 maximum (8×8 and 16×16 for tiny details). Several
-  textures per model are fine: the exporter writes one primitive per texture.
+- Textures: PNG per the final standard: **64×64** for furniture, props and equipment, 32×32
+  for small or simple details, **128×128 only for characters and weapons**, nothing ≥ 256×256
+  without an approved exception (ART_DIRECTION §2). Several textures per model are fine: the
+  exporter writes one primitive per texture.
+- Grid: where a model meets voxel geometry (furniture against walls, door frames in
+  openings), its footprint and pivot snap to the 0.5 m grid.
 - Blockbench writes NEAREST samplers, so its textures are pixel art automatically (lossless
   compile, nearest sampling).
 - Groups become nodes that carry the pivot; cubes are their children. The importer keeps
@@ -68,7 +79,8 @@ triangle budgets, bounds).
   is intended; the bounds check catches doubled or missing scale.
 - Materials: Principled BSDF only (base colour, metallic, roughness, normal, emission). Image
   Texture nodes: *Interpolation* **Closest** (exports NEAREST samplers = pixel art), PNG
-  images, 32×32 default, 64×64 maximum, quantised to the game palette.
+  images per the final standard (64×64; 128×128 only characters/weapons), quantised to the
+  game palette.
 - *File > Export > glTF 2.0*:
   - *Format*: glTF Binary (`.glb`).
   - *Include*: selected objects or the visible collection; no cameras or lights (ignored,
@@ -110,7 +122,8 @@ python3 tools/zodar.py assets check -- --registry game/assets/assets.json --stri
 - `"budgets"` maps asset classes to triangle budgets; an entry's `class` selects one. Over
   budget is a warning.
 - The check also warns about texture sizes, off-palette texels, texel density outside
-  16..64 texels/m (target 32) and bounds outside 1/16..64 m. The report lists `sourceTool`,
+  16..64 texels/m (target 32; V2 makes target and sizes configurable per game: Lastlight
+  64 texels/m, 32..128 accepted, size limits per class) and bounds outside 1/16..64 m. The report lists `sourceTool`,
   `notes`, `size`, `class` and `triangleBudget` per model.
 
 ## Hot reload
@@ -124,8 +137,10 @@ registry hash is current (`check` reports stale entries).
 
 - [ ] Correct units (Blockbench 16 units = 1 m, Blender 1 unit = 1 m, transforms applied).
 - [ ] `.glb`, no Draco, no WebP, no quantisation.
-- [ ] Textures PNG, 32×32 (64×64 maximum), palette colours only, nearest ("Closest") sampling.
-- [ ] Texel density about 32 texels/m (16..64).
+- [ ] Textures PNG: 64×64 standard, 32×32 small details, 128×128 only characters/weapons,
+      none ≥ 256×256; palette colours only; nearest ("Closest") sampling.
+- [ ] Texel density about 64 texels/m for environment assets (characters/weapons may differ).
+- [ ] Footprint/pivot on the 0.5 m grid where the model meets voxel geometry.
 - [ ] Triangle count within the class budget; `class` set at import.
 - [ ] `zodar.py import` done; `zodar.py assets check --strict` passes (notes are fine).
 - [ ] Source file (`.bbmodel` / `.blend`) committed next to the export under the same base

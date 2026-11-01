@@ -1,6 +1,12 @@
 # LASTLIGHT EXPANSE
 
-## Game Design Document --- v1.1
+## Game Design Document --- v1.1 (Amendment 1)
+
+> **Amendment 1 (2026-11-01, approved by the project owner):** final geometry direction
+> (hybrid voxel environment + imported models, 0.5 m base grid, block definitions, shapes),
+> final texture resolution standard, chunk/region definition, handcrafted world with
+> procedural generation as an authoring tool. Changes are marked "(A1)" in §2 and §3.
+> Technical specification: `docs/guide/VOXELS.md`.
 
 ### 1. Overview
 
@@ -17,6 +23,14 @@
 -   Initial handcrafted map: 4 × 4 km (16 km²), expandable in future
     updates.
 -   Chunk-based world: 64 × 64 m; dynamic loading, unloading and LOD.
+    (A1) The 64 × 64 m unit is the world **region** (streaming, storage,
+    authoring, future multiplayer synchronisation); each region contains
+    4 × 4 internal meshing chunks of 16 × 16 × 16 m (32³ base cells).
+-   (A1) The map stays handcrafted. Procedural generation (deterministic
+    terrain, roads, rivers, stamped structures) is an authoring tool whose
+    result is edited by hand and saved as region data; persistent world
+    changes are stored per region. No endless or randomly generated runtime
+    world.
 -   Regions: city, suburbs, forests, villages, industrial areas,
     military sites, quarantine zones, research facilities and
     underground locations.
@@ -29,8 +43,30 @@
 ### 3. Art Direction
 
 -   Hybrid voxel/block-influenced geometry with natural silhouettes.
--   Pixel-art textures: 32×32 default, 64×64 maximum; nearest-neighbor
-    filtering.
+-   (A1) Environment from voxel blocks: walls, floors, ceilings,
+    buildings, structural architecture, roads, terrain, rocks,
+    landscape, bunkers, underground facilities and other large
+    structures. Block construction resembles Minecraft; the graphics are
+    far more atmospheric and sophisticated.
+-   (A1) Base grid 0.5 m (configurable in the engine). Full Block
+    1 × 1 × 1 m (2 × 2 × 2 cells); Half Block / Slab 1 × 1 × 0.5 m
+    (2 × 2 × 1); Vertical Half Block 0.5 × 1 × 1 m (1 × 2 × 2); Sub-block
+    0.5 × 0.5 × 0.5 m (one cell, 1/8 of a Full Block; not a "quarter
+    block"). Extensible shapes: stairs, slopes and wedges, inner and
+    outer corners, arches and curved shapes, thin panels, more later.
+-   (A1) Props and detailed assets are imported 3D models (glTF/GLB):
+    weapons, characters, mutants, furniture, generators, machinery,
+    computers, terminals, vehicles, equipment, decoration. Blockbench is
+    primary (voxel/low-poly), Blender for complex and organic models.
+    Voxel geometry and models share style, materials, lighting and
+    rendering.
+-   (A1) Texture resolution standard (replaces "32×32 default, 64×64
+    maximum"): 32×32 for small/simple details and assets; **64×64
+    standard** for all environment textures, voxel blocks, architecture,
+    furniture, props and equipment (64 texels per metre on voxel
+    surfaces); 128×128 only for characters and weapons; 256×256 and
+    above prohibited unless the project owner approves an exception.
+    Nearest-neighbor filtering.
 -   Muted, faded colors and Eastern European post-war atmosphere.
 -   PBR materials, realistic lighting and shadows; UE5-inspired
     atmospheric presentation.
