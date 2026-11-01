@@ -134,6 +134,9 @@
 ## Current task
 - **Next session: V1 — block registry, shape library, mesher shapes (engine).** Not started;
   waits for the user's go. Order: V1–V5 → D3–D6 → D7 → V6 → D8.
+- World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`) approved in principle
+  (2026-11-01), planning only; its proposals (areas, bunker boundary, optional NPCs, story
+  items, post-D8 track order) await the user's review — see its "Unresolved decisions".
 
 ## Handoff (Phase V0 session, 2026-11-01)
 - Done (documentation only, no code): GDD Amendment 1 (§2 region = 64 × 64 m, handcrafted

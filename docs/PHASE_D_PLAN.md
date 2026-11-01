@@ -3,7 +3,8 @@
 Status: **approved; D1 and D2 done; Phase V inserted (V0 done, 2026-11-01).** Next session:
 V1. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
-changes scope, and record completed sessions in `PROGRESS.md`.
+changes scope, and record completed sessions in `PROGRESS.md`. Area-by-area production after
+D8 (completion levels, checklist, tracks): `docs/WORLD_PRODUCTION_ROADMAP.md`.
 
 ## Authoritative game specification
 

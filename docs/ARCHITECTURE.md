@@ -453,6 +453,13 @@ Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
   benchmarks (V6).
 - Phase order: V0 → V1–V5 → D3–D6 → D7 (voxel bunker) → V6 → D8.
 
+## World production (approved in principle, 2026-11-01; planning only)
+
+`docs/WORLD_PRODUCTION_ROADMAP.md`: Engine Complete, Area Production Complete (with a separate
+Single-Player Complete milestone; final sign-off requires tested co-op) and Game Complete;
+one area at a time, bunker first; Phase V / D order unchanged; rendering S5–S8 after D8;
+generated assets final only after owner approval; proposals are not requirements.
+
 ## Phase D1 decisions (implemented)
 
 - glTF importer messages have two levels: `ModelData::warnings` (skipped features that change

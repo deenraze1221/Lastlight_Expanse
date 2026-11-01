@@ -2,7 +2,9 @@
 
 **Status:** **Phase C complete; Phase D planned and approved (8 sessions,
 `docs/PHASE_D_PLAN.md`); D1 and D2 done; Phase V (hybrid voxel + model foundation,
-`docs/guide/VOXELS.md`) inserted, V0 done; next V1. Order: V1–V5 → D3–D6 → D7 → V6 → D8.** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
+`docs/guide/VOXELS.md`) inserted, V0 done; next V1. Order: V1–V5 → D3–D6 → D7 → V6 → D8.
+After D8: World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`; S5–S8 after D8, then
+area-by-area production, bunker first).** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
 (`zodar::Application`, `FixedTimestep`, headless/deterministic modes, game migrated).
 **Phase A2 done** (standard CLI + `runMain`, PNG screenshots, capture sequences, `--camera`,
 run report JSON). **Phase A3 done** (CMake presets, `tools/zodar.py`, `docs/guide/RUNNING.md`,
