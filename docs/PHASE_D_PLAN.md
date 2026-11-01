@@ -70,7 +70,7 @@ part of the binding plan.
 
 | | Blockbench (primary) | Blender (secondary) |
 | --- | --- | --- |
-| Use | Props, items, weapons, characters, mutants, modular bunker kit | Complex architecture (curved or large structures), organic models |
+| Use | Weapons, characters, mutants, furniture, equipment, decorative props (D2: temporary greybox kit) | Complex models (generators, machinery, computers, vehicles), organic models |
 | Source | `game/assets/sources/blockbench/*.bbmodel` (plain JSON, normal Git) | `game/assets/sources/blender/*.blend` (regular Git, compressed, ≤ 20 MB each) |
 | Export | `.glb`; 16 Blockbench units = 1 block = 1 m | `.glb`; 1 unit = 1 m, +Y up, transforms applied, Draco off, image interpolation "Closest", no WebP |
 
@@ -349,19 +349,20 @@ generic; Lastlight content only in V5. Every session: Highlands screenshot byte-
   `game/src/Bunker/*`.
 - Lastlight block catalogue (`game/assets/blocks/*.blocks.json`, 64×64 textures, palette);
   bunker architecture written as a structure (0.5 m walls, 4.0 m ceiling, 4 m corridor,
-  existing rooms and areas); props stay models (re-textured to 64×64); architecture modules
+  existing rooms and areas); doors, frames, lights, signs, vents, cable trays, furniture,
+  generators and terminals stay imported models (re-textured to 64×64); architecture modules
   and their `colliders.json` entries removed; registry texture standard per A1.
 - Exploration mode + walkthrough test on the voxel bunker; `CollisionWorld` composes voxel
-  queries and prop boxes.
+  queries and imported-model boxes.
 
 ### V6 — Performance and 4 × 4 km benchmark (engine, after D7)
 - Benchmark first (ZodarBench region-scale scenario); then only measured needs: packed voxel
-  vertices, GPU-driven chunk rendering, prop instancing, region I/O.
+  vertices, GPU-driven chunk rendering, model/prop instancing, region I/O.
 
 ### Effect on D3–D8
 - D3–D6 scope unchanged (no voxel dependency).
 - D7 plays on the voxel bunker (after V5): architecture collision from voxel queries; the
-  planned `Collider` components cover props only. The temporary exploration walker is
+  planned `Collider` components cover imported models only. The temporary exploration walker is
   replaced by the D7 `PlayerController`.
 - D8 additionally audits the Phase V systems.
 

@@ -424,7 +424,9 @@ Binding plan: `docs/PHASE_D_PLAN.md`.
 ## Phase V decisions: hybrid voxel + model world (approved V0, 2026-11-01; not implemented)
 
 Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
-- Environment = voxel blocks; props and detailed assets = imported glTF models (D1 pipeline).
+- Voxel blocks: architecture and structural environment. Imported 3D models (glTF, D1
+  pipeline): weapons, characters, mutants, furniture, generators, machinery, computers,
+  vehicles, equipment and decorative props.
   Shared materials standard, lighting and renderer.
 - Engine grid is configurable (`cellSize`); Lastlight uses 0.5 m cells (Full Block = 2×2×2
   cells, Half Block / Slab 2×2×1, Vertical Half Block 1×2×2, Sub-block = 1 cell). Highlands
@@ -440,14 +442,14 @@ Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
 - World data layers: deterministic base generator → stamped structure templates → authored
   edits → persistent runtime edits; regions store only differences. Procedural generation is
   an authoring tool for the handcrafted map, not an endless runtime world.
-- Collision: architecture from voxel queries; props from components / `colliders.json` until
+- Collision: architecture from voxel queries; imported models from components / `colliders.json` until
   D6/D7; Lastlight's `CollisionWorld` composes both (Jolt later).
 - Conservative LOD for structural chunks; crack-free sealing (existing) extended to shapes.
 - Texture standards become configurable per game (V2); Lastlight: 64×64 standard, 32×32 small
   details, 128×128 characters/weapons only, ≥ 256 prohibited without an approved exception;
   64 texels/m on voxel surfaces. Engine defaults stay as today for registries without a
   standard (examples, fixtures).
-- Performance work (packed voxel vertices, GPU-driven chunks, prop instancing) only after
+- Performance work (packed voxel vertices, GPU-driven chunks, model/prop instancing) only after
   benchmarks (V6).
 - Phase order: V0 → V1–V5 → D3–D6 → D7 (voxel bunker) → V6 → D8.
 

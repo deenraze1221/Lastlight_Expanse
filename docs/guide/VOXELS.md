@@ -6,9 +6,13 @@ binding specification for Phase V (V1–V6, `docs/PHASE_D_PLAN.md`). Sections ma
 V-session implements or changes a part, so later sessions read the guide instead of the code.
 
 Authoritative game rules: GDD §2 and §3 (Amendment 1). Art rules: `docs/ART_DIRECTION.md`.
-Props pipeline: `docs/guide/MODELING.md`, `docs/guide/ASSETS.md`.
+Imported-model pipeline: `docs/guide/MODELING.md`, `docs/guide/ASSETS.md`.
 
 ## 1. Hybrid model
+
+Voxel blocks: architecture and structural environment. Imported 3D models: weapons,
+characters, mutants, furniture, generators, machinery, computers, vehicles, equipment and
+decorative props.
 
 | Voxel environment (blocks) | Imported models (glTF, D1 pipeline) |
 | --- | --- |
@@ -98,7 +102,7 @@ Extends the existing `VoxelPalette` *(exists: id → colour, optional texture la
   `VoxelWorld::collectSolidBoxes(aabb, out)` returns world boxes for cube cells (merged along
   rows) and the template boxes of shape cells.
 - `raycast` becomes shape-aware (cube cells as today; shape cells test their boxes).
-- Lastlight composes this with prop colliders behind its `CollisionWorld` interface
+- Lastlight composes this with imported-model colliders behind its `CollisionWorld` interface
   (`game/src/Physics`); architecture never needs hand-made collider boxes.
 - Phase E (Jolt): per-chunk static compound of merged boxes, rebuilt on edit.
 
@@ -120,10 +124,10 @@ Extends the existing `VoxelPalette` *(exists: id → colour, optional texture la
 ## 8. Structure templates
 
 - A structure is a box of cells (palettized, RLE) with an origin, named anchors and optional
-  prop placements (scene entities referencing registry ids), stored as `*.zstruct`.
+  model placements (scene entities referencing registry ids), stored as `*.zstruct`.
 - Stamped into generators or regions at grid-aligned positions with 4 yaw rotations.
 - Captured from a world box (`captureStructure`) and written by scripts (the bunker in V5).
-- Props stay scene entities (models), placed relative to the structure origin.
+- Imported models stay scene entities, placed relative to the structure origin.
 
 ## 9. Rendering and performance
 
@@ -136,7 +140,7 @@ Extends the existing `VoxelPalette` *(exists: id → colour, optional texture la
 | Bottleneck | Optimisation |
 | --- | --- |
 | 64-byte `Vertex` for voxel meshes | Packed voxel vertex (8–12 bytes) |
-| CPU draw path (`StreamedMeshSet`, `ModelRenderer`) | GPU-driven chunk rendering (`GeometryPool` with free/reuse), prop instancing |
+| CPU draw path (`StreamedMeshSet`, `ModelRenderer`) | GPU-driven chunk rendering (`GeometryPool` with free/reuse), model/prop instancing |
 | Memory at 0.5 m (8× the cells of 1 m) | Uniform chunks *(exists)*, per-chunk palettes (4/8-bit indices), streaming radius, diff-only storage |
 | Region I/O | Compressed region files, async loads |
 | Shapes break greedy merges | Triangle budget per chunk, shape budget per structure |
@@ -178,6 +182,6 @@ the cube-only mesher hash test green.
   (0.5 m walls, 4.0 m ceiling, 4 m corridor, existing room layout and areas).
 - Doors, blast-door frames, lights, signs, vents, cable trays, furniture, generators and
   terminals stay glTF models.
-- Architecture collision comes from voxel queries; `colliders.json` keeps prop boxes only
+- Architecture collision comes from voxel queries; `colliders.json` keeps imported-model boxes only
   until `Collider` components exist (D6/D7).
 - The exploration mode and the walkthrough test run on the voxel bunker.

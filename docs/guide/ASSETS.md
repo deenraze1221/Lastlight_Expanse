@@ -200,7 +200,8 @@ Use `linear` for smooth textures (sky, UI gradients, effects).
 absolute maximum; 8×8 and 16×16 are allowed for tiny details. **Lastlight's final standard
 (GDD §3 Amendment 1, ART_DIRECTION §2):** 64×64 standard for environment, blocks, furniture,
 props and equipment; 32×32 small details; 128×128 only characters and weapons; ≥ 256×256
-prohibited without an approved exception. Session V2 makes the standard configurable per
+prohibited without an approved exception; 8×8 and 16×16 not approved (invalid for new
+Lastlight assets). Session V2 makes the standard configurable per
 registry (sizes per asset class, density target) so Lastlight can enforce it; registries
 without a standard (examples, fixtures) keep the engine default. Anything else (above 64, non-square, not a power of two) loads unchanged but adds a warning to
 `TextureAsset::warnings` / `ModelAsset::warnings`, the log and `zodar.py assets check`

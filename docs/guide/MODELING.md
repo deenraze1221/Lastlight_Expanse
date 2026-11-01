@@ -3,12 +3,15 @@
 One pipeline, two tools. Both export `.glb` into the same registry, check and hot-reload path
 and follow one art standard (`docs/ART_DIRECTION.md`).
 
-**Scope (GDD §3 Amendment 1, 2026-11-01):** models are for props and detailed assets
-(weapons, characters, mutants, furniture, generators, machinery, computers, terminals,
-vehicles, doors and frames, lights, signs, equipment, decoration). Walls, floors, ceilings,
-stairs, terrain and other architecture are voxel blocks (`docs/guide/VOXELS.md`), not models.
-The D2 architecture modules (`floor`, `wall`, `doorway`, `corner`, `pillar`, `beam`,
-`stairs`, `ceiling`, …) are temporary and move to voxels in V5. Registry, check and loading details:
+**Scope (GDD §3 Amendment 1, 2026-11-01):** voxel blocks: architecture and structural
+environment (walls, floors, ceilings, stairs, terrain; `docs/guide/VOXELS.md`). Imported 3D
+models: weapons, characters, mutants, furniture, generators, machinery, computers, vehicles,
+equipment and decorative props (including doors and frames, lights, signs, terminals). The D2
+architecture modules (`floor`, `wall`, `doorway`, `corner`, `pillar`, `beam`, `stairs`,
+`ceiling`, …) are temporary greybox geometry that moves to voxels in V5; they do not restrict
+what imported models are used for.
+
+Registry, check and loading details:
 `docs/guide/ASSETS.md`. The engine reads glTF only; it never parses `.bbmodel` or `.blend`
 files and treats every export the same way. `asset.generator` is read only to report the
 source tool (`blockbench`, `blender` or `other`).
@@ -22,7 +25,7 @@ a real export in this repository.
 
 | | Blockbench (primary) | Blender (secondary) |
 | --- | --- | --- |
-| Use | Weapons, characters, mutants, furniture, equipment, props | Complex models (machinery, vehicles, blast-door frames), organic shapes |
+| Use | Weapons, characters, mutants, furniture, equipment, decorative props | Complex models (generators, machinery, computers, vehicles, blast-door frames), organic shapes |
 | Units | 16 Blockbench units = 1 block = 1 m | 1 unit = 1 m |
 | Source files | `.bbmodel` (plain JSON, normal Git) | `.blend` (regular Git: compressed, ≤ 20 MB, textures not packed) |
 

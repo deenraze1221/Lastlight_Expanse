@@ -139,7 +139,9 @@
 - Done (documentation only, no code): GDD Amendment 1 (§2 region = 64 × 64 m, handcrafted
   world with procedural generation as an authoring tool; §3 hybrid geometry, 0.5 m grid, Full
   Block / Half Block (Slab) / Vertical Half Block / Sub-block, extensible shapes, imported
-  models for props, final texture standard 32/64/128, ≥ 256 prohibited); new
+  imported 3D models for weapons, characters, mutants, furniture, generators, machinery,
+  computers, vehicles, equipment and decorative props; final texture standard 32/64/128,
+  ≥ 256 prohibited, 8×8/16×16 not approved); new
   `docs/guide/VOXELS.md` (binding spec); ART_DIRECTION §1–5; ARCHITECTURE "Phase V
   decisions"; PHASE_D_PLAN (Phase V sessions, dependencies, effect on D7/D8); roadmap;
   MODELING; ASSETS; CLAUDE.md; `game/assets/README.md` (pending changes).
@@ -147,7 +149,10 @@
   4.0 m ceiling, 0.5 m walls; Highlands stays the 1 m regression scene.
 - Implemented state unchanged: engine texture checks still enforce 32 default / 64 maximum
   (configurable per game in V2); game textures are 32×32 (re-made at 64×64 in V5).
-- Open questions for the user: may tiny details use 8×8/16×16 (not in the final table)?
+- V0 review corrections (user, 2026-11-01): 8×8/16×16 not approved (invalid for new assets);
+  model usage wording unified (voxel blocks: architecture and structural environment;
+  imported models: weapons, characters, mutants, furniture, generators, machinery, computers,
+  vehicles, equipment and decorative props).
 - **V1 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/guide/VOXELS.md` §2–5,
   `docs/PHASE_D_PLAN.md` (Phase V, V1), `engine/scene/Scene/Voxel/*.h`,
   `engine/scene/Scene/Voxel/ChunkMesher.cpp`, `engine/tests/Scene/VoxelTests.cpp`.

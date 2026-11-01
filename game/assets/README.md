@@ -78,7 +78,7 @@ get runtime mips instead.
 4. Remove the module from `MODULES` in the generator (so `--check` stops expecting it),
    run `zodar.py import models/<module>.glb` and the strict check. Without an entry in
    `colliders.json` the exploration mode uses the model's bounds as one collision box (fine
-   for props; architecture with openings needs explicit boxes until Collider components).
+   for compact models; geometry with openings needs explicit boxes until Collider components).
 5. In a Debug build with the game running, the level picks up the new file (hot reload).
 
 ## Source-file policy (regular Git, no Git LFS)

@@ -54,10 +54,11 @@
     0.5 × 0.5 × 0.5 m (one cell, 1/8 of a Full Block; not a "quarter
     block"). Extensible shapes: stairs, slopes and wedges, inner and
     outer corners, arches and curved shapes, thin panels, more later.
--   (A1) Props and detailed assets are imported 3D models (glTF/GLB):
-    weapons, characters, mutants, furniture, generators, machinery,
-    computers, terminals, vehicles, equipment, decoration. Blockbench is
-    primary (voxel/low-poly), Blender for complex and organic models.
+-   (A1) Voxel blocks: architecture and structural environment.
+    Imported 3D models (glTF/GLB): weapons, characters, mutants,
+    furniture, generators, machinery, computers, vehicles, equipment and
+    decorative props. Blockbench is primary (voxel/low-poly), Blender
+    for complex and organic models.
     Voxel geometry and models share style, materials, lighting and
     rendering.
 -   (A1) Texture resolution standard (replaces "32×32 default, 64×64
@@ -66,6 +67,7 @@
     furniture, props and equipment (64 texels per metre on voxel
     surfaces); 128×128 only for characters and weapons; 256×256 and
     above prohibited unless the project owner approves an exception.
+    8×8 and 16×16 are not approved (invalid for new assets).
     Nearest-neighbor filtering.
 -   Muted, faded colors and Eastern European post-war atmosphere.
 -   PBR materials, realistic lighting and shadows; UE5-inspired

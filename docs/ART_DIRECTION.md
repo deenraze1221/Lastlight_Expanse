@@ -20,8 +20,10 @@ modes, mip control, lighting, shadows, fog, weather). Games choose the look (see
 - **Hybrid geometry (GDD §3 Amendment 1, 2026-11-01):** the environment (walls, floors, ceilings,
   buildings, architecture, roads, terrain, rocks, bunkers, underground facilities) is built from
   voxel blocks on a 0.5 m base grid (Full Block 1 m, Half Block / Slab, Vertical Half Block,
-  Sub-block 0.5 m, plus shapes: stairs, slopes, corners, arches, thin panels). Props and detailed
-  assets are imported models (§3). Both share materials, lighting and rendering. Specification:
+  Sub-block 0.5 m, plus shapes: stairs, slopes, corners, arches, thin panels). Voxel blocks:
+  architecture and structural environment. Imported 3D models (§3): weapons, characters,
+  mutants, furniture, generators, machinery, computers, vehicles, equipment and decorative
+  props. Both share materials, lighting and rendering. Specification:
   `docs/guide/VOXELS.md`.
 
 ## 2. Texture standards
@@ -42,8 +44,8 @@ in V5. Textures are never resized automatically; violations are reported.
 
 - Sizes are powers of two and square. Above the size allowed for the asset's class, non-square
   or not a power of two is a violation (warning: re-author the texture; nothing is resized).
-- Sizes below 32×32 (8×8, 16×16) are not part of the final table; whether tiny details may use
-  them is an open question for the project owner (until decided: treat as violations in new art).
+- 8×8 and 16×16 are **not approved**: invalid for new assets (the engine's default check still
+  accepts them until V2 applies this standard to Lastlight's registry).
 - **Consistent palette.** Each game keeps one master palette. All textures are quantised to it, or
   to documented sub-palettes per biome or faction. Declare them in the game's `assets.json`
   (`"palette"`, `"subPalettes"`); `zodar.py assets check` reports off-palette texels.
@@ -80,11 +82,13 @@ pipeline, and stay unchanged so the Highlands screenshot regression stays byte-i
 
 ## 3. 3D asset workflow
 
-- **Environment geometry is voxels, not models** (GDD §3 A1): walls, floors, ceilings, stairs,
-  pillars, beams, openings and terrain are block construction (`docs/guide/VOXELS.md`). Models
-  are for props and detailed assets.
+- **Hybrid split** (GDD §3 A1): voxel blocks for architecture and structural environment
+  (walls, floors, ceilings, stairs, pillars, beams, openings, terrain; `docs/guide/VOXELS.md`);
+  imported 3D models for weapons, characters, mutants, furniture, generators, machinery,
+  computers, vehicles, equipment and decorative props. The D2 bunker's architecture modules are
+  temporary greybox geometry; they say nothing about which objects may be models.
 - **Blockbench** is the primary tool for voxel/low-poly models (weapons, characters, mutants,
-  furniture, equipment, props).
+  furniture, equipment, decorative props).
 - **Blender** is the secondary tool, for complex models (machinery, vehicles, blast-door frames)
   and organic shapes that are impractical in Blockbench. Blender assets must not drift from the
   voxel style: same texture sizes, palette, nearest sampling and texel density; triangle
