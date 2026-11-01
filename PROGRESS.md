@@ -113,9 +113,11 @@
   (8 sessions D1-D8, read lists, tests, acceptance criteria); roadmap updated.
 
 - **GDD added (2026-11-01):** `docs/GDD/Lastlight_Expanse_GDD_v1.1.md` is the authoritative
-  game specification (CLAUDE.md, `docs/PHASE_D_PLAN.md`). Five GDD alignment items (bunker
-  content, save backups/autosave, multiplayer constraints, electricity, art) are listed in the
-  plan and await user decisions before the affected sessions (D1 is not affected).
+  game specification (CLAUDE.md, `docs/PHASE_D_PLAN.md`). GDD alignment approved
+  (2026-11-01, `docs/PHASE_D_PLAN.md`): D2 greybox adds five merchant areas, locker room and
+  common area (static only); D6 adds rotating backups + configurable autosave; no networking in
+  Phase D, host-authoritative compatible, player ids and player logic game-side only; D7 adds
+  repairable electrical panels + emergency lighting; palette muted/faded post-war (GDD §3).
 
 ## Current task
 - **Next session: D1 — unified GLB/glTF pipeline for Blockbench and Blender (engine).**

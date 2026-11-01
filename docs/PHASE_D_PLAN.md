@@ -30,30 +30,26 @@ Expanse gameplay, world, art direction and features.
 5. **`.blend` sources:** Git LFS, enabled only after checking repository support and storage
    limits (D2 step 0, see below).
 
-## GDD alignment (open, user decision before the affected session)
+## GDD alignment (approved 2026-11-01)
 
-The plan was approved before the GDD was added. The items below are not yet in scope; nothing
-in the plan is changed until the user decides.
-1. **Bunker content (GDD §10, before D2):** the GDD bunker is the shared, permanent safe hub
-   with merchants, NPCs, private player lockers and common areas, no construction or
-   expansion. The plan's greybox has dormitory, corridor, generator room and airlock. Proposed:
-   add merchant stalls (five roles, §9), a locker room and a common area as static greybox
-   spaces in D2; NPCs, trading and lockers as gameplay stay out of Phase D.
-2. **Save requirements (GDD §11, before D6):** the GDD requires atomic writes and backups,
-   autosave every 5 minutes and on normal host exit, and saving world state, player data,
-   inventories, lockers, missions and world changes. D6 has atomic writes only. Proposed: add
-   rotating backups and an engine autosave interval hook to D6 (generic); game data beyond
-   player/doors/power waits for the features that own it.
-3. **Multiplayer (GDD §11, D3-D6 design constraint):** server-authoritative host-based co-op
-   (4 players, room for 5). Proposed: no networking in Phase D, but input actions, systems,
-   events and saves are designed so actions can later become per-player commands to an
-   authoritative host (player id on actions/events, no global "the player" in engine APIs).
-4. **Electricity (GDD §4):** district-level generators, repairable panels, emergency lights.
-   D7 `Power` matches the generator part; repairable panels and emergency lights proposed as
-   D7 extensions (emergency lights on when power is off).
-5. **Art direction (GDD §3):** consistent with `ART_DIRECTION.md` (32×32 default, 64×64 max,
-   nearest filtering, PBR). "Muted, faded colors, Eastern European post-war atmosphere" guides
-   the greybox palette in D2.
+The plan was approved before the GDD was added; these decisions align it with the GDD and are
+part of the binding plan.
+1. **Bunker content (GDD §10, §9) — D2:** the greybox adds merchant areas (five roles: weapon
+   dealer, medic, resource trader, technician, scout), a locker room and a common area. Static
+   spaces only: no NPC, merchant, trading or locker functionality in Phase D. No construction,
+   upgrades or expansion (GDD §10).
+2. **Saving (GDD §11) — D6:** rotating backups and a configurable autosave interval (game sets
+   5 minutes and saves on normal exit). Feature-specific save data (inventories, lockers,
+   missions, world changes) is added later by the systems that own it.
+3. **Multiplayer (GDD §11) — D3-D7 constraint:** no networking in Phase D. The architecture
+   stays compatible with host-authoritative multiplayer (simulation driven only by fixed-step
+   actions, events and saved state; no hidden global state in systems), but player ids and
+   all player-specific logic live in the game layer. Generic engine APIs (Input, scheduler,
+   events, save) have no player concept.
+4. **Electricity (GDD §4) — D7:** besides the generator, repairable electrical panels and
+   emergency lighting (on while main power is off).
+5. **Art (GDD §3) — D2 onward:** the master palette follows GDD §3: muted, faded colours,
+   Eastern European post-war atmosphere; 32×32 default, 64×64 maximum, nearest filtering, PBR.
 
 ## Findings that shape the plan
 
@@ -146,15 +142,19 @@ handoff block described under "Session workflow".
   `game/assets/sources/blender/*.blend filter=lfs diff=lfs merge=lfs -text`, plus
   `game/assets/** -text` (registry hashes cover exact bytes). If LFS is not usable, stop and
   report; no `.blend` is committed without LFS. Document the setup in `MODELING.md`.
+- Read also: GDD §1, §3, §9, §10.
 - Layout: `game/assets/{assets.json, palette.png, sources/blockbench/, sources/blender/,
   models/, materials/, prefabs/, levels/bunker.scene.json}`; `assets.json` holds defaults,
   budgets, master palette and sub-palettes.
 - Greybox kit (`game/tools/make_greybox_kit.py`, stdlib only, deterministic bytes):
   Blockbench-style floor, wall, doorway, corner, ceiling, pillar, stairs, door leaf, lamp,
-  crate, bunk, locker, terminal, generator; one Blender-style curved airlock arch. 32×32
-  palette textures. File names are the long-term names real exports will replace.
-- Level: four rooms (dormitory, corridor, generator room, airlock), point lights limited to
-  their rooms, emissive lamps, dim fog.
+  crate, bunk, locker, terminal, generator, electrical panel, emergency light, merchant counter,
+  shelf, table, bench; one Blender-style curved airlock arch. 32×32 textures from the master
+  palette (muted, faded post-war colours, GDD §3). File names are the long-term names real exports will replace.
+- Level (static greybox, GDD §10): dormitory, corridor, generator room, airlock, five merchant
+  areas (weapon dealer, medic, resource trader, technician, scout), locker room (private
+  lockers as props), common area. Point lights limited to their rooms, emissive lamps,
+  emergency lights (props until D7), dim fog. No NPC, merchant or locker functionality.
 - Game: `--level bunker|highlands` (default `bunker`); loads through `LiveScene` +
   `AssetManager` (async, hot reload in Debug); existing fly camera. Existing highlands tests
   pass `--level highlands`.
@@ -214,28 +214,42 @@ handoff block described under "Session workflow".
   state); `world` (entity snapshot via `captureScene` + registered components, models by
   registry id); `game` (JSON per key from save handlers). Atomic write (temp + rename);
   versioned load with clear errors; load into a new World, swapped in only on success.
+- Rotating backups (GDD §11): before a save replaces a file, the previous file rotates to
+  `<name>.bak1..N` (`SaveGameDesc::backups`, default 3); load can fall back to the newest
+  valid backup when the main file is corrupt (reported, never silent).
+- Autosave: configurable interval (`SaveGameDesc::autosaveInterval`, off by default; the game
+  sets 5 minutes) on the fixed-step clock, plus save on normal exit when enabled. Generic: no
+  player or game concepts in the engine API.
 - CLI: `--load-save FILE`, `--save-at-exit FILE`.
 - Tests: registered components (parse, override, capture round-trip, unknown field), save
-  round-trip, version/corrupt/missing errors, atomic write; GPU determinism: replay to tick N,
+  round-trip, version/corrupt/missing errors, atomic write, backup rotation and fallback,
+  autosave interval (deterministic ticks) and save on exit; GPU determinism: replay to tick N,
   save, load, continue = uninterrupted screenshot.
 - Acceptance: determinism case passes; a failed load leaves the running World unchanged.
 
 ### D7 — Playable bunker (game)
 - Read: `docs/guide/INPUT.md` and `GAMEPLAY.md` (drafted in D3–D6), `game/src`,
   `game/assets/levels/bunker.scene.json`.
-- Components: `Collider` (static box), `Door`, `PowerSwitch`, `Interactable`,
-  `PlayerSpawn`; colliders authored in prefabs (doorways walkable).
+- Read also: GDD §4 (electricity), §10, §11.
+- Components: `Collider` (static box), `Door`, `PowerSwitch`, `ElectricalPanel` (broken /
+  repaired), `EmergencyLight`, `Interactable`, `PlayerSpawn`; colliders authored in prefabs (doorways walkable).
 - `CollisionWorld` interface (decision 2) with the AABB implementation: axis-separated sweep,
   raycast, static boxes only.
 - Systems: `PlayerController` (walk, sprint, crouch, look, gravity, steps/stairs) using
   `CollisionWorld`; `Interaction` (ray against `Interactable`); `Doors` (timer-driven
-  sliding); `Power` (generator switch event → light intensity + lamp emissive via
-  `updateMaterial`).
+  sliding); `Power` (generator switch and repairable panels; main lights on only when the
+  generator runs and the room's panel is repaired; emergency lights on while main power is off;
+  light intensity + lamp emissive via `updateMaterial`). Player id and player-specific state
+  are game-side (decision 3).
 - `--free-cam` keeps the fly camera; F5/F9 quick save/load through `SaveGame` with handlers
-  for player, doors and power.
-- Recording `game/tests/bunker_walk.inputrec.jsonl`: dormitory → generator → door → airlock.
-- Tests: AABB sweep (walls, corners, steps, no tunnelling at max speed), door and power state
-  machines; GPU `gpu.lastlight_bunker_walk` (ends in the airlock within tolerance, lights on,
+  for player, doors, panels and power; game autosave every 5 minutes and on normal exit
+  (D6 interval).
+- Recording `game/tests/bunker_walk.inputrec.jsonl`: dormitory → repair panel → start
+  generator → door → airlock.
+- Tests: AABB sweep (walls, corners, steps, no tunnelling at max speed), door, panel and power
+  state machines (emergency lights on without power, main lights only with generator + repaired
+  panel); GPU `gpu.lastlight_bunker_walk` (ends in the airlock within tolerance, main lights on,
+  emergency lights off,
   screenshot, 0 validation messages).
 - Acceptance: a human or the replay can walk the bunker; all interaction runs through actions,
   systems and events; no system depends on the AABB implementation directly.
