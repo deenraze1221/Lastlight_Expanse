@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "entities": [
+    {
+      "id": "fixture",
+      "name": "Wall light",
+      "modelRenderer": {
+        "model": "wall_light"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Wall light source",
+      "parent": "fixture",
+      "transform": {
+        "position": [
+          0.0,
+          2.15,
+          0.3
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1.0,
+          0.78,
+          0.5
+        ],
+        "intensity": 2.0,
+        "range": 3.5
+      }
+    }
+  ]
+}

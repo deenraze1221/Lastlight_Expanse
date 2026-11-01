@@ -1,5 +1,9 @@
 #include "Bunker/BunkerApp.h"
 
+#include "Bunker/LevelColliders.h"
+#include "Physics/CollisionWorld.h"
+#include "Player/ExplorationWalker.h"
+
 #include "AssetManager/AssetManager.h"
 #include "AssetManager/AssetRegistry.h"
 #include "AssetManager/LiveScene.h"
@@ -9,6 +13,7 @@
 #include "Renderer/Mesh.h"
 #include "Renderer/Resources/UploadContext.h"
 #include "Renderer/Vulkan/VulkanContext.h"
+#include "Platform/Window.h"
 #include "SceneFile/SceneFile.h"
 #include "World/World.h"
 #include "WorldRender/SceneComponents.h"
@@ -34,8 +39,8 @@ constexpr const char* kLevel = "levels/bunker.scene.json";
 
 class BunkerApp final : public Application {
 public:
-    BunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir)
-        : Application(desc), m_assetDir(std::move(assetDir)) {}
+    BunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore)
+        : Application(desc), m_assetDir(std::move(assetDir)), m_explore(explore) {}
 
 protected:
     void onStart() override {
@@ -48,7 +53,7 @@ protected:
         m_registry = AssetRegistry::load(m_assetDir / AssetRegistry::kFileName);
         {
             UploadBatch batch(upload());
-            m_signMesh.emplace(batch, primitives::plane(0.8f, 0.8f)); // "sign" mesh of the level
+            m_signMesh.emplace(batch, primitives::plane(0.6f, 0.6f)); // "sign" mesh of the level
             batch.submit();
         }
         // Start every model and material of the level decoding on the worker threads; the
@@ -61,10 +66,40 @@ protected:
             m_assets->waitAll(); // reproducible frames: the level is complete in frame 0
         }
         m_view.camera.projection.nearPlane = 0.05f;
+        if (m_explore) {
+            m_colliderTable = loadColliderTable(m_assetDir / "colliders.json");
+        }
         tryLoadLevel();
     }
 
+    void onFixedUpdate(double dt) override {
+        if (!m_explore || !m_level) {
+            return;
+        }
+        // Temporary keyboard polling (D3 replaces this with input actions).
+        const bool* keys = SDL_GetKeyboardState(nullptr);
+        WalkInput input;
+        input.forward = float(keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) -
+                        float(keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN]);
+        input.right = float(keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) -
+                      float(keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]);
+        input.sprint = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+        input.jump = keys[SDL_SCANCODE_SPACE];
+        input.yaw = m_yaw;
+        m_walker.step(m_collision, input, static_cast<float>(dt));
+    }
+
     void onEvent(const SDL_Event& e) override {
+        if (m_explore) {
+            // Mouse look while captured; Tab releases/recaptures the mouse, a click recaptures.
+            if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_TAB && !e.key.repeat) setMouseCaptured(!m_captured);
+            if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured) setMouseCaptured(true);
+            if (e.type == SDL_EVENT_MOUSE_MOTION && m_captured) {
+                m_yaw -= e.motion.xrel * 0.0025f;
+                m_pitch = std::clamp(m_pitch - e.motion.yrel * 0.0025f, -1.5f, 1.5f);
+            }
+            return;
+        }
         if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_RIGHT) m_looking = true;
         if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_RIGHT) m_looking = false;
         if (e.type == SDL_EVENT_MOUSE_MOTION && m_looking) {
@@ -83,10 +118,18 @@ protected:
             ZODAR_LOG_WARN("Level reload failed, previous version kept: {}", m_level->error());
         }
         if (m_level) m_lastError = m_level->error();
+        if (m_explore && m_level && m_level->generation() != m_colliderGeneration) {
+            rebuildColliders(); // the level was hot-reloaded: new geometry, same walker position
+        }
 
-        // Fly camera (until the player controller in D7). Speeds are bunker-scale.
-        const float dt = static_cast<float>(time.dt);
         m_view.camera.setYawPitch(m_yaw, m_pitch);
+        if (m_explore) {
+            m_view.camera.position = m_walker.eye();
+            finishFrame(time);
+            return;
+        }
+        // Fly camera. Speeds are bunker-scale.
+        const float dt = static_cast<float>(time.dt);
         const bool* keys = SDL_GetKeyboardState(nullptr);
         glm::vec3 move(0.0f);
         if (keys[SDL_SCANCODE_W]) move += m_view.camera.forward();
@@ -99,7 +142,10 @@ protected:
             const float speed = keys[SDL_SCANCODE_LSHIFT] ? 8.0f : 3.0f;
             m_view.camera.position += glm::normalize(move) * speed * dt;
         }
+        finishFrame(time);
+    }
 
+    void finishFrame(const FrameTime& time) {
         m_draws.clear();
         collectDraws(m_world, m_draws); // modelRenderer modules + meshRenderer signs (CPU path)
         collectLighting(m_world, m_view); // room lights, ambient, fog (re-read: hot reload)
@@ -112,7 +158,16 @@ protected:
     }
 
     void onShutdown() override {
+        setMouseCaptured(false);
         renderer().waitIdle();
+        if (m_explore && m_level) {
+            const glm::vec3 p = m_walker.feet();
+            ZODAR_LOG_INFO("Explorer at ({:.2f}, {:.2f}, {:.2f}), {}", p.x, p.y, p.z,
+                           m_walker.grounded() ? "on the ground" : "in the air");
+            if (m_collision.overlaps(m_walker.box()) || p.y < -1.0f) {
+                fail("exploration walker ended inside geometry or below the floor");
+            }
+        }
         if (m_level) {
             ZODAR_LOG_INFO("Bunker: {} entities, {} draws in the last frame", m_world.entityCount(),
                            lastRenderStats().drawCalls);
@@ -162,6 +217,38 @@ private:
         }
         ZODAR_LOG_INFO("Bunker loaded: {} entities ({} watched files{})", m_world.entityCount(),
                        m_level->files().size(), m_level->watching() ? ", hot reload on" : "");
+        if (m_explore) {
+            rebuildColliders();
+            const WalkerSettings& w = m_walker.settings();
+            m_walker.spawn(m_view.camera.position - glm::vec3(0.0f, w.eyeHeight, 0.0f));
+            setMouseCaptured(true);
+            ZODAR_LOG_INFO("Exploration mode: WASD move, mouse look, Shift sprint, Space jump, Tab frees the "
+                           "mouse, Esc quits");
+        }
+    }
+
+    void rebuildColliders() {
+        m_collision.clear();
+        const SceneBindings& bindings = m_level->bindings();
+        const LevelColliderStats stats = buildLevelColliders(
+            m_level->document(), m_colliderTable,
+            [&](const std::string& model) -> std::optional<Aabb> {
+                const auto it = bindings.models.find(model);
+                if (it == bindings.models.end() || !it->second || it->second->bounds().isEmpty()) return std::nullopt;
+                return Aabb{it->second->bounds().min, it->second->bounds().max};
+            },
+            m_collision);
+        m_colliderGeneration = m_level->generation();
+        ZODAR_LOG_INFO("Colliders: {} boxes ({} entities from colliders.json, {} from model bounds, {} without)",
+                       stats.boxes, stats.fromTable, stats.fromBounds, stats.skipped);
+    }
+
+    void setMouseCaptured(bool captured) {
+        if (desc().headless || captured == m_captured) {
+            return;
+        }
+        SDL_SetWindowRelativeMouseMode(window().native(), captured);
+        m_captured = captured;
     }
 
     std::filesystem::path m_assetDir;
@@ -175,6 +262,12 @@ private:
     std::vector<MeshDraw> m_draws;
     SceneView m_view;
     std::string m_lastError;
+    bool m_explore = false;
+    ColliderTable m_colliderTable;
+    CollisionWorld m_collision;
+    ExplorationWalker m_walker;
+    uint64_t m_colliderGeneration = 0;
+    bool m_captured = false;
     float m_yaw = 0.0f;
     float m_pitch = 0.0f;
     bool m_looking = false;
@@ -182,8 +275,8 @@ private:
 
 } // namespace
 
-std::unique_ptr<Application> makeBunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir) {
-    return std::make_unique<BunkerApp>(desc, std::move(assetDir));
+std::unique_ptr<Application> makeBunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore) {
+    return std::make_unique<BunkerApp>(desc, std::move(assetDir), explore);
 }
 
 } // namespace lastlight

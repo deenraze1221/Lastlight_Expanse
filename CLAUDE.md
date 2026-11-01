@@ -53,7 +53,8 @@ SDL_VIDEO_DRIVER=offscreen ctest --test-dir build --output-on-failure
   (presets `debug|release|gpu-tests|ci` in `CMakePresets.json`; guide: `docs/guide/RUNNING.md`).
 - Focused: `./build/bin/ZodarTests -tc='name*'`, `./build/bin/ZodarGpuTests -tc='name*'`.
 - Game smoke: `./build/bin/LastlightExpanse --headless --deterministic --frames 60 --screenshot out.png --report run.json`
-  (default level `bunker` from `game/assets`; `--level highlands` = regression scene, screenshot byte-identical)
+  (default level `bunker` from `game/assets`; `--level highlands` = regression scene, screenshot byte-identical;
+  `--explore` / `zodar.py explore` = temporary first-person walk with collision)
   (standard options of every `Application` app: `--help`).
 - New apps derive from `zodar::Application` (`engine/runtime/Runtime/Application.h`); game,
   ModelViewer and ZodarBench do (ZodarBench: `--frames` = measured frames).

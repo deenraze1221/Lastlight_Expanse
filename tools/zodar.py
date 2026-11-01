@@ -6,6 +6,7 @@ Usage (from anywhere; paths are relative to the current directory):
   zodar.py [--preset P | --build-dir DIR] test [-R REGEX] [--tail N]
   zodar.py [--preset P | --build-dir DIR] run APP [--tail N] [-- APP_ARGS ...]
   zodar.py [--preset P | --build-dir DIR] shot APP [--frames N] [--out DIR] [-- APP_ARGS ...]
+  zodar.py [--preset P | --build-dir DIR] explore [-- GAME_ARGS ...]   walk the bunker (window)
   zodar.py [--preset P | --build-dir DIR] bench [-- ZODARBENCH_ARGS ...]
   zodar.py report FILE.json
   zodar.py [--preset P | --build-dir DIR] import FILE|DIR... [ZodarAssetTool import options]
@@ -176,6 +177,16 @@ def cmd_run(args):
     return code
 
 
+def cmd_explore(args):
+    """Starts the game in a normal window in the bunker's first-person exploration mode
+    (temporary walker until D7). Interactive: no timeout, output goes to the console."""
+    exe = executable(args, "game")
+    cmd = [str(exe), "--level", "bunker", "--explore", *args.extra]
+    print("starting: " + " ".join(cmd))
+    print("WASD move, mouse look, Shift sprint, Space jump, Tab frees the mouse, Esc quits")
+    return subprocess.run(cmd).returncode
+
+
 def cmd_shot(args):
     exe = executable(args, args.app)
     out_dir = Path(args.out).resolve()
@@ -325,6 +336,9 @@ def main(argv=None):
     p.add_argument("action", choices=["list", "check"])
     p.add_argument("rest", nargs=argparse.REMAINDER, help="[--registry F] [--json] [--report F] [--strict]")
     p.set_defaults(func=cmd_assets)
+
+    p = sub.add_parser("explore", help="walk the bunker in first person (game window, Windows/Linux)")
+    p.set_defaults(func=cmd_explore)
 
     p = sub.add_parser("report", help="summarize a run report or ZodarBench report")
     p.add_argument("file")

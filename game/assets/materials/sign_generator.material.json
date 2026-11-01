@@ -1,0 +1,10 @@
+{
+  "name": "sign_generator",
+  "shader": "zodar/pbr",
+  "roughness": 0.8,
+  "doubleSided": true,
+  "baseColorTexture": {
+    "path": "../textures/signs/generator.png",
+    "filter": "pixelArt"
+  }
+}

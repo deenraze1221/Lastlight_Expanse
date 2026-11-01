@@ -191,6 +191,14 @@ handoff block described under "Session workflow".
   then `LiveScene` (blocking, cache hits) instantiates the level; the highlands
   byte-identity was verified by comparing screenshots before/after on lavapipe (no golden
   image in ctest, results are GPU-specific).
+- **Revision (user request, 2026-11-01):** the bunker was redesigned as a spacious, modern,
+  maintained military shelter (4 m grid, 4 m corridor, 3.6 m ceilings, larger rooms, wide
+  openings, structural beams, organised services, layered lighting; same rooms and areas;
+  `game/assets/README.md`). Also by user request: a TEMPORARY first-person exploration mode
+  (`--explore`, `zodar.py explore`): `game/src/Physics/CollisionWorld` (the approved D7/decision
+  2 interface, implemented now and reused by D7), a temporary `ExplorationWalker` (replaced by
+  the D7 player controller on D3 input actions), collision boxes from `colliders.json`. No
+  interaction, doors, power or gameplay logic.
 
 ### D3 — Input action maps (engine)
 - Read: `engine/runtime/Runtime/Application.h`, `CommandLine.h`, game input code.

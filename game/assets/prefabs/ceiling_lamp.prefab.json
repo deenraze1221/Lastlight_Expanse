@@ -3,11 +3,11 @@
   "entities": [
     {
       "id": "lamp",
-      "name": "Lamp",
+      "name": "Overhead light",
       "transform": {
         "position": [
           0.0,
-          3.0,
+          3.6,
           0.0
         ]
       },
@@ -17,23 +17,23 @@
     },
     {
       "id": "light",
-      "name": "Lamp light",
+      "name": "Overhead light source",
       "parent": "lamp",
       "transform": {
         "position": [
           0.0,
-          -0.35,
+          -0.3,
           0.0
         ]
       },
       "pointLight": {
         "color": [
-          1.0,
-          0.82,
-          0.55
+          0.92,
+          0.93,
+          1.0
         ],
-        "intensity": 6.0,
-        "range": 5.0
+        "intensity": 12.0,
+        "range": 7.0
       }
     }
   ]

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "materials": {
+    "sign": "../materials/sign_dormitory.material.json"
+  },
+  "entities": [
+    {
+      "id": "sign",
+      "name": "Sign",
+      "transform": {
+        "rotationDegrees": [
+          90.0,
+          0.0,
+          0.0
+        ]
+      },
+      "meshRenderer": {
+        "mesh": "sign",
+        "material": "sign"
+      }
+    }
+  ]
+}

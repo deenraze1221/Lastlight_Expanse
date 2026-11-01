@@ -27,7 +27,17 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:3413103b06710237",
+      "hash": "fnv1a64:5f8fece3e53d1e0e",
+      "dependencies": []
+    },
+    {
+      "id": "beam",
+      "type": "model",
+      "source": "models/beam.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:1987f418795124af",
       "dependencies": []
     },
     {
@@ -37,7 +47,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:51e454991ec02a29",
+      "hash": "fnv1a64:d331c766bc186a9b",
       "dependencies": []
     },
     {
@@ -47,15 +57,20 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:8ccb936063da5e61",
+      "hash": "fnv1a64:6871d697dfd1f48e",
       "dependencies": []
     },
     {
       "id": "bunker",
       "type": "scene",
       "source": "levels/bunker.scene.json",
-      "hash": "fnv1a64:629913aa6ae5a5d1",
+      "hash": "fnv1a64:9dd31968139d8ce3",
       "dependencies": [
+        "materials/sign_airlock.material.json",
+        "materials/sign_common.material.json",
+        "materials/sign_dormitory.material.json",
+        "materials/sign_generator.material.json",
+        "materials/sign_lockers.material.json",
         "materials/sign_medic.material.json",
         "materials/sign_resources.material.json",
         "materials/sign_scout.material.json",
@@ -63,6 +78,13 @@
         "materials/sign_weapons.material.json",
         "prefabs/ceiling_lamp.prefab.json",
         "prefabs/merchant_stall.prefab.json",
+        "prefabs/room_sign.prefab.json",
+        "prefabs/wall_light_unit.prefab.json",
+        "textures/signs/airlock.png",
+        "textures/signs/common.png",
+        "textures/signs/dormitory.png",
+        "textures/signs/generator.png",
+        "textures/signs/lockers.png",
         "textures/signs/medic.png",
         "textures/signs/resources.png",
         "textures/signs/scout.png",
@@ -71,20 +93,30 @@
       ]
     },
     {
+      "id": "cable_tray",
+      "type": "model",
+      "source": "models/cable_tray.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:a7e300a49f75606a",
+      "dependencies": []
+    },
+    {
       "id": "ceiling",
       "type": "model",
       "source": "models/ceiling.glb",
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:e3680667ea479510",
+      "hash": "fnv1a64:7882581b09523ded",
       "dependencies": []
     },
     {
       "id": "ceiling_lamp",
       "type": "prefab",
       "source": "prefabs/ceiling_lamp.prefab.json",
-      "hash": "fnv1a64:076a407382735285",
+      "hash": "fnv1a64:f21885eaf524e974",
       "dependencies": []
     },
     {
@@ -94,7 +126,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:bc212568293c6e6f",
+      "hash": "fnv1a64:0b0bb30130d255c7",
       "dependencies": []
     },
     {
@@ -104,7 +136,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:48b6809dbf08b4a6",
+      "hash": "fnv1a64:15e5dd290c90c605",
       "dependencies": []
     },
     {
@@ -114,7 +146,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:411d4c33c1292d88",
+      "hash": "fnv1a64:a9f3c3d583e5f629",
       "dependencies": []
     },
     {
@@ -124,7 +156,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:2babbf58cc55bb65",
+      "hash": "fnv1a64:a7deb942b0815cb3",
       "dependencies": []
     },
     {
@@ -134,7 +166,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:8f135123c6c5c188",
+      "hash": "fnv1a64:66ff199fdb9cb623",
       "dependencies": []
     },
     {
@@ -144,7 +176,18 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:c39436884ee202a6",
+      "hash": "fnv1a64:fdb2e3343c8b0004",
+      "dependencies": [],
+      "palette": "glow"
+    },
+    {
+      "id": "exit_sign",
+      "type": "model",
+      "source": "models/exit_sign.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:aeaf02ab6a2d2d19",
       "dependencies": [],
       "palette": "glow"
     },
@@ -155,7 +198,17 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:21fdc436a03176b4",
+      "hash": "fnv1a64:1ad5f1e8c752339c",
+      "dependencies": []
+    },
+    {
+      "id": "floor_marked",
+      "type": "model",
+      "source": "models/floor_marked.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:9dd6820bd62c53af",
       "dependencies": []
     },
     {
@@ -165,8 +218,9 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:001d16ef9da7848d",
-      "dependencies": []
+      "hash": "fnv1a64:fe51c5890d7b2ce4",
+      "dependencies": [],
+      "palette": "glow"
     },
     {
       "id": "lamp",
@@ -175,7 +229,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:c16ce4cb48c3c770",
+      "hash": "fnv1a64:3fe9433575bdff5e",
       "dependencies": [],
       "palette": "glow"
     },
@@ -186,7 +240,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:f0f13b15bbb59e40",
+      "hash": "fnv1a64:b8ba6c9a19e62c62",
       "dependencies": []
     },
     {
@@ -196,18 +250,28 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:756dcfefc3d5ae98",
+      "hash": "fnv1a64:de6a222ebd99705f",
       "dependencies": []
     },
     {
       "id": "merchant_stall",
       "type": "prefab",
       "source": "prefabs/merchant_stall.prefab.json",
-      "hash": "fnv1a64:112e7f6aecebf27c",
+      "hash": "fnv1a64:0042fdcb3957247a",
       "dependencies": [
         "materials/sign_weapons.material.json",
         "textures/signs/weapons.png"
       ]
+    },
+    {
+      "id": "opening_wide",
+      "type": "model",
+      "source": "models/opening_wide.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:cfd5a76c56a40ac8",
+      "dependencies": []
     },
     {
       "id": "pillar",
@@ -216,8 +280,18 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:b3ae64288b95c748",
+      "hash": "fnv1a64:2064d9c6532580bb",
       "dependencies": []
+    },
+    {
+      "id": "room_sign",
+      "type": "prefab",
+      "source": "prefabs/room_sign.prefab.json",
+      "hash": "fnv1a64:9f723d50752a8a5d",
+      "dependencies": [
+        "materials/sign_dormitory.material.json",
+        "textures/signs/dormitory.png"
+      ]
     },
     {
       "id": "shelf",
@@ -226,14 +300,59 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:9a4329ede81b8e61",
+      "hash": "fnv1a64:34f99123610fd1d3",
       "dependencies": []
+    },
+    {
+      "id": "sign_airlock",
+      "type": "material",
+      "source": "materials/sign_airlock.material.json",
+      "hash": "fnv1a64:e01df989f7a940d0",
+      "dependencies": [
+        "textures/signs/airlock.png"
+      ]
+    },
+    {
+      "id": "sign_common",
+      "type": "material",
+      "source": "materials/sign_common.material.json",
+      "hash": "fnv1a64:d57a1143f3600ee5",
+      "dependencies": [
+        "textures/signs/common.png"
+      ]
+    },
+    {
+      "id": "sign_dormitory",
+      "type": "material",
+      "source": "materials/sign_dormitory.material.json",
+      "hash": "fnv1a64:240291c9b01eb091",
+      "dependencies": [
+        "textures/signs/dormitory.png"
+      ]
+    },
+    {
+      "id": "sign_generator",
+      "type": "material",
+      "source": "materials/sign_generator.material.json",
+      "hash": "fnv1a64:2d482e47702b547f",
+      "dependencies": [
+        "textures/signs/generator.png"
+      ]
+    },
+    {
+      "id": "sign_lockers",
+      "type": "material",
+      "source": "materials/sign_lockers.material.json",
+      "hash": "fnv1a64:2ea7751ac78bd99d",
+      "dependencies": [
+        "textures/signs/lockers.png"
+      ]
     },
     {
       "id": "sign_medic",
       "type": "material",
       "source": "materials/sign_medic.material.json",
-      "hash": "fnv1a64:7da76aaca771ea69",
+      "hash": "fnv1a64:e737835ff07b6f14",
       "dependencies": [
         "textures/signs/medic.png"
       ]
@@ -242,7 +361,7 @@
       "id": "sign_resources",
       "type": "material",
       "source": "materials/sign_resources.material.json",
-      "hash": "fnv1a64:4df0516c93764a02",
+      "hash": "fnv1a64:61985749c7acac23",
       "dependencies": [
         "textures/signs/resources.png"
       ]
@@ -251,7 +370,7 @@
       "id": "sign_scout",
       "type": "material",
       "source": "materials/sign_scout.material.json",
-      "hash": "fnv1a64:b42d268af0ef57af",
+      "hash": "fnv1a64:fccc50054d4c87ea",
       "dependencies": [
         "textures/signs/scout.png"
       ]
@@ -260,7 +379,7 @@
       "id": "sign_technician",
       "type": "material",
       "source": "materials/sign_technician.material.json",
-      "hash": "fnv1a64:98aace22e4f978ce",
+      "hash": "fnv1a64:7683bd661d045de3",
       "dependencies": [
         "textures/signs/technician.png"
       ]
@@ -269,7 +388,7 @@
       "id": "sign_weapons",
       "type": "material",
       "source": "materials/sign_weapons.material.json",
-      "hash": "fnv1a64:a973ff6c66f3fe4b",
+      "hash": "fnv1a64:8f7921b6fa48b6f2",
       "dependencies": [
         "textures/signs/weapons.png"
       ]
@@ -281,7 +400,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:eb342898e985bb55",
+      "hash": "fnv1a64:a7922b6a2b190a92",
       "dependencies": []
     },
     {
@@ -291,7 +410,7 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:e3b3ffe7e0087039",
+      "hash": "fnv1a64:e80393418c446369",
       "dependencies": []
     },
     {
@@ -301,9 +420,19 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:91867bb989d7efee",
+      "hash": "fnv1a64:5e6985454fcde9fd",
       "dependencies": [],
       "palette": "glow"
+    },
+    {
+      "id": "vent",
+      "type": "model",
+      "source": "models/vent.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:02d1557d7d9a2988",
+      "dependencies": []
     },
     {
       "id": "wall",
@@ -312,7 +441,25 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:62b12feb2aec49a9",
+      "hash": "fnv1a64:b37004c28dfcdbbe",
+      "dependencies": []
+    },
+    {
+      "id": "wall_light",
+      "type": "model",
+      "source": "models/wall_light.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:1220f78cfce79154",
+      "dependencies": [],
+      "palette": "glow"
+    },
+    {
+      "id": "wall_light_unit",
+      "type": "prefab",
+      "source": "prefabs/wall_light_unit.prefab.json",
+      "hash": "fnv1a64:46e1528acb43e844",
       "dependencies": []
     }
   ]

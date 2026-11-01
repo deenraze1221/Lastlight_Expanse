@@ -2,7 +2,7 @@
 //   bunker    (default, Phase D2) the team bunker greybox from game/assets (Bunker/BunkerApp.cpp)
 //   highlands streamed voxel highlands at dusk (regression scene; this file)
 //
-//   LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR]
+//   LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR] [--explore]
 //                    highlands only: [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]
 //                    [--untextured] [--no-fog] [--spawn-height H] [--pitch DEG]
 //
@@ -10,6 +10,8 @@
 // --report, --seed, --camera, ...) come from the engine runtime: run with --help.
 // Default seed 1337, window 1600x900.
 //
+// --explore (bunker): temporary first-person walk with collision (WASD, mouse look, Shift sprint,
+// Space jump, Tab frees the mouse) until the D7 player controller. Otherwise:
 // Controls: hold right mouse to look, WASD move, Space/Ctrl up/down, Shift fast, F1 profiler,
 // Esc quits; highlands: left click digs the targeted voxel, F places stone on it.
 // Exit codes: 0 ok, 1 fatal error, 2 validation errors, 3 screenshot/capture failed.
@@ -53,7 +55,7 @@ using namespace zodar::gfx;
 using namespace zodar::voxel;
 
 constexpr std::string_view kUsage =
-    "LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR]\n"
+    "LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR] [--explore]\n"
     "                 highlands: [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]\n"
     "                 [--untextured] [--no-fog] [--spawn-height H] [--pitch DEG]";
 
@@ -61,6 +63,7 @@ constexpr std::string_view kUsage =
 struct Options {
     std::string level = "bunker";                 // bunker | highlands
     std::filesystem::path assets = LASTLIGHT_ASSETS_DIR; // game/assets (bunker)
+    bool explore = false;                         // bunker: first-person walk with collision
     int viewRadius = 10;
     LightingQuality quality = LightingQuality::High;
     bool textured = true; // pixel-art texture arrays (false: flat palette colours, A/B tests)
@@ -81,6 +84,7 @@ Options parseOptions(std::span<const std::string> args) {
             o.level = next();
             if (o.level != "bunker" && o.level != "highlands") fail("--level must be bunker or highlands");
         } else if (arg == "--assets") o.assets = next();
+        else if (arg == "--explore") o.explore = true;
         else if (arg == "--view-radius") o.viewRadius = static_cast<int>(parseIntArgument(arg, next()));
         else if (arg == "--lighting-quality") o.quality = parseLightingQuality(next());
         else if (arg == "--untextured") o.textured = false;
@@ -342,8 +346,9 @@ int main(int argc, char** argv) {
                              std::span<const std::string> args) -> std::unique_ptr<zodar::Application> {
                               const Options options = parseOptions(args);
                               if (options.level == "bunker") {
-                                  return lastlight::makeBunkerApp(desc, options.assets);
+                                  return lastlight::makeBunkerApp(desc, options.assets, options.explore);
                               }
+                              if (options.explore) fail("--explore needs --level bunker");
                               return std::make_unique<LastlightApp>(desc, options);
                           });
 }

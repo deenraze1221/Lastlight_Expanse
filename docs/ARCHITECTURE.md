@@ -470,6 +470,16 @@ Binding plan: `docs/PHASE_D_PLAN.md`.
   `binary`; `.gitignore` drops Blender backups and `*.zodar/` caches.
 - Registry defaults `compile: false` until compiled caches are produced in the build instead
   of the source tree.
+- Exploration mode (user request during D2, temporary): `CollisionWorld`
+  (`game/src/Physics`: static AABBs; `sweep` per axis with skin, `raycast`, `addStatic`,
+  `clear`) is the approved D7 interface, implemented early; D7 keeps it, Phase E swaps in
+  Jolt behind it. `ExplorationWalker` (`game/src/Player`) is throwaway: the D7 player
+  controller replaces it and its direct SDL keyboard polling (D3 input actions). Collision
+  boxes per module come from `game/assets/colliders.json` (generated from the module
+  geometry; model bounds as a fallback) until scene files carry Collider components (D6).
+  Colliders are rebuilt when the level hot-reloads. `LastlightGameCore` (static library) holds
+  the testable game logic; `LastlightGameTests` (ctest `game.unit`) walks the real level
+  through every room.
 
 ## Frame flow (Milestone 1)
 

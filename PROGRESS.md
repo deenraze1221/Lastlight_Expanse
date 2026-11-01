@@ -124,13 +124,40 @@
   (user supplies one export per tool). See the D1 handoff below.
 
 - **Phase D2 done (2026-11-01):** game asset layout + static greybox bunker (default level),
-  `--level highlands` regression scene byte-identical. See the D2 handoff below.
+  revised to a modern spacious shelter, plus a temporary first-person exploration mode
+  (`zodar.py explore`); `--level highlands` regression scene byte-identical. See the D2
+  handoffs below.
 
 ## Current task
 - **Next session: D3 — input action maps (engine).** Not started; waits for the user's go.
 - Open question from the user (2026-11-01, during D2): raise all 32×32 textures to 64×64.
   Conflicts with GDD §3 (32×32 default, 64×64 maximum) and the 32 texels/m density target;
   not done, awaiting the user's decision.
+
+## Handoff (D2 revision: modern shelter + exploration mode, 2026-11-01)
+- User requests during D2 (after commit 4663edd): (1) redesign the bunker as a spacious,
+  modern, maintained military shelter; (2) a temporary first-person exploration mode.
+- Done:
+  - Generator rewritten for a 4 m grid: corridor 60×4 m, 3.6 m ceilings, 0.3 m walls with
+    0.5 m pilasters, beams, suspended cable tray, vents, neutral LED overhead lights, warm wall
+    lights, lit exit signs, room and merchant signs, sliding doors (2.0 m), wide openings
+    (2.8 m); rooms enlarged (dormitory 12×8, locker room 8×8, common area 24×12, generator
+    16×8, five merchant zones 12×8, airlock 8×12, exit passage with stairs). 28 modules
+    (27 Blockbench-style + Blender-style arch), 10 signs, 4 prefabs; clean GDD §3 palette with
+    a neutral light colour added to the glow sub-palette. Registry: 43 entries, strict OK.
+  - Exploration: `--explore` / `zodar.py explore` (window, Windows + Linux): spawn at the
+    entrance, WASD, mouse look (captured; Tab frees), Shift sprint, Space jump, collision,
+    stair step-up, smoothed eye height. `game/src/Physics/CollisionWorld` (D7 interface,
+    kept), temporary `game/src/Player/ExplorationWalker`, `game/src/Bunker/LevelColliders`
+    (+ generated `game/assets/colliders.json`), `LastlightGameCore` library,
+    `LastlightGameTests`.
+- Tests: Debug and Release 0 warnings, 36/36 ctest each (new `game.unit`: 6 cases incl. a
+  walk from the entrance through every room; `gpu.lastlight_bunker_explore_smoke`), 212 unit
+  + 65 GPU cases, validation 0 errors / 0 warnings (GPU tests, bunker, bunker --explore,
+  highlands); highlands screenshot sha256 `1e6b461a…` unchanged (Debug, Release).
+- Not verified: interactive play on a real window and GPU (container is headless; mouse
+  capture and feel need the user's check); no real exports; Clang/MinGW/MSVC not built.
+- 64×64 texture question still open (kept 32×32 per GDD §3).
 
 ## Handoff (Phase D2 session, 2026-11-01)
 - Done:
