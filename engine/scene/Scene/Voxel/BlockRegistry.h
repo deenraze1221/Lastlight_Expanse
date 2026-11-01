@@ -68,6 +68,11 @@ struct Shape {
     bool aoOccluder = false;
 
     uint8_t fullFaces() const;
+    // Point-in-solid test in cell-local space. Deterministic and libm-free: majority vote of
+    // three crossing-parity rays in fixed generic directions against the fan triangles, so a
+    // ray that grazes an edge or vertex can only spoil its own vote. Points outside [0, 1]^3
+    // are outside; points within about 1e-6 of the surface may be classified either way.
+    bool contains(const glm::vec3& p) const;
 };
 
 // Yaw rotation in 90-degree steps about the cell's vertical centre line (right-handed about +Y:

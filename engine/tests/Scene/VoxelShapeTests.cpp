@@ -165,6 +165,115 @@ TEST_CASE("voxel shapes: coverage masks of every rotation match the rotated samp
     CHECK(rotateShape(lib[*lib.find("stair")], 1).coverageMask[size_t(Face::PosZ)] == (0x00FF | 0xCC00));
 }
 
+TEST_CASE("voxel shapes: point-in-solid test") {
+    const ShapeLibrary lib = ShapeLibrary::builtins();
+    const auto shape = [&](const char* n) -> const Shape& { return lib[*lib.find(n)]; };
+    CHECK(shape("cube").contains({0.5f, 0.5f, 0.5f}));
+    CHECK_FALSE(shape("cube").contains({1.5f, 0.5f, 0.5f}));
+    CHECK(shape("slab_low").contains({0.5f, 0.25f, 0.5f}));
+    CHECK_FALSE(shape("slab_low").contains({0.5f, 0.75f, 0.5f}));
+    CHECK(shape("wedge").contains({0.5f, 0.3f, 0.6f}));       // below the slope y = z
+    CHECK_FALSE(shape("wedge").contains({0.5f, 0.6f, 0.3f})); // above it
+    CHECK(shape("stair").contains({0.5f, 0.75f, 0.75f}));     // upper step
+    CHECK_FALSE(shape("stair").contains({0.5f, 0.75f, 0.25f}));
+    CHECK(shape("corner_inner").contains({0.9f, 0.8f, 0.1f})); // height max(x, z) = 0.9
+    CHECK_FALSE(shape("corner_inner").contains({0.2f, 0.5f, 0.3f}));
+    CHECK(shape("corner_outer").contains({0.9f, 0.5f, 0.6f})); // height min(x, z) = 0.6
+    CHECK_FALSE(shape("corner_outer").contains({0.9f, 0.5f, 0.4f}));
+    CHECK(shape("quarter_round").contains({0.5f, 0.6f, 0.6f}));
+    CHECK_FALSE(shape("quarter_round").contains({0.5f, 0.8f, 0.8f}));
+    CHECK(shape("quarter_round_inner").contains({0.5f, 0.8f, 0.8f}));
+    CHECK_FALSE(shape("quarter_round_inner").contains({0.5f, 0.6f, 0.6f}));
+    CHECK(shape("panel_thin").contains({0.5f, 0.5f, 0.0625f}));
+    CHECK_FALSE(shape("panel_thin").contains({0.5f, 0.5f, 0.2f}));
+    // Rotation invariance on a sample grid.
+    const auto yawPoint = [](glm::vec3 p) { return glm::vec3(p.z, p.y, 1.0f - p.x); };
+    for (size_t i = 0; i < lib.size(); ++i) {
+        const Shape& s = lib[static_cast<uint16_t>(i)];
+        for (int steps = 1; steps < 4; ++steps) {
+            const Shape r = rotateShape(s, steps);
+            for (int k = 0; k < 343; ++k) {
+                glm::vec3 p((k % 7 + 0.43f) / 7.0f, (k / 7 % 7 + 0.37f) / 7.0f, (k / 49 + 0.29f) / 7.0f);
+                glm::vec3 q = p;
+                for (int n = 0; n < steps; ++n) q = yawPoint(q);
+                CAPTURE(s.name);
+                CHECK(r.contains(q) == s.contains(p));
+            }
+        }
+    }
+}
+
+TEST_CASE("voxel shapes: collision boxes approximate the geometry within 1/8 cell at every rotation") {
+    // V3 rule (VOXELS §6): box shapes are exact; slopes and arches are stepped with 4 levels,
+    // each point covered wrongly lies within 1/8 cell of the true surface (along some axis),
+    // and both over- and under-covered volumes stay small.
+    const ShapeLibrary lib = ShapeLibrary::builtins();
+    // x and z samples are symmetric under yaw ((i + 0.5) / N maps to itself), y has another
+    // phase so no sample lies on a 45-degree surface (y = x or y = z).
+    constexpr int kN = 24;
+    const float reach = 0.125f + 1e-4f;
+    for (size_t i = 0; i < lib.size(); ++i) {
+        const Shape& base = lib[static_cast<uint16_t>(i)];
+        const bool exact = base.name == "cube" || base.name == "slab_low" || base.name == "slab_high" ||
+                           base.name == "stair" || base.name == "panel_thin";
+        for (int steps = 0; steps < 4; ++steps) {
+            const Shape s = rotateShape(base, steps);
+            CAPTURE(s.name);
+            CAPTURE(steps);
+            for (const ShapeBox& b : s.collision) {
+                CHECK(glm::all(glm::lessThan(b.min, b.max)));
+                CHECK(glm::all(glm::greaterThanEqual(b.min, glm::vec3(0.0f))));
+                CHECK(glm::all(glm::lessThanEqual(b.max, glm::vec3(1.0f))));
+            }
+            int over = 0;
+            int under = 0;
+            int far = 0;
+            for (int k = 0; k < kN * kN * kN; ++k) {
+                const glm::vec3 p((k % kN + 0.5f) / kN, (k / kN % kN + 0.31f) / kN, (k / (kN * kN) + 0.5f) / kN);
+                bool inBox = false;
+                for (const ShapeBox& b : s.collision) {
+                    inBox = inBox || (glm::all(glm::greaterThanEqual(p, b.min)) && glm::all(glm::lessThanEqual(p, b.max)));
+                }
+                const bool inSolid = s.contains(p);
+                if (inBox == inSolid) continue;
+                (inBox ? over : under)++;
+                bool near = false;
+                for (int a = 0; a < 3 && !near; ++a) {
+                    for (float sign : {-1.0f, 1.0f}) {
+                        glm::vec3 q = p;
+                        q[a] += sign * reach;
+                        // Stay strictly inside the cell: points on the cell boundary are ambiguous.
+                        near = near || s.contains(glm::clamp(q, glm::vec3(1e-4f), glm::vec3(1.0f - 1e-4f))) != inSolid;
+                    }
+                }
+                if (!near) ++far;
+            }
+            const float volume = static_cast<float>(kN * kN * kN);
+            CHECK(far == 0);
+            if (exact) {
+                CHECK(over == 0);
+                CHECK(under == 0);
+            } else {
+                CHECK(static_cast<float>(over) / volume < 0.06f); // measured <= 0.05 at 48^3 samples
+                CHECK(static_cast<float>(under) / volume < 0.06f);
+                CHECK(over > 0); // stepped, so both errors occur ...
+                CHECK(under > 0); // ... in balance
+            }
+        }
+    }
+    // Slopes and corners: 4 levels; box tops at the level midpoints 1/8, 3/8, 5/8, 7/8.
+    const Shape& wedge = lib[*lib.find("wedge")];
+    REQUIRE(wedge.collision.size() == 4u);
+    for (int k = 0; k < 4; ++k) {
+        CHECK(wedge.collision[size_t(k)].max.y == static_cast<float>(2 * k + 1) / 8.0f);
+        CHECK(wedge.collision[size_t(k)].min.z == static_cast<float>(k) / 4.0f);
+    }
+    CHECK(lib[*lib.find("corner_inner")].collision.size() == 7u);
+    CHECK(lib[*lib.find("corner_outer")].collision.size() == 7u);
+    CHECK(lib[*lib.find("quarter_round")].collision.size() == 4u);
+    CHECK(lib[*lib.find("quarter_round_inner")].collision.size() == 4u);
+}
+
 TEST_CASE("voxel shapes: invalid templates are rejected") {
     ShapeLibrary lib;
     CHECK_THROWS_AS(lib.add(unitBox("cube")), Error); // duplicate name

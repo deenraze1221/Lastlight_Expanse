@@ -4,6 +4,7 @@
 #include "Scene/Voxel/BlockRegistry.h"
 
 #include <utility>
+#include <vector>
 
 namespace zodar::voxel {
 namespace {
@@ -47,6 +48,50 @@ ShapeTemplate boxShape(const char* name, const V& lo, const V& hi, bool aoOcclud
     return t;
 }
 
+// Collision approximation of sloped and curved shapes (V3 rule, docs/guide/VOXELS.md §6). The
+// solid is a height field along a step axis (Y for slopes, Z for the arch pieces); its height
+// is quantised into `steps` equal levels, and the footprint region whose true height lies in
+// level k gets a box up to the level midpoint (2k + 1) / (2 * steps). Per column the error
+// along the step axis is at most 1 / (2 * steps) (1/8 cell with 4 steps), and the largest
+// over- and under-coverage are equal. The step count is internal, not public API.
+constexpr int kCollisionSteps = 4;
+
+float level(int k, int steps) { return static_cast<float>(k) / static_cast<float>(steps); }
+float levelTop(int k, int steps) { return static_cast<float>(2 * k + 1) / static_cast<float>(2 * steps); }
+
+// Slope rising toward +Z: height = z.
+std::vector<ShapeBox> wedgeBoxes(int steps) {
+    std::vector<ShapeBox> boxes;
+    for (int k = 0; k < steps; ++k) boxes.push_back({V(0, 0, level(k, steps)), V(1, levelTop(k, steps), level(k + 1, steps))});
+    return boxes;
+}
+
+// Height = max(x, z): level k covers the L-shaped band max(x, z) in [k, k + 1] / steps.
+std::vector<ShapeBox> cornerInnerBoxes(int steps) {
+    std::vector<ShapeBox> boxes;
+    for (int k = 0; k < steps; ++k) {
+        const float lo = level(k, steps);
+        const float hi = level(k + 1, steps);
+        const float top = levelTop(k, steps);
+        boxes.push_back({V(lo, 0, 0), V(hi, top, hi)});
+        if (k > 0) boxes.push_back({V(0, 0, lo), V(lo, top, hi)});
+    }
+    return boxes;
+}
+
+// Height = min(x, z): level k covers the band min(x, z) in [k, k + 1] / steps.
+std::vector<ShapeBox> cornerOuterBoxes(int steps) {
+    std::vector<ShapeBox> boxes;
+    for (int k = 0; k < steps; ++k) {
+        const float lo = level(k, steps);
+        const float hi = level(k + 1, steps);
+        const float top = levelTop(k, steps);
+        boxes.push_back({V(lo, 0, lo), V(hi, top, 1)});
+        if (k + 1 < steps) boxes.push_back({V(hi, 0, lo), V(1, top, hi)});
+    }
+    return boxes;
+}
+
 // Axis 0 = X (u = Y, v = Z), axis 1 = Y (u = Z, v = X), axis 2 = Z (u = X, v = Y).
 ShapeTemplate stair() {
     ShapeTemplate t;
@@ -79,7 +124,7 @@ ShapeTemplate wedge() {
         {{V(0, 0, 0), V(0, 0, 1), V(0, 1, 1)}},             // -X
         {{V(1, 0, 0), V(1, 1, 1), V(1, 0, 1)}},             // +X
     };
-    t.collision = {{V(0, 0, 0.25f), V(1, 0.5f, 1)}, {V(0, 0.5f, 0.75f), V(1, 1, 1)}};
+    t.collision = wedgeBoxes(kCollisionSteps);
     return t;
 }
 
@@ -96,10 +141,7 @@ ShapeTemplate cornerInner() {
         {{V(0, 0, 0), V(1, 1, 1), V(1, 1, 0)}}, // slope facing -X
         {{V(0, 0, 0), V(0, 1, 1), V(1, 1, 1)}}, // slope facing -Z
     };
-    t.collision = {{V(0.75f, 0, 0), V(1, 1, 1)},
-                   {V(0, 0, 0.75f), V(0.75f, 1, 1)},
-                   {V(0.25f, 0, 0), V(0.75f, 0.5f, 0.75f)},
-                   {V(0, 0, 0.25f), V(0.25f, 0.5f, 0.75f)}};
+    t.collision = cornerInnerBoxes(kCollisionSteps);
     return t;
 }
 
@@ -114,7 +156,7 @@ ShapeTemplate cornerOuter() {
         {{V(0, 0, 0), V(0, 0, 1), V(1, 1, 1)}}, // slope facing -X
         {{V(0, 0, 0), V(1, 1, 1), V(1, 0, 0)}}, // slope facing -Z
     };
-    t.collision = {{V(0.25f, 0, 0.25f), V(1, 0.5f, 1)}, {V(0.75f, 0.5f, 0.75f), V(1, 1, 1)}};
+    t.collision = cornerOuterBoxes(kCollisionSteps);
     return t;
 }
 
@@ -122,6 +164,32 @@ ShapeTemplate cornerOuter() {
 // k * 22.5 degrees from +Z toward +Y: (y, z) = (sin, cos). Exact literals keep output libm-free.
 constexpr float kArcY[5] = {0.0f, 0.38268343f, 0.70710678f, 0.92387953f, 1.0f};
 constexpr float kArcZ[5] = {1.0f, 0.92387953f, 0.70710678f, 0.38268343f, 0.0f};
+
+// Y of the arc polygon's profile at z (piecewise linear between the arc points).
+float arcY(float z) {
+    if (z >= 1.0f) return 0.0f;
+    if (z <= 0.0f) return 1.0f;
+    for (int k = 0; k < 4; ++k) {
+        if (z >= kArcZ[k + 1]) {
+            return kArcY[k] + (kArcZ[k] - z) / (kArcZ[k] - kArcZ[k + 1]) * (kArcY[k + 1] - kArcY[k]);
+        }
+    }
+    return 1.0f;
+}
+
+// Arch pieces as height fields along Z over Y: level k (z of the arc in [k, k + 1] / steps)
+// spans y in [arcY((k + 1) / steps), arcY(k / steps)]. Convex piece: z up to the level
+// midpoint; concave piece: from the level midpoint to the cell's +Z face.
+std::vector<ShapeBox> arcBoxes(int steps, bool inner) {
+    std::vector<ShapeBox> boxes;
+    for (int k = 0; k < steps; ++k) {
+        const float y0 = arcY(level(k + 1, steps));
+        const float y1 = arcY(level(k, steps));
+        const float z = levelTop(k, steps);
+        boxes.push_back(inner ? ShapeBox{V(0, y0, z), V(1, y1, 1)} : ShapeBox{V(0, y0, 0), V(1, y1, z)});
+    }
+    return boxes;
+}
 
 // Convex rounded edge: solid inside the quarter circle (bulges toward +Y +Z).
 ShapeTemplate quarterRound() {
@@ -139,7 +207,7 @@ ShapeTemplate quarterRound() {
         t.polygons.push_back({{V(0, kArcY[k], kArcZ[k]), V(1, kArcY[k], kArcZ[k]), V(1, kArcY[k + 1], kArcZ[k + 1]),
                                V(0, kArcY[k + 1], kArcZ[k + 1])}});
     }
-    t.collision = {{V(0, 0, 0), V(1, 0.5f, 0.875f)}, {V(0, 0.5f, 0), V(1, 0.875f, 0.5f)}};
+    t.collision = arcBoxes(kCollisionSteps, false);
     return t;
 }
 
@@ -158,7 +226,7 @@ ShapeTemplate quarterRoundInner() {
         t.polygons.push_back({{V(0, kArcY[k + 1], kArcZ[k + 1]), V(1, kArcY[k + 1], kArcZ[k + 1]),
                                V(1, kArcY[k], kArcZ[k]), V(0, kArcY[k], kArcZ[k])}});
     }
-    t.collision = {{V(0, 0.875f, 0), V(1, 1, 1)}, {V(0, 0, 0.875f), V(1, 1, 1)}, {V(0, 0.75f, 0.75f), V(1, 1, 1)}};
+    t.collision = arcBoxes(kCollisionSteps, true);
     return t;
 }
 

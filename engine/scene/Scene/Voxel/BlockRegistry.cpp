@@ -237,6 +237,40 @@ uint8_t Shape::fullFaces() const {
     return bits;
 }
 
+bool Shape::contains(const glm::vec3& p) const {
+    if (p.x < 0.0f || p.y < 0.0f || p.z < 0.0f || p.x > 1.0f || p.y > 1.0f || p.z > 1.0f) {
+        return false;
+    }
+    // Generic directions: no component ratio of small integers, so rays do not run along the
+    // edges or diagonals of grid-aligned and 45-degree geometry.
+    static constexpr glm::vec3 kDirs[3] = {
+        {0.3198f, 0.8124f, 0.4877f}, {-0.7349f, 0.2633f, 0.6249f}, {0.4361f, -0.5582f, 0.7058f}};
+    int insideVotes = 0;
+    for (const glm::vec3& d : kDirs) {
+        int crossings = 0;
+        for (const Polygon& poly : polygons) {
+            const glm::vec3& a = poly.corners[0];
+            for (size_t k = 1; k + 1 < poly.corners.size(); ++k) {
+                const glm::vec3 e1 = poly.corners[k] - a;
+                const glm::vec3 e2 = poly.corners[k + 1] - a;
+                const glm::vec3 q = glm::cross(d, e2);
+                const float det = glm::dot(e1, q);
+                if (det == 0.0f) continue;
+                const float inv = 1.0f / det;
+                const glm::vec3 s = p - a;
+                const float u = glm::dot(s, q) * inv;
+                if (u < 0.0f || u > 1.0f) continue;
+                const glm::vec3 r = glm::cross(s, e1);
+                const float v = glm::dot(d, r) * inv;
+                if (v < 0.0f || u + v > 1.0f) continue;
+                if (glm::dot(e2, r) * inv > 0.0f) ++crossings;
+            }
+        }
+        insideVotes += crossings & 1;
+    }
+    return insideVotes >= 2;
+}
+
 Shape rotateShape(const Shape& shape, int yawSteps) {
     const int steps = ((yawSteps % 4) + 4) % 4;
     if (steps == 0) {
