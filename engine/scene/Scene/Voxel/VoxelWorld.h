@@ -59,6 +59,24 @@ struct RaycastHit {
     Voxel value = kEmpty;
 };
 
+// World-space axis-aligned box (world units, min <= max on every axis).
+struct WorldBox {
+    glm::vec3 min{0.0f};
+    glm::vec3 max{0.0f};
+};
+
+// Solid collision box returned by VoxelWorld::collectSolidBoxes (world units).
+struct SolidBox {
+    glm::vec3 min{0.0f};
+    glm::vec3 max{0.0f};
+    Voxel value = kEmpty; // block id of the cell(s)
+};
+
+enum class QueryStatus {
+    Complete,      // every chunk the query touches had data
+    MissingChunks, // some chunk inside the world's Y range had no data (not loaded / generating)
+};
+
 struct VoxelWorldStats {
     uint32_t chunksWithData = 0;
     uint32_t chunksMeshed = 0;     // chunks currently represented by a non-empty mesh
@@ -103,6 +121,20 @@ public:
     // Edits a loaded voxel; returns false if its chunk has no data. Affected meshes
     // (including neighbours sharing the boundary) are rebuilt by later updates.
     bool setVoxel(const glm::ivec3& voxel, Voxel value);
+    // Collision boxes of every solid cell whose cell box touches `query` (closed intervals:
+    // touching counts), in world units. Cube cells are merged into runs of equal ids along X
+    // (within one chunk, clipped to the query's cell range); shape cells contribute their rotated
+    // collision boxes that touch the query. Cells with BlockState::kNoCollision are skipped;
+    // ids beyond the registry are cubes. Order is deterministic: chunks by (y, z, x), cells by
+    // (y, z, x), then box index.
+    //
+    // Appends to `out` (never clears it). Returns MissingChunks when a chunk inside the world's
+    // Y range has no data: `out` then still holds the boxes of every loaded chunk (valid, in
+    // the same order), and the missing chunks contribute nothing; the caller decides whether
+    // partial data is usable. Chunks outside the Y range read as empty, like getVoxel, and are
+    // not missing. Throws zodar::Error when `query` has a NaN/infinite coordinate or min > max.
+    QueryStatus collectSolidBoxes(const WorldBox& query, std::vector<SolidBox>& out) const;
+
     // First solid voxel along a ray through loaded chunks (Amanatides-Woo traversal).
     std::optional<RaycastHit> raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const;
 

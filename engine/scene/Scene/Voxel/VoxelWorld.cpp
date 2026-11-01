@@ -470,6 +470,78 @@ bool VoxelWorld::setVoxel(const glm::ivec3& voxel, Voxel value) {
     return true;
 }
 
+QueryStatus VoxelWorld::collectSolidBoxes(const WorldBox& query, std::vector<SolidBox>& out) const {
+    for (int i = 0; i < 3; ++i) {
+        ZODAR_ENSURE(std::isfinite(query.min[i]) && std::isfinite(query.max[i]),
+                     "collectSolidBoxes: query box has a non-finite coordinate");
+        ZODAR_ENSURE(query.min[i] <= query.max[i], "collectSolidBoxes: query box has min > max");
+    }
+    const float vs = m_settings.voxelSize;
+    for (int i = 0; i < 3; ++i) {
+        ZODAR_ENSURE(std::abs(query.min[i] / vs) < 1.0e9f && std::abs(query.max[i] / vs) < 1.0e9f,
+                     "collectSolidBoxes: query box lies outside the representable cell range");
+    }
+    // Cells [c, c + 1] * vs touching [min, max]: c in [ceil(min / vs) - 1, floor(max / vs)].
+    // Each candidate is re-checked against the exact world box below, so rounding here only
+    // has to be conservative.
+    glm::ivec3 lo;
+    glm::ivec3 hi;
+    for (int i = 0; i < 3; ++i) {
+        lo[i] = static_cast<int>(std::ceil(query.min[i] / vs)) - 1;
+        hi[i] = static_cast<int>(std::floor(query.max[i] / vs));
+    }
+    const auto touches = [&](const glm::vec3& bmin, const glm::vec3& bmax) {
+        return bmin.x <= query.max.x && bmin.y <= query.max.y && bmin.z <= query.max.z && bmax.x >= query.min.x &&
+               bmax.y >= query.min.y && bmax.z >= query.min.z;
+    };
+    const BlockTable& table = *m_table;
+    QueryStatus status = QueryStatus::Complete;
+    const ChunkCoord c0 = chunkOf(lo);
+    const ChunkCoord c1 = chunkOf(hi);
+    for (int cy = c0.y; cy <= c1.y; ++cy) {
+        if (!inWorldY(cy)) continue; // reads as empty (getVoxel), not missing
+        for (int cz = c0.z; cz <= c1.z; ++cz) {
+            for (int cx = c0.x; cx <= c1.x; ++cx) {
+                const ChunkCoord coord{cx, cy, cz};
+                const auto it = m_chunks.find(coord);
+                if (it == m_chunks.end() || !it->second.data) {
+                    status = QueryStatus::MissingChunks;
+                    continue;
+                }
+                const VoxelChunk& chunk = *it->second.data;
+                const glm::ivec3 origin = coord.originVoxel();
+                const glm::ivec3 a = glm::max(lo, origin) - origin;
+                const glm::ivec3 b = glm::min(hi, origin + glm::ivec3(kChunkSize - 1)) - origin;
+                if (chunk.isUniform() && !table.collides(chunk.uniformValue())) continue;
+                for (int y = a.y; y <= b.y; ++y) {
+                    for (int z = a.z; z <= b.z; ++z) {
+                        for (int x = a.x; x <= b.x; ++x) {
+                            const Voxel v = chunk.get(x, y, z);
+                            if (!table.collides(v)) continue;
+                            const glm::vec3 cell(origin + glm::ivec3(x, y, z));
+                            if (table.isCube(v)) {
+                                int end = x;
+                                while (end < b.x && chunk.get(end + 1, y, z) == v) ++end;
+                                const SolidBox box{cell * vs, (cell + glm::vec3(float(end - x + 1), 1.0f, 1.0f)) * vs, v};
+                                if (touches(box.min, box.max)) out.push_back(box);
+                                x = end;
+                                continue;
+                            }
+                            const Shape* shape = table.shape(v);
+                            if (!shape) continue;
+                            for (const ShapeBox& sb : shape->collision) {
+                                const SolidBox box{(cell + sb.min) * vs, (cell + sb.max) * vs, v};
+                                if (touches(box.min, box.max)) out.push_back(box);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return status;
+}
+
 std::optional<RaycastHit> VoxelWorld::raycast(const glm::vec3& origin, const glm::vec3& direction,
                                               float maxDistance) const {
     const float len = glm::length(direction);

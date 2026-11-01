@@ -175,6 +175,10 @@ public:
     }
     uint8_t fill(Voxel v) const { return v < m_fill.size() ? m_fill[v] : uint8_t(8); }
     bool isCube(Voxel v) const { return (cellFlags(v) & BlockInfo::kCube) != 0; }
+    // BlockState flags; 0 for legacy palettes and ids beyond the registry.
+    uint8_t stateFlags(Voxel v) const { return v < m_stateFlags.size() ? m_stateFlags[v] : uint8_t(0); }
+    // Solid for collision queries: not empty and without BlockState::kNoCollision.
+    bool collides(Voxel v) const { return v != kEmpty && !(stateFlags(v) & BlockState::kNoCollision); }
     // Rotated geometry of a non-cube id, else nullptr.
     const Shape* shape(Voxel v) const;
     // Smallest cube id (>= 1); an out-of-range id when the registry has no cube block.
