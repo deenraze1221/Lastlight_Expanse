@@ -169,8 +169,12 @@
   fixed without changing approved requirements (VOXELS §2/§3/§9, PHASE_D_PLAN V1,
   AI_FIRST_ROADMAP §4 and texture-standard notes, stale "Next steps").
 - Performance (bench workload, callgrind instruction counts; wall time on this shared VM
-  varied ±50 %): meshChunk 4.036e9 → 4.183e9 after step 3 (+3.7 %); final: see verification.
-- Verification: full Debug + Release ctest pending at the time of this commit (recorded in the next commit).
+  varied ±50 %): meshChunk 4.036e9 → 4.183e9 after step 3 (+3.7 %); final +0.8 % (see verification).
+- Verification (GCC 13, lavapipe, validation on): Debug + Release 36/36 ctest, 231 engine unit
+  cases (+1 skipped benchmark), 7 game unit cases, 65 GPU cases, 0 warnings, 0 validation
+  messages; Highlands screenshot sha256 `1e6b461a…` unchanged (Debug + Release); golden hashes
+  green in Debug and Release. Cube-only meshing, bench workload (callgrind): 4.036e9 → 4.069e9
+  instructions (+0.8 %, limit 5 %). Not verified: Clang, MinGW, MSVC.
 - Not done (by plan): `*.blocks.json`, materials, texture standards, voxel shader (V2);
   shape-aware collision/raycasts, conservative LOD, `structural` flag (V3); regions and
   structures (V4); bunker migration (V5). Golden hashes assume x86-64 without FMA contraction
