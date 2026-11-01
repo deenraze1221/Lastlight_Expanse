@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 
 #include <memory>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -121,6 +122,91 @@ TEST_CASE("texture standards: 32x32 default, 64x64 maximum, violations warn") {
     REQUIRE(odd.has_value());
     CHECK(odd->find("crate.png: 100x64 is not a standard texture size") == 0);
     CHECK(std::string(toString(TextureSizeClass::Default)) == "default (32x32)");
+}
+
+TEST_CASE("texture standards: configurable classes, prohibited sizes, engine default unchanged") {
+    const TextureStandard engine = TextureStandard::engineDefault();
+    CHECK_NOTHROW(engine.validate());
+    CHECK(engine.densityTarget == 32.0);
+    CHECK(engine.densityTolerance == 2.0);
+    // The engine default reproduces the legacy rule and messages for every size below 256.
+    for (uint32_t w : {4u, 8u, 16u, 32u, 48u, 64u, 100u, 128u}) {
+        for (uint32_t h : {8u, 32u, 64u, 128u}) {
+            const auto legacy = checkTextureSize("t.png", w, h);
+            const auto issue = checkTextureSize(engine, "t.png", w, h);
+            REQUIRE(legacy.has_value() == issue.has_value());
+            if (issue) {
+                CHECK((issue->verdict == TextureSizeVerdict::Violation));
+                CHECK(issue->message == *legacy);
+            }
+        }
+    }
+    // 256 and above: an error under every standard, on either side.
+    for (const auto& [w, h] : {std::pair{256u, 256u}, std::pair{512u, 512u}, std::pair{256u, 32u}, std::pair{32u, 300u}}) {
+        const auto issue = checkTextureSize(engine, "big.png", w, h);
+        REQUIRE(issue.has_value());
+        CHECK((issue->verdict == TextureSizeVerdict::Prohibited));
+        CHECK(issue->message.find("is prohibited (256x256 and above") != std::string::npos);
+        REQUIRE(checkTextureSize("big.png", w, h).has_value());
+        CHECK(checkTextureSize("big.png", w, h)->find("is prohibited") != std::string::npos);
+    }
+
+    // A game standard (GDD §3 A1 shape): 32 small, 64 environment, 128 characters and weapons.
+    TextureStandard game;
+    game.classes = {{"small", {32}}, {"environment", {64}}, {"character", {128}}};
+    game.defaultClass = "environment";
+    game.densityTarget = 64.0;
+    CHECK_NOTHROW(game.validate());
+    CHECK_FALSE(checkTextureSize(game, "wall.png", 64, 64).has_value());
+    CHECK_FALSE(checkTextureSize(game, "bolt.png", 32, 32, "small").has_value());
+    CHECK_FALSE(checkTextureSize(game, "hero.png", 128, 128, "character").has_value());
+    for (uint32_t size : {8u, 16u, 32u, 128u}) {
+        const auto issue = checkTextureSize(game, "wall.png", size, size); // default class: environment
+        REQUIRE(issue.has_value());
+        CHECK((issue->verdict == TextureSizeVerdict::Violation));
+        CHECK(issue->message.find("is not allowed for texture class 'environment' (64x64;") != std::string::npos);
+    }
+    CHECK((checkTextureSize(game, "hero.png", 64, 64, "character")->verdict == TextureSizeVerdict::Violation));
+    CHECK((checkTextureSize(game, "hero.png", 128, 64, "character")->verdict == TextureSizeVerdict::Violation));
+    CHECK((checkTextureSize(game, "hero.png", 256, 256, "character")->verdict == TextureSizeVerdict::Prohibited));
+    CHECK(checkTextureSize(game, "x.png", 64, 64, "vehicle")->message == "x.png: unknown texture class 'vehicle'");
+
+    // Invalid standards name the problem.
+    const auto invalid = [](TextureStandard s) {
+        try {
+            s.validate();
+        } catch (const Error& e) {
+            return std::string(e.what());
+        }
+        return std::string();
+    };
+    TextureStandard bad = game;
+    bad.classes.clear();
+    CHECK(invalid(bad).find("no texture classes") != std::string::npos);
+    bad = game;
+    bad.classes.push_back({"small", {32}});
+    CHECK(invalid(bad).find("class 'small' is declared twice") != std::string::npos);
+    bad = game;
+    bad.classes[1].sizes = {48};
+    CHECK(invalid(bad).find("size 48 is not a power of two") != std::string::npos);
+    bad = game;
+    bad.classes[2].sizes = {256};
+    CHECK(invalid(bad).find("at or above the prohibited size 256") != std::string::npos);
+    bad = game;
+    bad.classes[1].sizes = {64, 32};
+    CHECK(invalid(bad).find("ascending and unique") != std::string::npos);
+    bad = game;
+    bad.defaultClass = "props";
+    CHECK(invalid(bad).find("default class 'props' is not declared") != std::string::npos);
+    bad = game;
+    bad.prohibitedSize = 512;
+    CHECK(invalid(bad).find("must be in 1..256") != std::string::npos);
+    bad = game;
+    bad.densityTarget = 0.0;
+    CHECK(invalid(bad).find("densityTarget must be positive") != std::string::npos);
+    bad = game;
+    bad.classes[0].sizes.clear();
+    CHECK(invalid(bad).find("class 'small' allows no sizes") != std::string::npos);
 }
 
 TEST_CASE("asset cache: pending entries resolve or reject later (async loads)") {
