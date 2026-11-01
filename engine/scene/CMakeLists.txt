@@ -3,6 +3,7 @@
 # Produces Assets::MeshData; the renderer uploads it (Renderer/StreamedMeshSet).
 add_library(ZodarScene STATIC
     Scene/Noise.cpp
+    Scene/Voxel/Structure.cpp
     Scene/Voxel/Region.cpp
     Scene/Voxel/VoxelChunk.cpp
     Scene/Voxel/BlockRegistry.cpp

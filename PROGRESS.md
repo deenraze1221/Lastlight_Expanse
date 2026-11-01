@@ -737,3 +737,6 @@
   Validated temporary-file replacement; unknown names resolve before mutation.
   Focused tests: 2 cases / 20 assertions passed, including reordered ids and failed saves.
   Storage currently uses canonical text RLE; durable fsync and concurrent external writers unsupported.
+- Step 3: immutable layered generator, named structure capture/stamp, yaw transforms,
+  anchors/model descriptors and versioned structure serialization. Cross-region stamps preserve air.
+  Focused tests: 3 cases / 31 assertions passed. Model instantiation remains caller-owned.

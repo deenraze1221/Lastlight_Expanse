@@ -38,3 +38,24 @@ TEST_CASE("region: canonical RLE, layers, explicit air and reordered ids") {
     CHECK(loadRegion(path) == d);
     std::filesystem::remove(path);
 }
+#include "Scene/Voxel/Structure.h"
+TEST_CASE("region: structures rotate, cross boundaries and compose layers") {
+    Structure s; s.size = {2,1,1}; s.cells[{0,0,0}] = "stair"; s.cells[{1,0,0}] = "";
+    s.anchors.push_back({"entry", {0,0,0}}); s.models.push_back({"crate", {0.5f,0,0.5f}, 0});
+    auto r = rotateStructure(s, 1);
+    CHECK(r.cells.at({0,0,1}) == "stair@1");
+    CHECK(r.anchors[0].cell == glm::ivec3(0,0,1));
+    CHECK(r.models[0].yaw == 1);
+    CHECK(serializeStructure(parseStructure(serializeStructure(s))) == serializeStructure(s));
+    CHECK(serializeStructure(rotateStructure(rotateStructure(s, 1), 3)) == serializeStructure(s));
+    RegionData left, right; right.coord = {1,0};
+    stampStructure(left, s, {127,0,0}); stampStructure(right,s,{127,0,0});
+    CHECK(left.authored.at({3,0,0}).at(31) == "stair");
+    CHECK(right.authored.at({4,0,0}).at(0) == "");
+    struct Base : IVoxelGenerator { void generate(const ChunkCoord&, VoxelChunk& out) const override { out = VoxelChunk(1); } };
+    RegionLayer authored, runtime; authored[{0,0,0}][0] = "stone"; runtime[{0,0,0}][0] = "";
+    LayeredGenerator gen(std::make_shared<Base>(), {"", "stone", "stair"}, {{s,{0,0,0}}}, authored, runtime);
+    VoxelChunk chunk; gen.generate({0,0,0}, chunk);
+    CHECK(chunk.get(0,0,0) == 0); CHECK(chunk.get(1,0,0) == 0); CHECK(chunk.get(2,0,0) == 1);
+    CHECK_THROWS_AS(parseStructure(serializeStructure(s)+"bad"), zodar::Error);
+}
