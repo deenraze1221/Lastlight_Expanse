@@ -65,20 +65,30 @@ game art work, to be scheduled separately.
 ## 3. 3D asset workflow
 
 - **Blockbench** is the primary tool for voxel-style models (props, items, weapons, characters,
-  mutants).
+  mutants, modular kit pieces).
+- **Blender** is the secondary tool, for complex architecture (curved or large structures) and
+  organic shapes that are impractical in Blockbench. Blender assets must not drift from the
+  voxel style: same texture sizes, palette, nearest sampling and texel density; triangle
+  budgets per asset class keep polygon counts in check.
+- **One standard for both tools** (§2): textures 32×32 default, 64×64 maximum; master palette
+  plus documented sub-palettes; 32 texels/m (16..64 accepted); nearest sampling with linear
+  mips; no BCn on pixel art; triangle budget per asset class. Units: Blockbench 16 units =
+  1 block = 1 m, Blender 1 unit = 1 m with transforms applied.
 - **Exchange format: glTF 2.0** (`.glb` preferred, `.gltf` + files accepted), exported from
-  Blockbench. The asset carries meshes, materials, UVs and textures. Later it can also carry
-  skins and animations (Phase E).
+  either tool. The asset carries meshes, materials, UVs and textures. Later it can also carry
+  skins and animations (Phase E). Export settings per tool: `docs/guide/MODELING.md`.
 - **Engine/game split:**
   - ZODAR Engine keeps the asset pipeline generic: glTF import, texture compilation, sampler and
-    mip rules, validation and reports. Nothing in `engine/` knows about Blockbench project files
-    or Lastlight content.
+    mip rules, validation and reports. Nothing in `engine/` knows about Blockbench or Blender
+    project files or Lastlight content; glTF `asset.generator` is read only to report the
+    source tool.
   - Lastlight Expanse keeps its game-specific assets, palettes, texel-density targets and content
     rules in `game/` (for example a future `game/assets/`).
-- **Pipeline:** Blockbench → export `.glb` → place it in the game's asset folder → the engine
-  asset compiler (`ZodarAssetCompiler`) validates it and compiles the textures → the game loads
-  it through the engine importer. Blockbench `.bbmodel` source files are versioned next to the
-  exports so assets can be re-exported.
+- **Pipeline (both tools):** export `.glb` to the game's model folder → `zodar.py import`
+  (registry defaults: pixel-art sampling, lossless compile) → `zodar.py assets check --strict`
+  (size, palette, texel density, triangle budget, bounds, importer warnings) → prefabs/scenes
+  reference the registry id → hot reload in the game. Sources are versioned next to the
+  exports so assets can be re-exported: `.bbmodel` (plain JSON) in Git, `.blend` in Git LFS.
 
 ## 4. Technical requirements
 
@@ -96,10 +106,13 @@ What exists today (Phase C1 added the asset manager, see `docs/guide/ASSETS.md`)
 
 Required work, to be scheduled:
 
-1. **glTF import for Blockbench exports** (engine, generic). Verify that glTF sampler filters are
-   honoured end to end (renderer samplers, not only `ModelSampler`). Support per-face UVs and
-   multiple textures per model. Handle Blockbench's material and texture naming. Report
-   unsupported features in the import log.
+1. **glTF import for Blockbench and Blender exports** (engine, generic). *Done in Phase D1*:
+   sampler filters end to end, per-face UVs, several textures per model, hierarchy and pivots,
+   clashing/space-containing names, Blender PBR materials, vertex colours, tangents and extra
+   UV sets; one importer note per ignored feature, actionable errors for Draco, WebP and mesh
+   quantization; source tool, triangle budgets and bounds in the asset report. Verified with
+   generated fixtures (`engine/tests/data/gltf_tools`); real exports from both tools are the
+   open follow-up.
 2. **Pixel-art texture rules in the asset pipeline** (engine, generic, configured per game).
    Each texture gets a "pixel art" usage flag that means: no BCn compression (or an
    art-preserving mode, decided by A/B tests), mip generation that keeps the palette readable,
@@ -127,4 +140,8 @@ Required work, to be scheduled:
 - [ ] Texel density within the documented range.
 - [ ] Reads crisply up close (nearest sampling) and does not shimmer at distance (mips).
 - [ ] Silhouette readable at gameplay distance.
-- [ ] Blockbench source (`.bbmodel`) committed next to the `.glb` export.
+- [ ] Triangle count within the asset class budget; bounds plausible (1/16..64 m, correct
+      export scale).
+- [ ] Exported with the settings in `docs/guide/MODELING.md` (Blender: no Draco, no WebP,
+      transforms applied, "Closest" interpolation).
+- [ ] Source (`.bbmodel`, or `.blend` via Git LFS) committed next to the `.glb` export.

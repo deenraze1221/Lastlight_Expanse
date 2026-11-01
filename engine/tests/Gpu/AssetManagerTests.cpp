@@ -1089,3 +1089,72 @@ TEST_CASE("hot reload: changes during async loads are deferred; '#' material fil
     CHECK(mat.generation() == 1);
     gpu().context->waitIdle();
 }
+
+TEST_CASE("gltf tools: Blockbench- and Blender-style exports render byte-exact with pixel-art textures") {
+    zodar::test::ValidationGuard guard;
+    // Work on a copy: importing with compile writes the KTX2 caches next to the models.
+    const std::filesystem::path fixtures = std::filesystem::path(ZODAR_TEST_DATA_DIR) / "gltf_tools" / "valid";
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "zodar_gltf_tools_gpu";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    std::filesystem::copy(fixtures, dir, std::filesystem::copy_options::recursive);
+
+    // Registry defaults as a pixel-art game sets them: pixelArt sampling, lossless compile.
+    AssetRegistry registry(dir);
+    AssetDefaults defaults;
+    defaults.sampling = ModelSampling::PixelArt;
+    defaults.compile = true;
+    registry.setDefaults({{AssetType::Model, defaults}});
+    for (const char* file : {"blockbench_crate.glb", "blender_wall.glb"}) {
+        CAPTURE(file);
+        const AssetEntry entry = importAsset(registry, dir / file);
+        REQUIRE(entry.compile);
+        const std::filesystem::path path = registry.sourcePath(entry);
+        GltfLoadOptions sourceOnly;
+        sourceOnly.useCompiledTextures = false;
+        sourceOnly.generateMips = false;
+        const ModelData reference = loadGltf(path, sourceOnly);
+        REQUIRE(reference.images.size() == 2);
+
+        SceneView view;
+        view.camera.position = {2.5f, 2.0f, 3.5f};
+        view.camera.lookAt(reference.bounds.center());
+        const auto renderModel = [&](bool compiled) {
+            Fixture f;
+            AssetManagerDesc desc;
+            desc.root = dir;
+            AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+            ModelLoadSettings settings = modelLoadSettings(entry);
+            settings.useCompiledTextures = compiled;
+            const ModelHandle h = assets.loadModel(path, settings);
+            REQUIRE_MESSAGE(h.ready(), (h.failed() ? h.error() : ""));
+            REQUIRE(h->model.textures().size() == reference.images.size());
+            for (size_t i = 0; i < reference.images.size(); ++i) {
+                const Texture& t = h->model.textures()[i];
+                CHECK(t.format() == VK_FORMAT_R8G8B8A8_SRGB); // never block-compressed
+                CHECK(gpu().upload->readImage(t.image(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) ==
+                      reference.images[i].levels[0]);
+            }
+            std::vector<MeshDraw> draws;
+            h->model.appendDraws(draws);
+            view.draws = draws;
+            auto image = f.render(view, {96, 96});
+            CHECK(f.render(view, {96, 96}) == image); // deterministic
+            view.draws = {};
+            gpu().context->waitIdle();
+            return image;
+        };
+        const auto fromSource = renderModel(false);
+        CHECK(distinctColors(fromSource) > 4);
+        assets::ModelCompileOptions compile;
+        compile.pixelArt = true;
+        const auto compiledTextures = assets::compileModelTextures(path, compile);
+        REQUIRE(compiledTextures.size() == 2);
+        for (const auto& t : compiledTextures) CHECK((t.format == PixelFormat::Rgba8));
+        CHECK(loadGltf(path).textureStats.compiled == 2); // the cache is used
+        // Compiled (lossless) textures render exactly like the source PNGs.
+        CHECK(renderModel(true) == fromSource);
+        Fixture::collect();
+    }
+    std::filesystem::remove_all(dir);
+}

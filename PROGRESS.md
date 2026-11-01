@@ -119,8 +119,55 @@
   Phase D, host-authoritative compatible, player ids and player logic game-side only; D7 adds
   repairable electrical panels + emergency lighting; palette muted/faded post-war (GDD §3).
 
+- **Phase D1 done (2026-11-01):** unified GLB/glTF pipeline for Blockbench and Blender
+  (engine, generic). See the D1 handoff below.
+
 ## Current task
-- **Next session: D1 — unified GLB/glTF pipeline for Blockbench and Blender (engine).**
+- **Next session: D2 — game asset layout + static bunker (game).** Step 0 (Git LFS check)
+  blocks on the user confirming the GitHub LFS quota.
+
+## Handoff (Phase D1 session, 2026-11-01)
+- Done:
+  - Fixtures: `engine/tests/data/gltf_tools/make_fixtures.py` (stdlib, deterministic, stored
+    deflate) writes `valid/blockbench_crate.glb`, `valid/blockbench_crate_embedded.gltf`
+    (data: URIs), `valid/blender_wall.glb`, `rejected/{draco,webp,quantization}.glb`;
+    `assets.json` there (palette, defaults, budgets, classes) made with `zodar.py import valid`.
+  - Importer (`GltfLoader.cpp`, `ModelData.h`): `notes` vs `warnings` (one note per ignored
+    feature naming its users), `generator` + `SourceTool` (`detectSourceTool`, `toString`),
+    `ModelNode::path` (hierarchy), required extensions checked before buffers with actionable
+    errors (Draco, WebP, quantization, meshopt, BasisU), optional Draco uses the fallback.
+  - Registry (`AssetRegistry.h/.cpp`): optional `defaults` (texture/model, new entries only),
+    `budgets` + model `class` (validated), bounds check (1/16..64 m), check result/report
+    fields `sourceTool`, `notes`, `size`, `class`, `triangleBudget`; `findAssetFiles` for
+    batch import. Schema v1 unchanged; old registries serialize identically.
+  - Tool: `ZodarAssetTool import DIR` / `--class`; `zodar.py import FILE|DIR`.
+  - Docs: new `docs/guide/MODELING.md`; `docs/guide/ASSETS.md` (defaults, budgets, batch,
+    notes, report fields); `docs/ART_DIRECTION.md` §3-5 (Blender secondary, one standard);
+    ARCHITECTURE "Phase D1 decisions"; plan/roadmap/CLAUDE.md status.
+- Tests: new `engine/tests/Assets/GltfToolFixtureTests.cpp` (13 cases: source tool, both
+  Blockbench variants, Blender, rejected messages, optional real exports, defaults/budgets
+  round-trip + errors, defaults on import, report fields + budgets, bounds, batch import,
+  committed registry); GPU case "gltf tools: ... render byte-exact with pixel-art textures"
+  (GPU mip 0 == source texels, compiled RGBA8 KTX2 renders identically to source, renders
+  deterministic); ctests `tools.asset_check_gltf_tools` (strict), `tools.asset_import_dir*`,
+  `tools.gltf_fixtures_up_to_date`.
+- Results: GCC 13 Debug (warnings as errors) 0 warnings, 29/29 ctest, 212 unit and 65 GPU
+  cases, validation 0 errors / 0 warnings.
+  GCC 13 Release (warnings as errors): 0 warnings, 29/29 ctest, 212 unit + 65 GPU cases,
+  validation 0 messages. `make_fixtures.py --check` reproduces the committed bytes.
+- Decisions: notes do not fail `--strict` (needed for the acceptance "valid fixtures pass
+  --strict" with animations / Blender material extensions); fixture registry uses
+  `compile: false` (no KTX2 caches committed; the GPU case covers compile via defaults).
+- Open debts: real Blockbench/Blender exports not provided yet (drop them into
+  `engine/tests/data/gltf_tools/real/` as `blockbench_*.glb` / `blender_*.glb`; the unit case
+  checks them automatically, then import them into the fixture registry). Fixtures only
+  imitate exporter output (Blender menu names in MODELING.md are from Blender 4.x docs, not
+  verified in this session). Not run: Clang, MinGW, MSVC.
+- **D2 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/PHASE_D_PLAN.md` (D2, GDD alignment),
+  `docs/guide/MODELING.md`, `docs/guide/SCENE_FILES.md`, GDD §1, §3, §9, §10,
+  `game/src/main.cpp`, `game/CMakeLists.txt`.
+- **D2 first step:** step 0 Git LFS check (git-lfs present, remote accepts LFS pushes through
+  the proxy, user confirms the quota); stop and report if LFS is not usable.
 
 ## Handoff (Phase D planning session, 2026-11-01)
 - Done: Phase D planned and approved; `docs/PHASE_D_PLAN.md` written; roadmap Phase D

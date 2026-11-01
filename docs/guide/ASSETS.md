@@ -1,4 +1,4 @@
-# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3, scene models C4, hot reload C5/C6, palettes C7)
+# Assets: textures, glTF models and materials (Phase C1, async C2, registry C3, scene models C4, hot reload C5/C6, palettes C7, tool exports D1)
 
 Module `Zodar::AssetManager` (`engine/rendering/AssetManager/AssetManager/AssetManager.h`).
 Working example: `examples/asset_loading` rendered by the sample `ZodarAssetLoading`
@@ -94,9 +94,36 @@ with a warning.
 `check` exit code: 1 if any asset has errors (`--strict`: warnings too). Errors: missing
 source or dependency, unreadable/invalid file. Warnings: stale (source/dependency changed
 since import: re-import), texture size violations (above 64×64, non-standard), texel density
-outside 16..64 texels/m (target 32, `--density-target N`), glTF importer notes, missing compiled outputs. The report
-(`zodar.asset_report` v1) has per asset: status, errors, warnings, textures (size + class),
-meshes, vertices, triangles, materials, texelDensity.
+outside 16..64 texels/m (target 32, `--density-target N`), glTF importer warnings, missing
+compiled outputs, triangle budget exceeded and model bounds outside 1/16..64 m (Phase D1).
+glTF importer *notes* (ignored data such as animations, extra UV sets or unsupported
+material extensions) are reported but are not warnings, so `--strict` passes with them. The
+report (`zodar.asset_report` v1) has per asset: status, errors, warnings, textures (size +
+class), meshes, vertices, triangles, materials, texelDensity; models also have `sourceTool`
+(`blockbench|blender|other`, from glTF `asset.generator`), `notes`, `size` [x, y, z] in metres
+and, with a class, `class` and `triangleBudget`.
+
+### Defaults, budgets and batch import (Phase D1)
+
+Optional top-level fields (schema stays v1; registries without them load and save unchanged):
+
+```json
+"defaults": { "model": { "sampling": "pixelArt", "compile": true, "class": "prop" },
+              "texture": { "usage": "color", "mips": true } },
+"budgets": { "prop": 2000, "character": 6000, "architecture": 20000 }
+```
+
+- `defaults` per type (`texture`: usage, mips; `model`: sampling, compile, class) apply when a
+  file is imported for the first time and the option is not given. Entries always store
+  their settings, so changing defaults never changes how existing entries load.
+- `budgets`: asset class -> maximum triangles (positive). Model entries may have `"class"`
+  (`--class NAME` on import); it must name a budget (parse/import error otherwise). Over
+  budget: warning `triangles: N triangles exceed the 'prop' budget of M`.
+- `zodar.py import DIR` imports every asset file below `DIR` in sorted path order, skipping
+  hidden entries, `*.zodar` caches, the registry's palette swatches and files another found
+  asset depends on (e.g. a `.gltf`'s external textures, covered by its hash). Without
+  `--registry` the nearest `assets.json` at or above `DIR` is used.
+- Export settings per tool and the modeling checklist: `docs/guide/MODELING.md`.
 
 ### Palette validation (Phase C7)
 

@@ -13,6 +13,8 @@
 #include <cstdarg>
 #include <cstring>
 #include <iterator>
+#include <limits>
+#include <map>
 #include <fstream>
 #include <set>
 #include <system_error>
@@ -225,6 +227,21 @@ bool readPaletteSource(const Json& value, const std::string& path, PaletteSource
     return true;
 }
 
+// "" when `assetClass` names a budget, otherwise the problem.
+std::string classProblem(const std::string& assetClass, const std::map<std::string, uint32_t>& budgets) {
+    if (budgets.empty()) {
+        return "class '" + assetClass + "' but the registry has no \"budgets\"";
+    }
+    if (budgets.contains(assetClass)) {
+        return {};
+    }
+    std::string known;
+    for (const auto& [name, max] : budgets) {
+        known += (known.empty() ? "" : ", ") + name;
+    }
+    return "unknown asset class '" + assetClass + "' (budgets: " + known + ")";
+}
+
 Json paletteSourceJson(const PaletteSource& s) {
     return s.swatch.empty() ? Json(s.colors) : Json(s.swatch);
 }
@@ -258,7 +275,7 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
     if (!detail::requireObject(root, "", issues)) {
         issues.throwIfAny();
     }
-    detail::checkKeys(root, "", {"schema", "version", "palette", "assets"}, issues);
+    detail::checkKeys(root, "", {"schema", "version", "palette", "defaults", "budgets", "assets"}, issues);
     if (const auto palette = root.find("palette"); palette != root.end()) {
         PaletteConfig config;
         bool ok = true;
@@ -287,6 +304,72 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
         }
         if (ok) {
             registry.m_palette = std::move(config);
+        }
+    }
+    if (const auto budgets = root.find("budgets"); budgets != root.end()) {
+        if (!budgets->is_object()) {
+            issues.add("/budgets", "expected an object of asset class -> maximum triangles");
+        } else {
+            for (const auto& [name, value] : budgets->items()) {
+                if (!value.is_number_unsigned() || value.get<uint64_t>() == 0 ||
+                    value.get<uint64_t>() > std::numeric_limits<uint32_t>::max()) {
+                    issues.add(detail::child("/budgets", name), "expected a positive triangle count, got " +
+                                                                    detail::typeName(value) + " " + value.dump());
+                    continue;
+                }
+                registry.m_budgets[name] = static_cast<uint32_t>(value.get<uint64_t>());
+            }
+        }
+    }
+    if (const auto defaults = root.find("defaults"); defaults != root.end()) {
+        if (!defaults->is_object()) {
+            issues.add("/defaults", "expected an object of per-type import defaults (texture, model)");
+        } else {
+            for (const auto& [name, value] : defaults->items()) {
+                const std::string path = detail::child("/defaults", name);
+                const std::optional<AssetType> type = parseAssetType(name);
+                if (!type || (*type != AssetType::Texture && *type != AssetType::Model)) {
+                    issues.add(path, "defaults apply to texture and model only");
+                    continue;
+                }
+                if (!detail::requireObject(value, path, issues)) {
+                    continue;
+                }
+                AssetDefaults d;
+                if (*type == AssetType::Texture) {
+                    detail::checkKeys(value, path, {"usage", "mips"}, issues);
+                    std::string usage;
+                    if (detail::readString(value, "usage", path, usage, issues)) {
+                        d.usage = parseUsage(usage);
+                        if (!d.usage) {
+                            issues.add(detail::child(path, "usage"),
+                                       "unknown usage '" + usage + "' (expected color, data or normal)");
+                        }
+                    }
+                    bool mips = true;
+                    if (detail::readBool(value, "mips", path, mips, issues)) d.mips = mips;
+                } else {
+                    detail::checkKeys(value, path, {"sampling", "compile", "class"}, issues);
+                    std::string sampling;
+                    if (detail::readString(value, "sampling", path, sampling, issues)) {
+                        d.sampling = parseSampling(sampling);
+                        if (!d.sampling) {
+                            issues.add(detail::child(path, "sampling"),
+                                       "unknown sampling '" + sampling + "' (expected file, pixelArt, nearest or linear)");
+                        }
+                    }
+                    bool compile = false;
+                    if (detail::readBool(value, "compile", path, compile, issues)) d.compile = compile;
+                    std::string assetClass;
+                    if (detail::readString(value, "class", path, assetClass, issues)) {
+                        if (const std::string problem = classProblem(assetClass, registry.m_budgets); !problem.empty()) {
+                            issues.add(detail::child(path, "class"), problem);
+                        }
+                        d.assetClass = assetClass;
+                    }
+                }
+                registry.m_defaults[*type] = std::move(d);
+            }
         }
     }
     std::string schema;
@@ -326,8 +409,14 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
                               issues);
         } else if (e.type == AssetType::Model) {
             detail::checkKeys(
-                a, path, {"id", "type", "source", "sampling", "compile", "hash", "dependencies", "outputs", "palette"},
+                a, path,
+                {"id", "type", "source", "sampling", "compile", "class", "hash", "dependencies", "outputs", "palette"},
                 issues);
+            if (detail::readString(a, "class", path, e.assetClass, issues)) {
+                if (const std::string problem = classProblem(e.assetClass, registry.m_budgets); !problem.empty()) {
+                    issues.add(detail::child(path, "class"), problem);
+                }
+            }
         } else {
             detail::checkKeys(a, path, {"id", "type", "source", "hash", "dependencies", "outputs", "palette"}, issues);
         }
@@ -411,6 +500,22 @@ std::string AssetRegistry::serialize() const {
         }
         root["palette"] = std::move(palette);
     }
+    if (!m_defaults.empty()) {
+        Json defaults = Json::object();
+        for (const auto& [type, d] : m_defaults) {
+            Json t = Json::object();
+            if (d.usage) t["usage"] = toString(*d.usage);
+            if (d.mips) t["mips"] = *d.mips;
+            if (d.sampling) t["sampling"] = samplingName(*d.sampling);
+            if (d.compile) t["compile"] = *d.compile;
+            if (d.assetClass) t["class"] = *d.assetClass;
+            defaults[toString(type)] = std::move(t);
+        }
+        root["defaults"] = std::move(defaults);
+    }
+    if (!m_budgets.empty()) {
+        root["budgets"] = m_budgets;
+    }
     Json assets = Json::array();
     for (const AssetEntry& e : m_entries) {
         Json a = Json::object();
@@ -423,6 +528,9 @@ std::string AssetRegistry::serialize() const {
         } else if (e.type == AssetType::Model) {
             a["sampling"] = samplingName(e.sampling);
             a["compile"] = e.compile;
+            if (!e.assetClass.empty()) {
+                a["class"] = e.assetClass;
+            }
         }
         if (!e.hash.empty()) {
             a["hash"] = e.hash;
@@ -707,12 +815,13 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
     if ((options.usage || options.mips) && *type != AssetType::Texture) {
         throw Error("--usage/--no-mips apply to textures only");
     }
-    if ((options.sampling || options.compile) && *type != AssetType::Model) {
-        throw Error("--sampling/--compile apply to models only");
+    if ((options.sampling || options.compile || options.assetClass) && *type != AssetType::Model) {
+        throw Error("--sampling/--compile/--class apply to models only");
     }
 
     // An existing entry for the same source keeps its id and settings.
     AssetEntry entry;
+    bool fresh = true; // new entry: starts from the registry defaults
     const auto same = std::ranges::find(registry.entries(), source, &AssetEntry::source);
     if (!options.id.empty()) {
         if (same != registry.entries().end() && same->id != options.id) {
@@ -723,11 +832,13 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
             // Settings carry over only for the same file and type (e.g. re-import with --id).
             if (e->source == source && e->type == (options.type ? *options.type : e->type)) {
                 entry = *e;
+                fresh = false;
             }
         }
         entry.id = options.id;
     } else if (same != registry.entries().end()) {
         entry = *same;
+        fresh = false;
     } else {
         entry.id = defaultAssetId(abs);
         if (const AssetEntry* e = registry.find(entry.id)) {
@@ -736,6 +847,25 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
     }
     entry.type = *type;
     entry.source = source;
+    if (fresh) {
+        if (const auto d = registry.defaults().find(*type); d != registry.defaults().end()) {
+            const AssetDefaults& defaults = d->second;
+            if (*type == AssetType::Texture) {
+                if (defaults.usage) entry.usage = *defaults.usage;
+                if (defaults.mips) entry.mips = *defaults.mips;
+            } else if (*type == AssetType::Model) {
+                if (defaults.sampling) entry.sampling = *defaults.sampling;
+                if (defaults.compile) entry.compile = *defaults.compile;
+                if (defaults.assetClass) entry.assetClass = *defaults.assetClass;
+            }
+        }
+    }
+    if (options.assetClass) entry.assetClass = *options.assetClass;
+    if (!entry.assetClass.empty()) {
+        if (const std::string problem = classProblem(entry.assetClass, registry.budgets()); !problem.empty()) {
+            throw Error("cannot import '" + source + "': " + problem);
+        }
+    }
     if (options.usage) entry.usage = *options.usage;
     if (options.mips) entry.mips = *options.mips;
     if (options.sampling) entry.sampling = *options.sampling;
@@ -767,6 +897,42 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
 }
 
 // --- Checks ------------------------------------------------------------------------------
+
+std::vector<std::filesystem::path> findAssetFiles(const AssetRegistry& registry,
+                                                 const std::filesystem::path& directory) {
+    const std::filesystem::path root = normal(directory);
+    if (!std::filesystem::is_directory(root)) {
+        throw Error("cannot import '" + directory.generic_string() + "': not a directory");
+    }
+    std::vector<std::filesystem::path> found;
+    for (auto it = std::filesystem::recursive_directory_iterator(root); it != std::filesystem::recursive_directory_iterator();
+         ++it) {
+        const std::string name = it->path().filename().string();
+        if (name.starts_with(".") || name.ends_with(".zodar")) {
+            if (it->is_directory()) it.disable_recursion_pending();
+            continue;
+        }
+        if (it->is_regular_file() && detectAssetType(it->path())) {
+            found.push_back(normal(it->path()));
+        }
+    }
+    std::set<std::filesystem::path> skip;
+    if (const auto& palette = registry.palette()) {
+        std::vector<const PaletteSource*> sources{&palette->master};
+        for (const auto& [subName, sub] : palette->subPalettes) sources.push_back(&sub);
+        for (const PaletteSource* p : sources) {
+            if (!p->swatch.empty()) skip.insert(normal(registry.directory() / p->swatch));
+        }
+    }
+    for (const auto& file : found) {
+        for (const auto& dep : assetDependencies(*detectAssetType(file), file)) {
+            skip.insert(normal(dep));
+        }
+    }
+    std::erase_if(found, [&](const std::filesystem::path& f) { return skip.contains(f); });
+    std::ranges::sort(found, {}, [](const std::filesystem::path& p) { return p.generic_string(); });
+    return found;
+}
 
 namespace {
 
@@ -940,6 +1106,8 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
             for (const std::string& w : data.warnings) {
                 r.warnings.push_back("glTF: " + w);
             }
+            r.notes = data.notes;
+            r.sourceTool = toString(data.sourceTool);
             r.meshes = static_cast<uint32_t>(data.meshes.size());
             r.materials = static_cast<uint32_t>(data.materials.size());
             for (const MeshData& m : data.meshes) {
@@ -959,6 +1127,29 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
                 if (palette.palette && colourImages.contains(static_cast<int>(i))) {
                     countPalette(image, *palette.palette, r.textures.back(), palette.deviation);
                     palette.used = true;
+                }
+            }
+            if (!data.bounds.isEmpty()) {
+                r.size = data.bounds.extent();
+                const double extent = std::max({r.size.x, r.size.y, r.size.z});
+                if ((options.minModelSize > 0.0 && extent < options.minModelSize) ||
+                    (options.maxModelSize > 0.0 && extent > options.maxModelSize)) {
+                    r.warnings.push_back(formatText("bounds: largest extent %.3f m is outside %.4g..%.4g m; check the "
+                                                    "export scale (Blockbench: 16 units = 1 m; Blender: 1 unit = 1 m, "
+                                                    "transforms applied)",
+                                                    extent, options.minModelSize, options.maxModelSize));
+                }
+            }
+            if (!entry.assetClass.empty()) {
+                r.assetClass = entry.assetClass;
+                if (const auto b = registry.budgets().find(entry.assetClass); b != registry.budgets().end()) {
+                    r.triangleBudget = b->second;
+                    if (r.triangles > b->second) {
+                        r.warnings.push_back(formatText("triangles: %u triangles exceed the '%s' budget of %u",
+                                                        r.triangles, entry.assetClass.c_str(), b->second));
+                    }
+                } else {
+                    r.warnings.push_back("triangles: " + classProblem(entry.assetClass, registry.budgets()));
                 }
             }
             r.texelDensity = texelDensity(data);
@@ -1095,6 +1286,16 @@ std::string assetReportJson(const AssetRegistry& registry, const std::vector<Ass
         a["triangles"] = r.triangles;
         a["materials"] = r.materials;
         a["texelDensity"] = std::round(r.texelDensity * 100.0) / 100.0;
+        if (r.type == AssetType::Model && !r.sourceTool.empty()) {
+            a["sourceTool"] = r.sourceTool;
+            a["notes"] = r.notes;
+            a["size"] = Json::array({std::round(r.size.x * 1000.0) / 1000.0, std::round(r.size.y * 1000.0) / 1000.0,
+                                     std::round(r.size.z * 1000.0) / 1000.0});
+            if (!r.assetClass.empty()) {
+                a["class"] = r.assetClass;
+                a["triangleBudget"] = r.triangleBudget;
+            }
+        }
         if (r.paletteDeviation) {
             const PaletteDeviation& d = *r.paletteDeviation;
             Json examples = Json::array();

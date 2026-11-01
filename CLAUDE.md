@@ -32,7 +32,7 @@ Instructions for Claude Code sessions in this repository.
 
 - Repo: Lastlight Expanse game (`game/`) on the reusable ZODAR engine (`engine/`). Engine code
   never depends on `game/`. Layout and module rules: `docs/ARCHITECTURE.md`.
-- Status and next task: `PROGRESS.md`; plan: `docs/AI_FIRST_ROADMAP.md` (Phase A done, B1 done, B2 done, Phase C done (C1-C7): `Zodar::AssetManager` incl. async loads, `assets.json` registry + `zodar.py import|assets` (palette checks), scene `modelRenderer`, hot reload of assets/shaders/scenes (`LiveScene`, Debug-only opt-in watching), guide `docs/guide/ASSETS.md`). Phase D approved, not started: binding plan `docs/PHASE_D_PLAN.md` (D1-D8, read list per session); next per `PROGRESS.md`.
+- Status and next task: `PROGRESS.md`; plan: `docs/AI_FIRST_ROADMAP.md` (Phase A done, B1 done, B2 done, Phase C done (C1-C7): `Zodar::AssetManager` incl. async loads, `assets.json` registry + `zodar.py import|assets` (palette checks), scene `modelRenderer`, hot reload of assets/shaders/scenes (`LiveScene`, Debug-only opt-in watching), guide `docs/guide/ASSETS.md`). Phase D approved: binding plan `docs/PHASE_D_PLAN.md` (D1-D8, read list per session); D1 done (Blockbench/Blender glTF pipeline, guide `docs/guide/MODELING.md`); next per `PROGRESS.md`.
 - Token-efficient session workflow: `CLAUDE_CODE_WEB_EFFICIENT_WORKFLOW.md`.
 - Art direction (voxel/pixel art, texture sizes, Blockbench → glTF workflow): `docs/ART_DIRECTION.md`.
 - Language **C++23** (GCC 13, Clang 18, MinGW-w64 verified; MSVC unverified). Use only features

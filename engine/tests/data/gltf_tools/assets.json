@@ -1,0 +1,60 @@
+{
+  "schema": "zodar.asset_registry",
+  "version": 1,
+  "palette": {
+    "colors": [
+      "#3b3a36",
+      "#5c5a52",
+      "#7d7a6e",
+      "#6b4f3a",
+      "#8a6a4c",
+      "#4f5b4a",
+      "#c8a050",
+      "#9e9a88"
+    ]
+  },
+  "defaults": {
+    "model": {
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop"
+    }
+  },
+  "budgets": {
+    "architecture": 20000,
+    "character": 6000,
+    "prop": 2000
+  },
+  "assets": [
+    {
+      "id": "blender_wall",
+      "type": "model",
+      "source": "valid/blender_wall.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "architecture",
+      "hash": "fnv1a64:5bc88d2ac7efafcc",
+      "dependencies": []
+    },
+    {
+      "id": "blockbench_crate",
+      "type": "model",
+      "source": "valid/blockbench_crate.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:98b9bd9f82064311",
+      "dependencies": []
+    },
+    {
+      "id": "blockbench_crate_embedded",
+      "type": "model",
+      "source": "valid/blockbench_crate_embedded.gltf",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "hash": "fnv1a64:69da62f6b367c8b6",
+      "dependencies": []
+    }
+  ]
+}

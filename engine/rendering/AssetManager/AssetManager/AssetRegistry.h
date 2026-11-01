@@ -4,6 +4,8 @@
 #include "Assets/TextureCache.h"
 #include "Assets/TextureStandards.h"
 
+#include <glm/glm.hpp>
+
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -87,8 +89,24 @@ struct AssetEntry {
     // Sub-palette this asset may use in addition to the master palette (Phase C7); empty: the
     // master palette only. Must name a sub-palette of the registry's palette.
     std::string palette;
+    // Model asset class ("class", Phase D1): names a triangle budget of the registry's
+    // "budgets" (e.g. prop, character, architecture); empty: no budget check.
+    std::string assetClass;
 
     bool operator==(const AssetEntry&) const = default;
+};
+
+// Import defaults per asset type ("defaults", Phase D1): applied when a file is imported for
+// the first time and the option is not given. Existing entries keep their settings, and
+// entries always store their settings explicitly, so changing defaults never changes how
+// imported assets load. Texture: usage, mips. Model: sampling, compile, class.
+struct AssetDefaults {
+    std::optional<TextureUsage> usage;      // texture
+    std::optional<bool> mips;               // texture
+    std::optional<ModelSampling> sampling;  // model
+    std::optional<bool> compile;            // model
+    std::optional<std::string> assetClass;  // model ("class")
+    bool operator==(const AssetDefaults&) const = default;
 };
 
 class AssetRegistry {
@@ -122,14 +140,25 @@ public:
     const std::optional<PaletteConfig>& palette() const { return m_palette; }
     void setPalette(std::optional<PaletteConfig> palette) { m_palette = std::move(palette); }
 
+    // Optional import defaults per type (texture, model); written as "defaults" when not empty.
+    const std::map<AssetType, AssetDefaults>& defaults() const { return m_defaults; }
+    void setDefaults(std::map<AssetType, AssetDefaults> defaults) { m_defaults = std::move(defaults); }
+    // Optional triangle budgets: asset class -> maximum triangles (> 0); written as "budgets"
+    // when not empty. A model over its class budget is a check warning.
+    const std::map<std::string, uint32_t>& budgets() const { return m_budgets; }
+    void setBudgets(std::map<std::string, uint32_t> budgets) { m_budgets = std::move(budgets); }
+
     bool operator==(const AssetRegistry& other) const {
-        return m_entries == other.m_entries && m_palette == other.m_palette;
+        return m_entries == other.m_entries && m_palette == other.m_palette && m_defaults == other.m_defaults &&
+               m_budgets == other.m_budgets;
     }
 
 private:
     std::filesystem::path m_directory;
     std::vector<AssetEntry> m_entries;
     std::optional<PaletteConfig> m_palette;
+    std::map<AssetType, AssetDefaults> m_defaults;
+    std::map<std::string, uint32_t> m_budgets;
 };
 
 // Loader settings from an entry's import settings.
@@ -157,13 +186,23 @@ struct AssetImportOptions {
     std::optional<ModelSampling> sampling; // model
     std::optional<bool> compile;       // model (outputs are filled by the caller that compiles)
     std::optional<std::string> palette; // sub-palette name ("" clears); must exist in the registry
+    std::optional<std::string> assetClass; // model ("" clears); must name a registry budget
 };
-// Adds or updates the entry for `file` (settings of an existing entry are kept unless given):
-// type, relative source, dependencies and hash. Throws zodar::Error if the file is missing,
-// outside the registry directory, of unknown type, unreadable, or references missing files.
+// Adds or updates the entry for `file` (settings of an existing entry are kept unless given;
+// a new entry starts from the registry's defaults for its type): type, relative source,
+// dependencies and hash. Throws zodar::Error if the file is missing, outside the registry
+// directory, of unknown type, unreadable, references missing files or names an unknown class.
 const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::path& file,
                               const AssetImportOptions& options = {});
 std::string defaultAssetId(const std::filesystem::path& file);
+
+// Batch import (`ZodarAssetTool import DIR`): every asset file below `directory` (types from
+// detectAssetType), sorted by path, skipping hidden entries ('.'), compiled caches
+// (*.zodar), the registry's palette swatches and files another found asset depends on (an
+// external glTF texture is covered by its model's hash). Throws zodar::Error if `directory`
+// is not a directory or a found asset cannot be parsed.
+[[nodiscard]] std::vector<std::filesystem::path> findAssetFiles(const AssetRegistry& registry,
+                                                                const std::filesystem::path& directory);
 
 // --- Checks and report -------------------------------------------------------------------
 
@@ -193,7 +232,10 @@ struct AssetCheckResult {
     AssetType type = AssetType::Texture;
     std::string source;
     std::vector<std::string> errors;   // unusable: missing/invalid source or dependency
-    std::vector<std::string> warnings; // stale hash, size standards, texel density, importer notes
+    std::vector<std::string> warnings; // stale hash, size standards, texel density, budget, bounds, glTF warnings
+    // glTF importer notes (ignored data such as animations or extra UV sets): reported, never
+    // a warning, so exports with them pass `check --strict`.
+    std::vector<std::string> notes;
     std::vector<AssetTextureInfo> textures;
     uint32_t meshes = 0, vertices = 0, triangles = 0, materials = 0;
     // Models: texels per metre of base-colour textures (sqrt(texel area / surface area) over
@@ -201,6 +243,13 @@ struct AssetCheckResult {
     double texelDensity = 0.0;
     // Set when a palette applies and at least one colour texture was checked.
     std::optional<PaletteDeviation> paletteDeviation;
+    // Models (Phase D1): authoring tool from asset.generator ("blockbench", "blender",
+    // "other"; empty for other types), world-space size of the bounds in metres, asset class
+    // and its triangle budget (0: none).
+    std::string sourceTool;
+    glm::vec3 size{0.0f};
+    std::string assetClass;
+    uint32_t triangleBudget = 0;
 
     const char* status() const { return !errors.empty() ? "error" : !warnings.empty() ? "warning" : "ok"; }
 };
@@ -212,6 +261,10 @@ struct AssetCheckOptions {
     // Master palette for this check instead of the registry's (ZodarAssetTool --palette).
     // Without either, no palette check runs (and reports stay as before Phase C7).
     std::optional<PaletteSource> palette;
+    // Bounds check (Phase D1): a model whose largest extent is outside [min, max] metres gets a
+    // warning (usually a wrong export scale); <= 0 disables a limit.
+    double minModelSize = 1.0 / 16.0;
+    double maxModelSize = 64.0;
 };
 
 // Checks one entry / every entry (registry order). Never throws: problems become errors.
@@ -220,7 +273,9 @@ std::vector<AssetCheckResult> checkRegistry(const AssetRegistry& registry, const
 
 // JSON report, schema "zodar.asset_report" v1: { schema, version, registry, summary {assets,
 // ok, warnings, errors}, assets: [{ id, type, source, status, errors, warnings, textures,
-// meshes, vertices, triangles, materials, texelDensity }] }. With a palette check, assets also
+// meshes, vertices, triangles, materials, texelDensity }] }. Models also have "sourceTool",
+// "notes" and "size" [x, y, z] (metres), plus "class" and "triangleBudget" when they have a
+// class (Phase D1, optional keys within v1). With a palette check, assets also
 // get "paletteDeviation": { palette, texels, offPalette, percent, examples ["#rrggbb"] } and
 // textures get "paletteTexels" / "offPaletteTexels" (keys absent without a palette).
 std::string assetReportJson(const AssetRegistry& registry, const std::vector<AssetCheckResult>& results);

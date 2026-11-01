@@ -1,9 +1,11 @@
 // ZodarAssetTool: asset registry tool (Phase C3). CPU only, no Vulkan device needed.
 //
-//   ZodarAssetTool import <file>... [--registry FILE] [--id ID] [--type texture|model|material|scene|prefab]
+//   ZodarAssetTool import <file|dir>... [--registry FILE] [--id ID] [--type texture|model|material|scene|prefab]
 //       [--usage color|data|normal] [--no-mips] [--sampling file|pixelArt|nearest|linear] [--compile]
-//       [--sub-palette NAME]
-//       Adds or updates registry entries (dependencies + hash). --compile (models) bakes the
+//       [--sub-palette NAME] [--class NAME]
+//       Adds or updates registry entries (dependencies + hash). A directory imports every asset
+//       file below it in sorted order (findAssetFiles). New entries start from the registry's
+//       "defaults"; --class names a triangle budget of "budgets". --compile (models) bakes the
 //       textures into <model>.zodar/*.ktx2 (ZodarAssetCompiler's cache) and records them.
 //       Pixel-art textures (NEAREST glTF sampler, or --sampling pixelArt|nearest) compile
 //       losslessly (RGBA8); others use BC7.
@@ -42,6 +44,7 @@ namespace {
 constexpr const char* kUsage =
     "usage: ZodarAssetTool import <file>... [--registry FILE] [--id ID] [--type T] [--usage color|data|normal]\n"
     "                   [--no-mips] [--sampling file|pixelArt|nearest|linear] [--compile] [--sub-palette NAME]\n"
+    "                   [--class NAME]   (<file> may be a directory: batch import)\n"
     "       ZodarAssetTool list [--registry FILE] [--json]\n"
     "       ZodarAssetTool check [--registry FILE] [--report FILE.json] [--strict] [--density-target N]\n"
     "                   [--palette swatch.png|#rrggbb,#rrggbb...]\n";
@@ -116,6 +119,7 @@ Args parse(int argc, char** argv) {
             if (!palette.swatch.empty()) palette.swatch = std::filesystem::absolute(palette.swatch).generic_string();
             a.check.palette = std::move(palette);
         } else if (arg == "--sub-palette") a.import.palette = next();
+        else if (arg == "--class") a.import.assetClass = next();
         else if (arg == "--help" || arg == "-h") {
             std::fputs(kUsage, stdout);
             std::exit(0);
@@ -130,7 +134,8 @@ std::filesystem::path findRegistry(const Args& a) {
         return a.registry;
     }
     if (a.command == "import" && !a.files.empty()) {
-        std::filesystem::path dir = std::filesystem::absolute(a.files.front()).parent_path();
+        const std::filesystem::path first = std::filesystem::absolute(a.files.front());
+        std::filesystem::path dir = std::filesystem::is_directory(first) ? first : first.parent_path();
         for (;;) {
             if (std::filesystem::exists(dir / AssetRegistry::kFileName)) {
                 return dir / AssetRegistry::kFileName;
@@ -150,7 +155,18 @@ int cmdImport(const Args& a) {
     const std::filesystem::path path = findRegistry(a);
     AssetRegistry registry = std::filesystem::exists(path) ? AssetRegistry::load(path)
                                                            : AssetRegistry(std::filesystem::absolute(path).parent_path());
+    std::vector<std::filesystem::path> files;
     for (const std::string& file : a.files) {
+        if (std::filesystem::is_directory(file)) {
+            const auto found = findAssetFiles(registry, file);
+            if (found.empty()) std::printf("no asset files in %s\n", file.c_str());
+            files.insert(files.end(), found.begin(), found.end());
+        } else {
+            files.emplace_back(file);
+        }
+    }
+    if (!a.import.id.empty() && files.size() > 1) usage("--id needs a single file");
+    for (const std::filesystem::path& file : files) {
         AssetEntry entry = importAsset(registry, file, a.import); // copy: upsert below may move entries
         if (entry.type == AssetType::Model && entry.compile) {
             assets::ModelCompileOptions compile;

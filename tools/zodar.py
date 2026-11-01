@@ -8,7 +8,7 @@ Usage (from anywhere; paths are relative to the current directory):
   zodar.py [--preset P | --build-dir DIR] shot APP [--frames N] [--out DIR] [-- APP_ARGS ...]
   zodar.py [--preset P | --build-dir DIR] bench [-- ZODARBENCH_ARGS ...]
   zodar.py report FILE.json
-  zodar.py [--preset P | --build-dir DIR] import FILE... [ZodarAssetTool import options]
+  zodar.py [--preset P | --build-dir DIR] import FILE|DIR... [ZodarAssetTool import options]
   zodar.py [--preset P | --build-dir DIR] assets list|check [ZodarAssetTool options]
 
 APP: game (LastlightExpanse), viewer (ModelViewer), bench (ZodarBench), runtime
@@ -318,7 +318,7 @@ def main(argv=None):
     p.set_defaults(func=cmd_bench)
 
     p = sub.add_parser("import", help="add/update assets in assets.json (ZodarAssetTool import)")
-    p.add_argument("rest", nargs=argparse.REMAINDER, help="FILE... [--registry F] [--id ID] [--compile] ...")
+    p.add_argument("rest", nargs=argparse.REMAINDER, help="FILE|DIR... [--registry F] [--id ID] [--class C] [--compile] ...")
     p.set_defaults(func=cmd_assets)
 
     p = sub.add_parser("assets", help="list or check the asset registry (ZodarAssetTool)")

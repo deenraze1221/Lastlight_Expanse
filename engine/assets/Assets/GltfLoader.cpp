@@ -10,6 +10,8 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <optional>
 #include <cstring>
@@ -17,10 +19,55 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <string_view>
 #include <utility>
 
 namespace zodar {
+
+const char* toString(SourceTool tool) {
+    switch (tool) {
+    case SourceTool::Blockbench: return "blockbench";
+    case SourceTool::Blender: return "blender";
+    case SourceTool::Other: break;
+    }
+    return "other";
+}
+
+SourceTool detectSourceTool(std::string_view generator) {
+    std::string lower(generator);
+    std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lower.find("blockbench") != std::string::npos) return SourceTool::Blockbench;
+    if (lower.find("blender") != std::string::npos) return SourceTool::Blender;
+    return SourceTool::Other;
+}
+
 namespace {
+
+// Required extensions the importer cannot read, with the export setting that avoids them.
+struct RejectedExtension {
+    std::string_view name;
+    std::string_view what;
+    std::string_view fix;
+};
+constexpr RejectedExtension kRejectedExtensions[] = {
+    {"KHR_draco_mesh_compression", "Draco mesh compression",
+     "re-export without mesh compression (Blender glTF export: Data > Compression off)"},
+    {"EXT_texture_webp", "WebP textures",
+     "re-export with PNG textures (Blender glTF export: Material > Images 'Automatic' or 'PNG', not 'WebP')"},
+    {"KHR_mesh_quantization", "quantized vertex attributes",
+     "re-export with float vertex attributes (turn off mesh quantization in the exporter or optimizer, "
+     "e.g. gltfpack -noq)"},
+    {"EXT_meshopt_compression", "meshoptimizer compression",
+     "re-export without meshopt compression (e.g. gltfpack without -c)"},
+    {"KHR_texture_basisu", "Basis Universal (KTX2) textures", "re-export with PNG textures"},
+};
+
+// Extensions read by the importer (or reported by a dedicated note or warning).
+bool handledExtension(std::string_view ext) {
+    return ext == "KHR_materials_unlit" || ext == "KHR_materials_emissive_strength" ||
+           ext == "KHR_texture_transform" || ext == "KHR_lights_punctual" || ext == "KHR_draco_mesh_compression" ||
+           ext.starts_with("KHR_materials_");
+}
 
 const char* resultName(cgltf_result r) {
     switch (r) {
@@ -55,6 +102,7 @@ public:
             fail("Cannot load glTF '" + file + "': " + resultName(r));
         }
         m_data.reset(raw);
+        checkRequiredExtensions(); // before loading buffers: compressed data cannot be read
         r = cgltf_load_buffers(&options, raw, file.c_str());
         if (r != cgltf_result_success) {
             fail("Cannot load buffers of glTF '" + file + "': " + resultName(r));
@@ -66,6 +114,8 @@ public:
 
         m_model.name = m_path.stem().string();
         m_model.source = m_path;
+        m_model.generator = raw->asset.generator ? raw->asset.generator : "";
+        m_model.sourceTool = detectSourceTool(m_model.generator);
         reportUnsupported();
         for (cgltf_size i = 0; i < raw->samplers_count; ++i) {
             m_model.samplers.push_back(convertSampler(raw->samplers[i]));
@@ -77,8 +127,22 @@ public:
             m_model.meshes.push_back(convertMesh(raw->meshes[i]));
         }
         collectNodes();
+        for (const auto& [feature, users] : m_notes) {
+            std::string note = feature;
+            if (!users.second.empty()) {
+                note += " (" + users.first + ": ";
+                for (size_t i = 0; i < users.second.size(); ++i) {
+                    note += (i ? ", " : "") + users.second[i];
+                }
+                note += ")";
+            }
+            m_model.notes.push_back(std::move(note));
+        }
         for (const auto& w : m_model.warnings) {
             ZODAR_LOG_WARN("glTF '{}': {}", m_model.name, w);
+        }
+        for (const auto& n : m_model.notes) {
+            ZODAR_LOG_DEBUG("glTF '{}': {}", m_model.name, n);
         }
         return std::move(m_model);
     }
@@ -91,17 +155,63 @@ private:
         m_model.warnings.push_back(std::move(message));
     }
 
+    // One note per ignored feature; `kind`/`user` name what uses it (in file order, unique).
+    void note(const std::string& feature, const std::string& kind = {}, const std::string& user = {}) {
+        auto it = std::ranges::find(m_notes, feature, &Note::first);
+        if (it == m_notes.end()) {
+            m_notes.push_back({feature, {kind, {}}});
+            it = std::prev(m_notes.end());
+        }
+        std::vector<std::string>& users = it->second.second;
+        if (!user.empty() && std::ranges::find(users, user) == users.end()) {
+            users.push_back(user);
+        }
+    }
+
+    static std::string nameOr(const char* name, const std::string& fallback) {
+        return name && *name ? std::string(name) : fallback;
+    }
+
+    void checkRequiredExtensions() {
+        const cgltf_data* d = m_data.get();
+        for (cgltf_size i = 0; i < d->extensions_required_count; ++i) {
+            const std::string_view ext = d->extensions_required[i];
+            if (ext == "KHR_materials_unlit" || ext == "KHR_materials_emissive_strength" ||
+                ext == "KHR_texture_transform") {
+                continue;
+            }
+            for (const RejectedExtension& r : kRejectedExtensions) {
+                if (r.name == ext) {
+                    fail("glTF '" + m_path.string() + "' requires " + std::string(ext) + " (" + std::string(r.what) +
+                         "), which is not supported: " + std::string(r.fix));
+                }
+            }
+            fail("glTF '" + m_path.string() + "' requires unsupported extension " + std::string(ext) +
+                 " (re-export without it)");
+        }
+    }
+
     void reportUnsupported() {
         const cgltf_data* d = m_data.get();
-        if (d->skins_count) warn("skins are not supported yet (meshes are imported in bind pose)");
-        if (d->animations_count) warn("animations are not supported yet");
-        if (d->cameras_count) warn("cameras are ignored");
-        if (d->lights_count) warn("KHR_lights_punctual lights are ignored");
-        for (cgltf_size i = 0; i < d->extensions_required_count; ++i) {
-            const std::string ext = d->extensions_required[i];
-            if (ext != "KHR_materials_unlit" && ext != "KHR_materials_emissive_strength" &&
-                ext != "KHR_texture_transform") {
-                fail("glTF '" + m_path.string() + "' requires unsupported extension " + ext);
+        for (cgltf_size i = 0; i < d->animations_count; ++i) {
+            note("animations are ignored, animation playback is not supported yet", "animations",
+                 nameOr(d->animations[i].name, "animation" + std::to_string(i)));
+        }
+        for (cgltf_size i = 0; i < d->skins_count; ++i) {
+            note("skins are ignored, meshes are imported in bind pose", "skins",
+                 nameOr(d->skins[i].name, "skin" + std::to_string(i)));
+        }
+        for (cgltf_size i = 0; i < d->cameras_count; ++i) {
+            note("cameras are ignored", "cameras", nameOr(d->cameras[i].name, "camera" + std::to_string(i)));
+        }
+        for (cgltf_size i = 0; i < d->lights_count; ++i) {
+            note("KHR_lights_punctual lights are ignored", "lights",
+                 nameOr(d->lights[i].name, "light" + std::to_string(i)));
+        }
+        for (cgltf_size i = 0; i < d->extensions_used_count; ++i) {
+            const std::string ext = d->extensions_used[i];
+            if (!handledExtension(ext)) {
+                note("extension " + ext + " is ignored");
             }
         }
     }
@@ -266,9 +376,21 @@ private:
         out.emissiveTexture = textureRef(m.emissive_texture, TextureUsage::Color);
         out.emissive = glm::make_vec3(m.emissive_factor) *
                        (m.has_emissive_strength ? m.emissive_strength.emissive_strength : 1.0f);
-        if (m.has_clearcoat || m.has_transmission || m.has_volume || m.has_sheen || m.has_specular || m.has_ior ||
-            m.has_iridescence || m.has_anisotropy) {
-            warn("advanced PBR material extensions are ignored");
+        const std::pair<bool, const char*> ignored[] = {
+            {m.has_clearcoat, "KHR_materials_clearcoat"},
+            {m.has_transmission, "KHR_materials_transmission"},
+            {m.has_volume, "KHR_materials_volume"},
+            {m.has_sheen, "KHR_materials_sheen"},
+            {m.has_specular, "KHR_materials_specular"},
+            {m.has_ior, "KHR_materials_ior"},
+            {m.has_iridescence, "KHR_materials_iridescence"},
+            {m.has_anisotropy, "KHR_materials_anisotropy"},
+            {m.has_dispersion, "KHR_materials_dispersion"},
+            {m.has_diffuse_transmission, "KHR_materials_diffuse_transmission"},
+        };
+        const std::string user = nameOr(m.name, "material" + std::to_string(&m - m_data->materials));
+        for (const auto& [has, name] : ignored) {
+            if (has) note(std::string(name) + " is ignored", "materials", user);
         }
         return out;
     }
@@ -283,10 +405,12 @@ private:
                 continue;
             }
             if (prim.has_draco_mesh_compression) {
-                fail("glTF '" + m_path.string() + "' uses Draco compression, which is not supported");
+                // Optional compression (the extension is not required): the uncompressed
+                // fallback accessors are imported.
+                note("KHR_draco_mesh_compression is ignored, the uncompressed fallback data is used", "meshes", out.name);
             }
-            if (prim.targets_count) warn("morph targets are not supported yet");
-            MeshData part = convertPrimitive(prim);
+            if (prim.targets_count) note("morph targets are ignored, the base shape is imported", "meshes", out.name);
+            MeshData part = convertPrimitive(prim, out.name);
             if (part.vertices.empty()) {
                 continue;
             }
@@ -305,7 +429,7 @@ private:
         return out;
     }
 
-    MeshData convertPrimitive(const cgltf_primitive& prim) {
+    MeshData convertPrimitive(const cgltf_primitive& prim, const std::string& meshName) {
         MeshData part;
         const cgltf_accessor* positions = nullptr;
         const cgltf_accessor* normals = nullptr;
@@ -318,8 +442,16 @@ private:
             case cgltf_attribute_type_position: positions = attr.data; break;
             case cgltf_attribute_type_normal: normals = attr.data; break;
             case cgltf_attribute_type_tangent: tangents = attr.data; break;
-            case cgltf_attribute_type_texcoord: if (attr.index == 0) uvs = attr.data; break;
-            case cgltf_attribute_type_color: if (attr.index == 0) colors = attr.data; break;
+            case cgltf_attribute_type_texcoord:
+                if (attr.index == 0) uvs = attr.data;
+                else note("TEXCOORD_" + std::to_string(attr.index) + " is ignored, only TEXCOORD_0 is imported",
+                          "meshes", meshName);
+                break;
+            case cgltf_attribute_type_color:
+                if (attr.index == 0) colors = attr.data;
+                else note("COLOR_" + std::to_string(attr.index) + " is ignored, only COLOR_0 is imported", "meshes",
+                          meshName);
+                break;
             default: break;
             }
         }
@@ -360,17 +492,20 @@ private:
         return part;
     }
 
-    void visit(const cgltf_node* node) {
+    void visit(const cgltf_node* node, const std::string& parentPath) {
+        const std::string name = nameOr(node->name, "node" + std::to_string(node - m_data->nodes));
+        const std::string path = parentPath.empty() ? name : parentPath + "/" + name;
         if (node->mesh) {
             ModelNode out;
             out.name = node->name ? node->name : "";
+            out.path = path;
             out.mesh = static_cast<int>(node->mesh - m_data->meshes);
             cgltf_node_transform_world(node, glm::value_ptr(out.world));
             m_model.bounds.expand(m_model.meshes[static_cast<size_t>(out.mesh)].bounds.transformed(out.world));
             m_model.nodes.push_back(out);
         }
         for (cgltf_size i = 0; i < node->children_count; ++i) {
-            visit(node->children[i]);
+            visit(node->children[i], path);
         }
     }
 
@@ -378,16 +513,16 @@ private:
         const cgltf_data* d = m_data.get();
         const cgltf_scene* scene = d->scene ? d->scene : (d->scenes_count ? &d->scenes[0] : nullptr);
         if (scene) {
-            for (cgltf_size i = 0; i < scene->nodes_count; ++i) visit(scene->nodes[i]);
+            for (cgltf_size i = 0; i < scene->nodes_count; ++i) visit(scene->nodes[i], {});
         } else {
             for (cgltf_size i = 0; i < d->nodes_count; ++i) {
-                if (!d->nodes[i].parent) visit(&d->nodes[i]);
+                if (!d->nodes[i].parent) visit(&d->nodes[i], {});
             }
         }
         if (m_model.nodes.empty()) {
             // Files without a node hierarchy: one identity instance per mesh.
             for (size_t i = 0; i < m_model.meshes.size(); ++i) {
-                m_model.nodes.push_back({m_model.meshes[i].name, static_cast<int>(i), glm::mat4(1.0f)});
+                m_model.nodes.push_back({m_model.meshes[i].name, static_cast<int>(i), glm::mat4(1.0f), m_model.meshes[i].name});
                 m_model.bounds.expand(m_model.meshes[i].bounds);
             }
         }
@@ -398,6 +533,9 @@ private:
     std::unique_ptr<cgltf_data, DataDeleter> m_data;
     ModelData m_model;
     std::map<std::pair<const cgltf_image*, TextureUsage>, int> m_imageIndex;
+    // feature -> (kind of users, users), in first-seen order.
+    using Note = std::pair<std::string, std::pair<std::string, std::vector<std::string>>>;
+    std::vector<Note> m_notes;
 };
 
 } // namespace

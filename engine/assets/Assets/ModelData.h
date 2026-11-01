@@ -7,8 +7,10 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace zodar {
@@ -52,7 +54,17 @@ struct ModelNode {
     std::string name;
     int mesh = -1;
     glm::mat4 world{1.0f};
+    // Node names from the scene root to this node, '/'-separated ("crate/lid group/cube"); keeps
+    // the authored hierarchy (groups without meshes, clashing names) visible. Unnamed nodes
+    // appear as "node<index>".
+    std::string path;
 };
+
+// Authoring tool that wrote a glTF file, from `asset.generator` (only reported; the importer
+// treats every file the same).
+enum class SourceTool : uint8_t { Other, Blockbench, Blender };
+const char* toString(SourceTool tool); // "blockbench", "blender", "other"
+SourceTool detectSourceTool(std::string_view generator);
 
 // Where a model's textures came from (see GltfLoadOptions).
 struct TextureLoadStats {
@@ -84,7 +96,13 @@ struct ModelData {
     std::vector<ModelMaterial> materials;
     std::vector<ModelNode> nodes;
     Bounds bounds;
-    std::vector<std::string> warnings; // Unsupported features that were skipped.
+    std::vector<std::string> warnings; // Skipped features that change how the model looks.
+    // Ignored data that does not change the static model (animations until animation
+    // playback exists, cameras, lights, extra UV sets, ignored material extensions); one note
+    // per feature. Informational: asset checks report notes but do not warn about them.
+    std::vector<std::string> notes;
+    std::string generator; // asset.generator, as written
+    SourceTool sourceTool = SourceTool::Other;
     TextureLoadStats textureStats;
     std::vector<ModelImageSource> imageSources; // Parallel to images when requested.
 };
@@ -106,8 +124,12 @@ struct GltfLoadOptions {
 
 // Loads .gltf (external or embedded buffers/images) and .glb files. Supports static
 // triangle meshes, metallic-roughness materials, KHR_materials_unlit and
-// KHR_materials_emissive_strength. Skins, morph targets, animations, cameras, lights and
-// texture transforms are reported in `warnings`. Throws zodar::Error on invalid files.
+// KHR_materials_emissive_strength. Texture transforms, texture coordinate sets other than 0
+// used by a texture, specular-glossiness and skipped primitives are `warnings`; animations,
+// skins (bind pose), morph targets (base shape), cameras, lights, extra UV sets and other
+// material extensions are `notes`. Throws zodar::Error on invalid files and on required
+// extensions that cannot be imported (KHR_draco_mesh_compression, EXT_texture_webp,
+// KHR_mesh_quantization, ...); the message names the export setting that avoids them.
 ModelData loadGltf(const std::filesystem::path& path, const GltfLoadOptions& options = {});
 
 } // namespace zodar

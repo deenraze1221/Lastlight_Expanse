@@ -1,6 +1,6 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **approved, not started.** Next session: D1. Roadmap summary:
+Status: **approved; D1 done (2026-11-01).** Next session: D2. Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`.
 
@@ -131,6 +131,12 @@ handoff block described under "Session workflow".
 - Acceptance: all valid fixtures import and pass `assets check --strict`; rejected cases fail
   with actionable messages; the report shows the source tool and budget/palette deviations;
   existing registry files load unchanged.
+- **Done (2026-11-01)** with generated fixtures. Scope notes: importer messages split into
+  `warnings` (the model looks different) and `notes` (ignored data; not a check warning, so
+  exports with animations or Blender material extensions pass `--strict`); optional
+  (non-required) Draco falls back to the uncompressed data with a note; `EXT_meshopt_compression`
+  and `KHR_texture_basisu` are rejected like the three planned cases. Open: the real-export
+  test runs automatically once files exist in `engine/tests/data/gltf_tools/real/`.
 
 ### D2 — Game asset layout + static bunker (game)
 - Read: `docs/guide/MODELING.md`, `docs/guide/SCENE_FILES.md`, `game/src/main.cpp`,

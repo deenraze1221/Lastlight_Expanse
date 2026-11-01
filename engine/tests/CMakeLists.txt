@@ -1,6 +1,7 @@
 add_executable(ZodarTests
     main.cpp
     Assets/GltfLoaderTests.cpp
+    Assets/GltfToolFixtureTests.cpp
     Assets/ImageDataTests.cpp
     Assets/TextureAssetTests.cpp
     Assets/EnvironmentMapTests.cpp
@@ -50,7 +51,7 @@ add_executable(ZodarTests
 target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::World Zodar::WorldRender Zodar::SceneFile Zodar::AssetManager Zodar::UI Zodar::stb doctest::doctest)
 # UI tests read the committed resources directly (fonts, original logos, manifest).
 target_compile_definitions(ZodarTests PRIVATE ZODAR_TEST_UI_DIR="${ZODAR_ENGINE_DIR}/ui/Resources/UI"
-    ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples")
+    ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples" ZODAR_TEST_DATA_DIR="${ZODAR_ENGINE_DIR}/tests/data")
 zodar_set_warnings(ZodarTests)
 
 add_test(NAME unit COMMAND ZodarTests)
@@ -70,6 +71,30 @@ if(TARGET ZodarAssetTool)
                 --registry ${ZODAR_ENGINE_DIR}/../examples/asset_loading/assets.json)
     set_tests_properties(tools.asset_tool_bad_arguments PROPERTIES
         PASS_REGULAR_EXPRESSION "--density-target needs a positive number")
+    # Phase D1: the generated Blockbench/Blender fixtures pass the strict check (committed
+    # registry with palette, defaults and budgets), and batch import of a directory works.
+    set(_gltf_tools ${ZODAR_ENGINE_DIR}/tests/data/gltf_tools)
+    add_test(NAME tools.asset_check_gltf_tools
+        COMMAND ZodarAssetTool check --strict --registry ${_gltf_tools}/assets.json
+                --report ${CMAKE_BINARY_DIR}/asset_check_gltf_tools.json)
+    add_test(NAME tools.asset_import_dir_setup
+        COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_BINARY_DIR}/asset_import_dir)
+    add_test(NAME tools.asset_import_dir_copy
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${_gltf_tools}/valid ${CMAKE_BINARY_DIR}/asset_import_dir/valid)
+    add_test(NAME tools.asset_import_dir
+        COMMAND ZodarAssetTool import ${CMAKE_BINARY_DIR}/asset_import_dir
+                --registry ${CMAKE_BINARY_DIR}/asset_import_dir/assets.json)
+    set_tests_properties(tools.asset_import_dir_setup PROPERTIES FIXTURES_SETUP asset_import_dir_clean)
+    set_tests_properties(tools.asset_import_dir_copy PROPERTIES FIXTURES_SETUP asset_import_dir_files
+        FIXTURES_REQUIRED asset_import_dir_clean)
+    set_tests_properties(tools.asset_import_dir PROPERTIES FIXTURES_REQUIRED asset_import_dir_files
+        PASS_REGULAR_EXPRESSION "imported blender_wall .*imported blockbench_crate .*imported blockbench_crate_embedded .*\\(3 assets\\)")
+endif()
+# The committed glTF fixtures match their generator (stdlib Python, deterministic).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME tools.gltf_fixtures_up_to_date
+        COMMAND ${Python3_EXECUTABLE} ${ZODAR_ENGINE_DIR}/tests/data/gltf_tools/make_fixtures.py --check)
 endif()
 
 # Temporary UI sandbox (SDL3 software renderer, offscreen): renders the component gallery
@@ -130,7 +155,7 @@ if(ZODAR_GPU_TESTS)
     target_link_libraries(ZodarGpuTests PRIVATE Zodar::Renderer Zodar::WorldRender Zodar::SceneFile Zodar::AssetManager Zodar::Debug Zodar::AssetPipeline doctest::doctest)
     zodar_set_warnings(ZodarGpuTests)
     target_compile_definitions(ZodarGpuTests PRIVATE ZODAR_TEST_SHADER_DIR="${ZODAR_OUTPUT_DIR}/shaders"
-        ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples")
+        ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples" ZODAR_TEST_DATA_DIR="${ZODAR_ENGINE_DIR}/tests/data")
     zodar_compile_shaders(ZodarGpuTests SOURCES
         Gpu/Shaders/test_sample.vert
         Gpu/Shaders/test_sample.frag
