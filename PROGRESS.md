@@ -155,8 +155,8 @@
   built and run in the same container (Release, `61ab33fa…`). Flake counts: see the V2
   handoff. The gate's first run failed at configure because I seeded the FetchContent cache
   incorrectly (environment, recorded in its failure log); the second run passed.
-- **V3 done** on `claude/v3-voxel-collision` (from `main` `27e7788`, 6 commits); awaits review
-  and merge. See "Handoff (Phase V3 session)".
+- **V3 done** on `claude/v3-voxel-collision` (from `main` `27e7788`, 6 commits + audit fix
+  `f8f5bd4`); awaits final approval and merge. See "Handoff (Phase V3 session)".
 - **Next session: V4 — structures, regions, layered generators (engine)**; waits for the
   user's go (and the V3 review/merge). Order: V4–V5 → D3–D6 → D7 → V6 → D8.
 - World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`) approved in principle
@@ -206,6 +206,19 @@
   a ray lying exactly in a shape face plane stops at the next touching face's edge; rays on
   cell boundaries follow the floor rule (like cubes); `Shape::contains` is ambiguous within
   ~1e-6 of a surface; collision is stepped (≤ 1/8 cell), true slope contact waits for Phase E.
+- **Final audit fix (`f8f5bd4`, audit finding I1):** Collision-mode rays starting exactly on
+  the outer face of a collision box returned normal (0,0,0); now an inward ray hits at
+  distance 0 with the face normal and an outward ray leaves (like a cube's +X/+Y/+Z face; faces
+  shared by two boxes count as inside). `raycast` validates inputs (non-finite values, negative
+  `maxDistance`, beyond 1e9 cells: `zodar::Error`). Collision discrete table re-baselined
+  `0x3490C3C2CAD63E7D` -> `0x7BB0DF2FA3F56246`; legacy, cube-registry and Selection tables
+  unchanged. **Final gate on `f8f5bd4`** (the code of the final HEAD; the following commit only
+  updates this file): `tools/gate.sh` Debug + Release 36/36 + 36/36, Highlands `61ab33fa…` in
+  both, 0 validation messages; Clang 18 Release ZodarTests all green. Earlier full gate on
+  `98faa7c` (audit re-run) also passed.
+- Audit minor items left as documented limitations (not fixed, by decision): no size cap on
+  `collectSolidBoxes` queries (cost grows with volume); below the world's Y range queries read
+  empty while meshing uses bedrock; `unit` ctest takes ~110 s in Debug (21 s Release).
 - **V4 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/guide/VOXELS.md` §3, §7, §8,
   `docs/PHASE_D_PLAN.md` (V4), `engine/scene/Scene/Voxel/VoxelWorld.h`, `VoxelChunk.h`,
   `engine/rendering/SceneFile/SceneFile/BlockFile.h`.
