@@ -4,6 +4,18 @@ Status: **approved, not started.** Next session: D1. Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`.
 
+## Authoritative game specification
+
+`docs/GDD/Lastlight_Expanse_GDD_v1.1.md` is the authoritative specification for Lastlight
+Expanse gameplay, world, art direction and features.
+- All game-specific work in this plan (D2, D7 and the game parts of D3-D6, D8) must follow the
+  GDD. Read the relevant GDD sections before implementing a game-specific feature (bunker:
+  §1, §3, §4 electricity, §5, §10; saving: §11; art: §3).
+- Never silently change a GDD requirement. A conflict or gap between this plan and the GDD is
+  listed in "GDD alignment" below and decided by the user before implementation.
+- ZODAR Engine stays generic: engine sessions (D1, D3-D6) add no Lastlight names, content or
+  rules to `engine/`; game-specific code, data and assets go to `game/`.
+
 ## Approved decisions
 
 1. **Bunker art:** a script-generated greybox kit comes first (D2). Real Blockbench and Blender
@@ -17,6 +29,31 @@ changes scope, and record completed sessions in `PROGRESS.md`.
 4. **Phase D size:** 8 sessions (D1–D8), roadmap updated.
 5. **`.blend` sources:** Git LFS, enabled only after checking repository support and storage
    limits (D2 step 0, see below).
+
+## GDD alignment (open, user decision before the affected session)
+
+The plan was approved before the GDD was added. The items below are not yet in scope; nothing
+in the plan is changed until the user decides.
+1. **Bunker content (GDD §10, before D2):** the GDD bunker is the shared, permanent safe hub
+   with merchants, NPCs, private player lockers and common areas, no construction or
+   expansion. The plan's greybox has dormitory, corridor, generator room and airlock. Proposed:
+   add merchant stalls (five roles, §9), a locker room and a common area as static greybox
+   spaces in D2; NPCs, trading and lockers as gameplay stay out of Phase D.
+2. **Save requirements (GDD §11, before D6):** the GDD requires atomic writes and backups,
+   autosave every 5 minutes and on normal host exit, and saving world state, player data,
+   inventories, lockers, missions and world changes. D6 has atomic writes only. Proposed: add
+   rotating backups and an engine autosave interval hook to D6 (generic); game data beyond
+   player/doors/power waits for the features that own it.
+3. **Multiplayer (GDD §11, D3-D6 design constraint):** server-authoritative host-based co-op
+   (4 players, room for 5). Proposed: no networking in Phase D, but input actions, systems,
+   events and saves are designed so actions can later become per-player commands to an
+   authoritative host (player id on actions/events, no global "the player" in engine APIs).
+4. **Electricity (GDD §4):** district-level generators, repairable panels, emergency lights.
+   D7 `Power` matches the generator part; repairable panels and emergency lights proposed as
+   D7 extensions (emergency lights on when power is off).
+5. **Art direction (GDD §3):** consistent with `ART_DIRECTION.md` (32×32 default, 64×64 max,
+   nearest filtering, PBR). "Muted, faded colors, Eastern European post-war atmosphere" guides
+   the greybox palette in D2.
 
 ## Findings that shape the plan
 

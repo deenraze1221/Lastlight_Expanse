@@ -17,6 +17,17 @@ Instructions for Claude Code sessions in this repository.
 - Before ending a session, update project documentation.
 - Preserve all existing functionality and architecture.
 
+## Game Design Document (authoritative)
+
+- `docs/GDD/Lastlight_Expanse_GDD_v1.1.md` is the authoritative specification for Lastlight
+  Expanse gameplay, world, art direction and features. `docs/ART_DIRECTION.md` and the plans
+  implement it; where they differ, the GDD wins until the user approves a change.
+- Read the GDD (relevant sections) before implementing any game-specific feature.
+- All game-specific implementation must follow the approved GDD. Never silently change, drop
+  or reinterpret a GDD requirement: list conflicts or gaps and ask the user.
+- ZODAR Engine stays generic: no Lastlight names, content or rules in `engine/`.
+  Game-specific code, data and assets belong in `game/`.
+
 ## Project Quick Reference
 
 - Repo: Lastlight Expanse game (`game/`) on the reusable ZODAR engine (`engine/`). Engine code
