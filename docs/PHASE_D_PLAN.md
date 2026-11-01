@@ -1,7 +1,7 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **approved; D1 and D2 done; Phase V inserted (V0 done, V1 done 2026-11-01).** Next
-session: V2. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
+Status: **approved; D1 and D2 done; Phase V inserted (V0, V1 and V2 done 2026-11-01).** Next
+session: V3. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`. Area-by-area production after
 D8 (completion levels, checklist, tracks): `docs/WORLD_PRODUCTION_ROADMAP.md`.
@@ -339,6 +339,15 @@ generic; Lastlight content only in V5. Every session: Highlands screenshot byte-
   unchanged for existing registries.
 - Tests: schema errors, round-trip, checks per class (32/64/128, ≥ 256 rejected), GPU render
   of a block material byte-exact.
+- **Done (2026-11-01)** on `claude/v2-block-format`. Decisions (user): separate
+  `textureClass` (model `class` stays the triangle budget); class violations are warnings
+  (`--strict` errors), ≥ 256 always an error; Lastlight declares its standard in V5 (no
+  `game/` changes in V2); `"rotations": 4` → `name`, `name@1..@3`, ids in file order
+  (append-only until V4); custom shapes in JSON deferred. Additional: texture-array
+  dimensions validated with JSON paths; parameter precision tested (RGBA32F table);
+  emissive, lit and fogged voxel rendering tested. Follow-ups 1–7 below done except: (6)
+  Clang 18 verified, MinGW/MSVC still open; (7) the game's Highlands test keeps its own hash
+  helper (no `game/` changes). See `PROGRESS.md` (V2 handoff).
 
 - Follow-ups from the V1 review (2026-11-01; minor, not blocking):
   1. `ShapeLibrary::add`: validate that every polygon is star-shaped from `corners[0]` (each

@@ -138,16 +138,72 @@
 - **Phase V1 done (2026-11-01):** block registry, shape library, mesher shapes (engine).
   See the V1 handoff below.
 
+- **Phase V2 done (2026-11-01):** block definition files, block catalogue, configurable
+  texture standards, `blocks` asset type, engine voxel shader `zodar/voxel` (engine only, no
+  `game/` changes). Branch `claude/v2-block-format`, not merged. See the V2 handoff below.
+
 ## Current task
 - **V1 merged:** `main` fast-forwarded `ad2283d..620ad40` (2026-11-01, no history rewrite)
   after the final V1 review (no critical issues). Minor review findings are recorded as
   follow-ups under V2 and V3 in `docs/PHASE_D_PLAN.md`.
-- **Next session: V2 — block definitions, materials, texture standards (engine)** on branch
-  `claude/v2-block-format` (from `main` `620ad40`). Not started; waits for the user's go. Order: V2–V5 → D3–D6 →
-  D7 → V6 → D8.
+- **V2 done** on `claude/v2-block-format` (from `main` `620ad40`); awaits review and merge.
+- **Next session: V3 — voxel collision, raycasts, conservative LOD (engine)**; waits for the
+  user's go (and the V2 review/merge). Order: V3–V5 → D3–D6 → D7 → V6 → D8.
 - World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`) approved in principle
   (2026-11-01), planning only; its proposals (areas, bunker boundary, optional NPCs, story
   items, post-D8 track order) await the user's review — see its "Unresolved decisions".
+
+## Handoff (Phase V2 session, 2026-11-01)
+- Branch `claude/v2-block-format` (from `main` `620ad40` + docs `7226731`), one commit per step:
+  1. V1 follow-ups: star-shaped polygon check, face-overlap rejection (sample-based), UV tie
+     rule + √2 slope stretch documented and tested, `<utility>`, `Support/MeshHash.h`;
+  2. registry-mode unknown ids → `VoxelPalette::kFallbackMaterial` (legacy unchanged);
+  3. `TextureStandard` (Assets) + verdicts (Violation / Prohibited ≥ 256);
+  4. registry `textureStandards` + `textureClass` (+ defaults, `--texture-class`), density
+     target from the registry, runtime opt-in `AssetManagerDesc::textureStandard`;
+  5. `SceneFile/BlockFile` (`zodar.blocks` v1) → `BlockCatalogue`, `checkBlockLayerSizes`;
+  6. asset type `blocks` (deps, sizes, palette, texture-array dims, density, report keys);
+  7. `zodar/voxel` (`voxel_pbr.frag`), `gfx::Vec4Table` (RGBA32F), `AssetManager/BlockMaterials`;
+  8. docs + verification.
+- Decisions (user, 2026-11-01): separate `textureClass`; class violations = warnings
+  (`--strict` errors), ≥ 256 always errors (engine default included); Lastlight declares its
+  standard in V5 (`tools.game_assets_check --strict` stays green); `"rotations": 4` →
+  `name`, `name@1..@3`, ids in file order (append-only until V4); custom JSON shapes deferred.
+- Implementation decisions: block files use arrays with `name` (order explicit, duplicates
+  detectable); material index = file order; layers deduplicated by (texture, roughness,
+  metallic, emissive); defaults roughness 0.8, metallic 0, emissive 0, tint white,
+  `uvPerMetre` 1; engine shader output named `voxel_pbr.frag.spv` (the game already ships
+  `voxel.frag.spv`); `SceneFile` now links `Zodar::Scene`; checks resolve shapes with the
+  built-in library unless `AssetCheckOptions::blockShapes` is set.
+- Float upload investigation: `GpuImage` + `UploadBatch::uploadImage` already supported
+  `R32G32B32A32_SFLOAT` (16 B/texel); `Texture` only wraps `PixelFormat` (RGBA8/BCn/RGBA16F).
+  `Vec4Table` creates the image directly, checks sampled-image support and size limits. No
+  precision reduction: RGBA8 (0.3 → 0.302, emissive > 1 impossible) and RGBA16F (0.3 →
+  0.2998) are shown insufficient in a test; the table reads back bit-exact.
+- **V2 verification** (lavapipe Mesa 25.2.8, validation on): GCC 13 Debug + Release 36/36
+  ctest, 0 warnings, 0 validation messages after every step (gate script: build both, ctest
+  both, Highlands screenshot); Clang 18 Release 36/36 ctest, engine/catalogue/Highlands golden
+  hashes green, Highlands screenshot identical (Clang build: 3 pre-existing
+  `-Wunused-result` warnings in `engine/tests/Assets/PaletteTests.cpp`, untouched by V2).
+  Highlands screenshot (640×360, 90 frames) sha256 `61ab33fa…` in Debug, Release and Clang,
+  identical to the pre-V2 baseline in this container. `ZodarAssetTool check --strict` reports
+  of `examples/asset_loading` and `game/assets` byte-identical before/after step 4.
+  New tests: 15 engine unit cases (shape validation ×2, sloped UVs, unknown-id fallback,
+  texture standards, registry standards ×3, blocks assets ×2, block file ×5), 5 GPU cases (runtime standard, parameter precision, emissive vs
+  unlit, lit + fog vs pbr, layer-size errors). New golden hash: catalogue mesh
+  `0x2444B9C0D80D2BD6` (GCC + Clang).
+- Known issues (not V2): `gpu.subsystems` failed 2 of ~25 full `ctest -j4` runs in
+  `ResourceTests.cpp:156` ("deletion queue": `completedValue() == lastSubmitted()` 417 vs 418
+  right after `UploadContext::immediate`); not reproducible in 10 sequential runs under load.
+  Seen at step 3 too (no GPU code changed), so pre-existing: likely the timeline value lags
+  the fence on lavapipe under load. Not fixed (unrelated system). Recorded Highlands sha256
+  `1e6b461a…` came from another container's Mesa; in this container (Mesa 25.2.8, LLVM 20)
+  the pre-V2 baseline (`7226731`) is `61ab33fa…` and stays identical after every V2 step.
+- Open: MinGW and MSVC golden-hash verification; the game's Highlands test still has its own
+  FNV helper (moving it to `Support/MeshHash.h` needs a `game/` change, deferred).
+- **V3 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/guide/VOXELS.md` §3–6,
+  `docs/PHASE_D_PLAN.md` (V3 + follow-ups), `engine/scene/Scene/Voxel/*.h`,
+  `engine/scene/Scene/Voxel/VoxelWorld.cpp`, `engine/tests/Scene/VoxelShapeTests.cpp`.
 
 ## Handoff (Phase V1 session, 2026-11-01)
 - Branch `claude/v1-voxel-foundation` (from `main` `ad2283d`), one commit per step:
@@ -555,7 +611,7 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Phase V and D per `docs/PHASE_D_PLAN.md`: V2 next, then V3–V5 → D3–D6 → D7 → V6 → D8.
+1. Phase V and D per `docs/PHASE_D_PLAN.md`: V3 next, then V4–V5 → D3–D6 → D7 → V6 → D8.
    Streaming budgets, FBX/audio import and skins stay in later phases. Highlands keeps its
    legacy 256²/512² terrain textures (regression scene, not migrated; VOXELS §12).
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.

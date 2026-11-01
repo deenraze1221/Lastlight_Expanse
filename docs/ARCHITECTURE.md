@@ -275,7 +275,8 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
     propagation deferred until profiling needs it.
   - Verified: GPU test renders a World hierarchy pixel-identical to hand-built `MeshDraw`s via
     both paths, before and after update/destroy.
-- Scene / material files (B2): module `Zodar::SceneFile` (depends on WorldRender; nlohmann/json
+- Scene / material files (B2): module `Zodar::SceneFile` (depends on WorldRender, and since V2 on
+  Scene for block files (`SceneFile/BlockFile.h`); nlohmann/json
   v3.11.3 linked privately, public headers expose engine types only). Schema:
   `docs/guide/SCENE_FILES.md`.
   - Two steps: `parseScene`/`loadSceneFile` -> `SceneDocument` (pure CPU data, `operator==`,
@@ -445,10 +446,10 @@ Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
 - Collision: architecture from voxel queries; imported models from components / `colliders.json` until
   D6/D7; Lastlight's `CollisionWorld` composes both (Jolt later).
 - Conservative LOD for structural chunks; crack-free sealing (existing) extended to shapes.
-- Texture standards become configurable per game (V2); Lastlight: 64×64 standard, 32×32 small
+- Texture standards become configurable per game (V2, done); Lastlight: 64×64 standard, 32×32 small
   details, 128×128 characters/weapons only, ≥ 256 prohibited without an approved exception;
-  64 texels/m on voxel surfaces. Engine defaults stay as today for registries without a
-  standard (examples, fixtures).
+  64 texels/m on voxel surfaces (declared in Lastlight's `assets.json` in V5). Engine defaults
+  stay as today for registries without a standard (examples, fixtures).
 - Performance work (packed voxel vertices, GPU-driven chunks, model/prop instancing) only after
   benchmarks (V6).
 - Phase order: V0 → V1–V5 → D3–D6 → D7 (voxel bunker) → V6 → D8.
@@ -464,6 +465,29 @@ Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
   unchanged (key = material + 1); separate unmerged shape path at LOD 0; shapes render as cubes
   at LOD > 0 until V3. Cube-only output byte-identical (golden hash tests, engine + Highlands).
 - `VoxelWorld` opacity shortcuts (solid depth, trivial meshes, bedrock) count full cubes only.
+
+### Phase V2 implementation notes (2026-11-01)
+- Texture standards: `Assets/TextureStandards.h` `TextureStandard` (classes → sizes, default
+  class, prohibited size 256, density target/tolerance); `engineDefault()` reproduces the
+  legacy rule and messages. Registries declare `"textureStandards"`; entries select
+  `"textureClass"` (texture, model, material, blocks), a field separate from the model
+  `"class"` (triangle budgets). Severity: class violation = warning (`--strict` fails),
+  ≥ 256 = error under every standard. Runtime (`AssetManagerDesc::textureStandard`) is
+  opt-in; Lastlight declares its standard in V5 (strict game asset check stays green).
+- Block files: `SceneFile/BlockFile.h` (`zodar.blocks` v1) → `BlockCatalogue` (names, ids in
+  file order, `name@N` rotation variants, registry `VoxelPalette`, texture-array layers
+  deduplicated by texture + parameters, JSON path per layer). Errors are `DataError`s with
+  JSON paths. Custom shapes come from code (`ShapeLibrary::add`), not JSON. Ids depend on file
+  order (append-only until V4 regions save names; VOXELS §3).
+- Asset type `blocks`: dependencies = textures; checks = schema, shapes, sizes per class,
+  palette, texture-array dimensions (errors), density = layer size × `uvPerMetre`.
+- Rendering: engine shader `zodar/voxel` (`voxel_pbr.frag`, registered next to `zodar/pbr`;
+  the game's `lastlight/voxel` is unchanged). Per-layer parameters in `gfx::Vec4Table`
+  (RGBA32F, `texelFetch`): exact float32, because RGBA8/RGBA16F lose precision (tested).
+  `AssetManager/BlockMaterials` builds texture array + table + material from a catalogue.
+- Registry palettes: unknown ids map to `VoxelPalette::kFallbackMaterial` (magenta), never a
+  real material; shape validation also requires star-shaped polygons and non-overlapping
+  face polygons.
 
 ## World production (approved in principle, 2026-11-01; planning only)
 

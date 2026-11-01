@@ -1,7 +1,8 @@
 # Voxels: hybrid voxel + model world (architecture, Phase V)
 
 Status: **approved architecture (V0, 2026-11-01); V1 implemented (block registry, shape
-library, mesher shapes; §2–5 marked *(exists)*), V2–V6 not started.** This guide is the
+library, mesher shapes; §2–5 marked *(exists)*); V2 implemented (`*.blocks.json`, block
+catalogue, texture standards, `zodar/voxel`; §3/§9); V3–V6 not started.** This guide is the
 binding specification for Phase V (V1–V6, `docs/PHASE_D_PLAN.md`). Sections marked
 *(exists)* describe current code; everything else is the target. Update this file when a
 V-session implements or changes a part, so later sessions read the guide instead of the code.
