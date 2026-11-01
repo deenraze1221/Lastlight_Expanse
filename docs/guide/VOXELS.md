@@ -254,9 +254,19 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
     selectable);
   - `RaycastMode::Collision`: `kNoCollision` cells skipped, shapes by their collision boxes
     (slab test), the same boxes as `collectSolidBoxes`;
-  - **origin inside a solid** (cube cell, `Shape::contains`, or a collision box in Collision
-    mode): hit at distance 0, `normal` and `surfaceNormal` (0, 0, 0); origin in a shape's empty
-    part: the ray continues;
+  - **origin inside a solid** (cube cell, `Shape::contains`, or the interior of the collision
+    boxes in Collision mode): hit at distance 0, `normal` and `surfaceNormal` (0, 0, 0); origin
+    in a shape's empty part: the ray continues;
+  - **origin exactly on a collision-box face** (Collision mode, audit fix I1): on the box
+    union's outer surface an inward ray hits at distance 0 with that face's normal and an
+    outward ray leaves, like a cube's +X/+Y/+Z face (e.g. a ground probe from feet resting on a
+    slab top gets (0, 1, 0)); a face shared by two boxes (solid on both sides along the ray)
+    counts as inside. Cube cells keep the pre-V3 floor rule: an origin on a cube's -X/-Y/-Z face
+    lies in the cube's cell and counts as inside;
+  - **input validation**: a non-finite origin, direction or `maxDistance`, a negative
+    `maxDistance`, or an origin / `maxDistance` beyond 1e9 cells throws `zodar::Error` (no
+    undefined float-to-int conversion or cell overflow); a zero direction or `maxDistance` 0
+    gives no hit (unchanged);
   - **ties**: nearest t, then lower polygon index, then lower fan triangle (boxes: entry axis
     X, Y, Z, then box index);
   - `RaycastHit`: `voxel`, `normal` (cube: entered face; shape: dominant axis of the surface

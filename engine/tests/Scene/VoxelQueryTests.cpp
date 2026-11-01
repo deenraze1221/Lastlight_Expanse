@@ -211,7 +211,20 @@ int checkAgainstReference(const VoxelWorld& w, const std::vector<Ray>& rays, Ray
         const Ray& r = rays[i];
         CAPTURE(i);
         const auto hit = w.raycast(r.origin, r.direction, r.maxDistance, {mode});
-        const auto ref = marchFirstSolid(w, r, mode, kStep);
+        auto ref = marchFirstSolid(w, r, mode, kStep);
+        if (ref && *ref == 0.0f) {
+            // Origin on the solid's closed surface: a ray leaving it is not a hit (cube +X/+Y/+Z
+            // faces and Collision-mode box faces); march again from just past the origin.
+            const glm::vec3 d = glm::normalize(r.direction);
+            const glm::vec3 o = r.origin / vs;
+            if (!solidAt(w, o + d * 1e-3f, mode) && !solidAt(w, o + d * 2e-3f, mode)) {
+                Ray past = r;
+                past.origin = r.origin + d * (2e-3f * vs);
+                past.maxDistance = r.maxDistance - 2e-3f * vs;
+                ref = marchFirstSolid(w, past, mode, kStep);
+                if (ref) *ref += 2e-3f * vs;
+            }
+        }
         if (ref) {
             // Never leaks through solid the reference found.
             REQUIRE(hit.has_value());
@@ -253,7 +266,9 @@ TEST_CASE("voxel raycast: shape worlds hit the exact geometry (Selection) and th
     CHECK(selection == 0x53599CECA851519Cull);
     const uint64_t collision = discreteHash(world, rays, RaycastMode::Collision, &hits);
     MESSAGE("collision hits ", hits, " hash ", test::hex64(collision));
-    CHECK(collision == 0x3490C3C2CAD63E7Dull);
+    // Re-baselined for the audit I1 fix (origins on outer box faces: face normal, not inside);
+    // the previous value was 0x3490C3C2CAD63E7D. Selection is unchanged.
+    CHECK(collision == 0x7BB0DF2FA3F56246ull);
 
     CHECK(checkAgainstReference(world, sample, RaycastMode::Selection) == 0);
     CHECK(checkAgainstReference(world, sample, RaycastMode::Collision) == 0);
@@ -787,4 +802,156 @@ TEST_CASE("voxel query timing: player box queries and 64 m rays" * doctest::skip
     MESSAGE("player box query ", bestBox, " us (target < 5), ray Selection ", bestSel, " us, Collision ", bestCol,
             " us (target < 20, rays up to 64 m)");
     CHECK(guard > 0);
+}
+
+TEST_CASE("voxel raycast: Collision-mode origins on collision-box faces behave like cube faces") {
+    // Audit I1: an origin exactly on the outer face of a collision box must give an entry hit at
+    // distance 0 with that face's normal (inward ray) or leave the solid (outward ray), as a
+    // cube's +X/+Y/+Z face does; only faces shared by two boxes of the union count as inside.
+    // (Cube cells keep their pre-V3 floor rule, checked at the end: an origin on a cube's
+    // -X/-Y/-Z face lies in the cube's cell and counts as inside.)
+    const ShapeGallery g;
+    const VoxelWorld& w = g.world();
+    const BlockTable& table = w.blocks();
+    const auto inUnion = [](const Shape& s, const glm::vec3& p) {
+        for (const ShapeBox& b : s.collision) {
+            if (glm::all(glm::greaterThanEqual(p, b.min)) && glm::all(glm::lessThanEqual(p, b.max))) return true;
+        }
+        return false;
+    };
+    int inward = 0;
+    int outward = 0;
+    int inexact = 0;
+    for (uint16_t s = 1; s < g.reg.shapeCount(); ++s) {
+        for (int r = 0; r < 4; ++r) {
+            const Voxel id = ShapeRegistry::id(s, r);
+            const glm::vec3 cell(ShapeGallery::cellOf(s, r));
+            const Shape* shape = table.shape(id);
+            const std::vector<ShapeBox> boxes =
+                shape ? shape->collision : std::vector<ShapeBox>{{glm::vec3(0.0f), glm::vec3(1.0f)}};
+            const Shape cubeShape = (*g.reg.lib)[ShapeLibrary::kCube];
+            const Shape& union_ = shape ? *shape : cubeShape;
+            for (size_t bi = 0; bi < boxes.size(); ++bi) {
+                const ShapeBox& b = boxes[bi];
+                for (int f = 0; f < 6; ++f) { // -X, +X, -Y, +Y (bottom, top), -Z, +Z
+                    const int axis = f >> 1;
+                    glm::vec3 n(0.0f);
+                    n[axis] = (f & 1) ? 1.0f : -1.0f;
+                    // Face centre, nudged off the centre so it never lies on another box's edge.
+                    glm::vec3 p = (b.min + b.max) * 0.5f;
+                    p[axis] = (f & 1) ? b.max[axis] : b.min[axis];
+                    p[(axis + 1) % 3] = b.min[(axis + 1) % 3] + (b.max[(axis + 1) % 3] - b.min[(axis + 1) % 3]) * 0.4375f;
+                    p[(axis + 2) % 3] = b.min[(axis + 2) % 3] + (b.max[(axis + 2) % 3] - b.min[(axis + 2) % 3]) * 0.5625f;
+                    const bool outer = !inUnion(union_, p + n * 1e-3f) && inUnion(union_, p - n * 1e-3f);
+                    CAPTURE(union_.name);
+                    CAPTURE(r);
+                    CAPTURE(bi);
+                    CAPTURE(f);
+                    const glm::vec3 origin = cell + p;
+                    if (origin[axis] - cell[axis] != p[axis]) {
+                        ++inexact; // the face is not representable at this world position
+                        continue;
+                    }
+                    if (!outer) {
+                        // Shared with another box: the origin is inside the solid.
+                        if (inUnion(union_, p + n * 1e-3f) && inUnion(union_, p - n * 1e-3f)) {
+                            const auto hit = w.raycast(origin, n, 1.5f, {RaycastMode::Collision});
+                            REQUIRE(hit.has_value());
+                            CHECK(hit->distance == 0.0f);
+                            CHECK(hit->normal == glm::ivec3(0));
+                        }
+                        continue;
+                    }
+                    // Inward: entry hit at distance 0 with the face normal.
+                    auto hit = w.raycast(origin, -n, 1.5f, {RaycastMode::Collision});
+                    REQUIRE(hit.has_value());
+                    CHECK(hit->voxel == glm::ivec3(cell));
+                    CHECK(hit->distance == 0.0f);
+                    CHECK(hit->normal == glm::ivec3(n));
+                    CHECK(hit->surfaceNormal == n);
+                    CHECK(hit->point == origin);
+                    ++inward;
+                    // Inward but oblique: same face and normal.
+                    glm::vec3 oblique = -n;
+                    oblique[(axis + 1) % 3] = 0.3f;
+                    hit = w.raycast(origin, oblique, 1.5f, {RaycastMode::Collision});
+                    REQUIRE(hit.has_value());
+                    CHECK(hit->distance == 0.0f);
+                    CHECK(hit->normal == glm::ivec3(n));
+                    // Outward: leaves this cell's solid (gallery cells are 3 apart, so nothing else
+                    // lies within 1.5 m).
+                    hit = w.raycast(origin, n, 1.5f, {RaycastMode::Collision});
+                    CHECK_FALSE(hit.has_value());
+                    ++outward;
+                }
+            }
+        }
+    }
+    MESSAGE("box faces: inward ", inward, " outward ", outward, " not representable ", inexact);
+    CHECK(inward > 200);
+    CHECK(outward == inward);
+    // The audit case: feet resting on a slab top and on a cube top, probing down.
+    const glm::vec3 slabTop = glm::vec3(ShapeGallery::cellOf(*g.reg.lib->find("slab_low"), 0)) + glm::vec3(0.5f, 0.5f, 0.5f);
+    const glm::vec3 cubeTop = glm::vec3(ShapeGallery::cellOf(ShapeLibrary::kCube, 0)) + glm::vec3(0.5f, 1.0f, 0.5f);
+    for (RaycastMode mode : {RaycastMode::Selection, RaycastMode::Collision}) {
+        for (const glm::vec3& o : {slabTop, cubeTop}) {
+            const auto hit = w.raycast(o, {0, -1, 0}, 2.0f, {mode});
+            REQUIRE(hit.has_value());
+            CHECK(hit->distance == 0.0f);
+            CHECK(hit->normal == glm::ivec3(0, 1, 0));
+        }
+    }
+    // Cube reference (pre-V3, bit-exact): +X/+Y/+Z faces give entry hits with the face normal
+    // and outward rays leave; on -X/-Y/-Z faces the origin is in the cube's cell (floor rule),
+    // so every direction hits at distance 0 with normal (0, 0, 0).
+    const glm::vec3 cube(ShapeGallery::cellOf(ShapeLibrary::kCube, 0));
+    for (int f = 0; f < 6; ++f) {
+        const int axis = f >> 1;
+        glm::vec3 n(0.0f);
+        n[axis] = (f & 1) ? 1.0f : -1.0f;
+        glm::vec3 p(0.4375f, 0.5625f, 0.5f);
+        p[axis] = (f & 1) ? 1.0f : 0.0f;
+        CAPTURE(f);
+        for (RaycastMode mode : {RaycastMode::Selection, RaycastMode::Collision}) {
+            const auto in = w.raycast(cube + p, -n, 1.5f, {mode});
+            const auto out = w.raycast(cube + p, n, 1.5f, {mode});
+            REQUIRE(in.has_value());
+            CHECK(in->distance == 0.0f);
+            if (f & 1) {
+                CHECK(in->normal == glm::ivec3(n));
+                CHECK_FALSE(out.has_value());
+            } else {
+                CHECK(in->normal == glm::ivec3(0));
+                REQUIRE(out.has_value());
+                CHECK(out->normal == glm::ivec3(0));
+            }
+        }
+    }
+    // A shared face inside the union (wedge levels 0 and 1 meet at z = 1/4 below y = 1/8).
+    const glm::vec3 shared = glm::vec3(ShapeGallery::cellOf(*g.reg.lib->find("wedge"), 0)) + glm::vec3(0.5f, 0.0625f, 0.25f);
+    for (const glm::vec3 d : {glm::vec3(0, 0, 1), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)}) {
+        const auto hit = w.raycast(shared, d, 2.0f, {RaycastMode::Collision});
+        REQUIRE(hit.has_value());
+        CHECK(hit->distance == 0.0f);
+        CHECK(hit->normal == glm::ivec3(0));
+    }
+}
+
+TEST_CASE("voxel raycast: invalid inputs are rejected") {
+    const ShapeGallery g;
+    const VoxelWorld& w = g.world();
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    CHECK_THROWS_AS((void)w.raycast({nan, 0, 0}, {0, -1, 0}, 5.0f), zodar::Error);
+    CHECK_THROWS_AS((void)w.raycast({0, inf, 0}, {0, -1, 0}, 5.0f), zodar::Error);
+    CHECK_THROWS_AS((void)w.raycast({0, 0, 0}, {0, nan, 0}, 5.0f), zodar::Error);
+    CHECK_THROWS_AS((void)w.raycast({0, 0, 0}, {-inf, 0, 0}, 5.0f), zodar::Error);
+    CHECK_THROWS_AS((void)w.raycast({0, 0, 0}, {0, -1, 0}, nan), zodar::Error);
+    CHECK_THROWS_AS((void)w.raycast({0, 0, 0}, {0, -1, 0}, inf), zodar::Error);
+    CHECK_THROWS_AS((void)w.raycast({0, 0, 0}, {0, -1, 0}, -1.0f), zodar::Error);
+    CHECK_THROWS_AS((void)w.raycast({2e9f, 0, 0}, {0, -1, 0}, 5.0f), zodar::Error);
+    CHECK_THROWS_AS((void)w.raycast({0, 0, 0}, {0, -1, 0}, 2e9f), zodar::Error);
+    // Unchanged: zero direction or zero distance give no hit.
+    CHECK_FALSE(w.raycast({0, 10, 0}, {0, 0, 0}, 5.0f));
+    CHECK_FALSE(w.raycast({0, 10, 0}, {0, -1, 0}, 0.0f));
 }

@@ -166,9 +166,14 @@ public:
     //    polygon index, then the lower fan triangle.
     //  - Collision: the rotated collision boxes (slab test); ties prefer the entry axis X, Y,
     //    Z, then the lower box index.
-    // A ray that starts inside a cell's solid (cube, Shape::contains, or a collision box) hits
-    // that cell at distance 0 with normal (0, 0, 0); one that starts in the empty part of a
-    // shape cell continues.
+    // A ray that starts inside a cell's solid (cube, Shape::contains, or the interior of the
+    // collision boxes) hits that cell at distance 0 with normal (0, 0, 0); one that starts in the
+    // empty part of a shape cell continues. Collision mode, origin exactly on the outer face of
+    // a collision box: like a cube face, an inward ray hits at distance 0 with that face's
+    // normal and an outward ray leaves (faces shared by two boxes count as inside).
+    // Throws zodar::Error for a non-finite origin, direction or maxDistance, a negative
+    // maxDistance, or an origin / maxDistance beyond 1e9 cells. A zero direction or
+    // maxDistance 0 gives no hit.
     std::optional<RaycastHit> raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance,
                                       const RaycastOptions& options = {}) const;
 

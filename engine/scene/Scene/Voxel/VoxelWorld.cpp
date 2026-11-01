@@ -656,17 +656,33 @@ std::optional<LocalHit> boxHit(const Shape& shape, const glm::vec3& o, const glm
     return best;
 }
 
-bool insideBoxes(const Shape& shape, const glm::vec3& p) {
+bool inClosedBoxes(const Shape& shape, const glm::vec3& p) {
     for (const ShapeBox& b : shape.collision) {
         if (glm::all(glm::greaterThanEqual(p, b.min)) && glm::all(glm::lessThanEqual(p, b.max))) return true;
     }
     return false;
 }
 
+// Collision-mode origin test. Strictly inside a box: inside. On a box face: inside only when
+// the box union is solid just behind and just ahead of the origin along the ray (a face shared
+// by two boxes); on the union's outer surface the ray instead gets an entry hit at t = 0 with
+// that face's normal (inward) or leaves the solid (outward), like a cube's +X/+Y/+Z face.
+bool originInsideBoxes(const Shape& shape, const glm::vec3& p, const glm::vec3& d) {
+    for (const ShapeBox& b : shape.collision) {
+        if (glm::all(glm::greaterThan(p, b.min)) && glm::all(glm::lessThan(p, b.max))) return true;
+    }
+    constexpr float kBehind = 1e-4f; // cell units; far below the smallest box extent (1/8)
+    return inClosedBoxes(shape, p - d * kBehind) && inClosedBoxes(shape, p + d * kBehind);
+}
+
 } // namespace
 
 std::optional<RaycastHit> VoxelWorld::raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance,
                                               const RaycastOptions& options) const {
+    const auto finite = [](const glm::vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };
+    ZODAR_ENSURE(finite(origin) && finite(direction) && std::isfinite(maxDistance),
+                 "raycast: origin, direction and maxDistance must be finite");
+    ZODAR_ENSURE(maxDistance >= 0.0f, "raycast: maxDistance must not be negative");
     const float len = glm::length(direction);
     if (len <= 0.0f || maxDistance <= 0.0f) {
         return std::nullopt;
@@ -674,6 +690,9 @@ std::optional<RaycastHit> VoxelWorld::raycast(const glm::vec3& origin, const glm
     const glm::vec3 dir = direction / len;
     const glm::vec3 p = origin / m_settings.voxelSize; // voxel space
     const float maxT = maxDistance / m_settings.voxelSize;
+    // Keeps the integer cell coordinates of the traversal far from overflow.
+    ZODAR_ENSURE(glm::all(glm::lessThan(glm::abs(p), glm::vec3(1.0e9f))) && maxT <= 1.0e9f,
+                 "raycast: origin or maxDistance lies outside the representable cell range");
     glm::ivec3 cell(glm::floor(p));
     glm::ivec3 step;
     glm::vec3 tMax;
@@ -709,7 +728,7 @@ std::optional<RaycastHit> VoxelWorld::raycast(const glm::vec3& origin, const glm
         if (shape && (!collision || table.collides(v))) {
             const glm::vec3 local = p - glm::vec3(cell);
             const bool start = cell == startCell;
-            if (start && (collision ? insideBoxes(*shape, local) : shape->contains(local))) {
+            if (start && (collision ? originInsideBoxes(*shape, local, dir) : shape->contains(local))) {
                 return RaycastHit{cell, glm::ivec3(0), 0.0f, v, origin, glm::vec3(0.0f)};
             }
             const float tExit = std::min(tMax.x, std::min(tMax.y, tMax.z));
