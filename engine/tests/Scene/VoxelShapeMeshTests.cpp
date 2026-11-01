@@ -275,6 +275,24 @@ TEST_CASE("shape mesher: sloped polygons take UVs and face layers from their dom
     CHECK(ties > 0);
 }
 
+TEST_CASE("shape mesher: unknown registry ids mesh as fallback cubes, never as a real material") {
+    // Registry with one block; id 2 is unknown although material 2 exists (V1 would have used it).
+    VoxelPalette p;
+    p.colors = {glm::vec4(0), glm::vec4(0.5f, 0.5f, 0.5f, 1), glm::vec4(0.8f, 0.6f, 0.4f, 1)};
+    p.faceLayers = {{0, 0, 0}, {1, 2, 3}, {4, 5, 6}};
+    p.blocks = {BlockState{}, BlockState{1, ShapeLibrary::kCube, 0, 0}};
+    VoxelChunk c;
+    c.set(4, 4, 4, 2);
+    const MeshData m = meshChunk(single(c), p, {});
+    REQUIRE(m.vertices.size() == 24); // a full cube
+    for (const Vertex& v : m.vertices) {
+        CHECK(v.color.r > 0.0f);
+        CHECK(v.color.g == 0.0f); // magenta fallback, not material 2's colour
+        CHECK(v.color.b == v.color.r);
+        CHECK(v.color.a == 0.0f); // texture layer 0
+    }
+}
+
 TEST_CASE("shape mesher: shapes count by fill and render as cubes at LOD > 0") {
     const Registry reg;
     const auto lodMesh = [&](Voxel v) {

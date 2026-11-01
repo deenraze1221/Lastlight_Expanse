@@ -116,8 +116,13 @@ struct BlockState {
 //
 // Legacy mode (`blocks` empty): every non-empty id is a cube with material index = id.
 // Registry mode: `blocks[id]` for ids below blocks.size() (blocks[0] is ignored, id 0 is empty);
-// higher ids are cubes with material index = id (the fallback colour when out of range).
+// higher ids (unknown blocks, e.g. from corrupted or newer data) are cubes with the explicit
+// fallback material `kFallbackMaterial` (fallback colour, texture layer 0), never a real
+// material (V2; V1 used material = id there).
 struct VoxelPalette {
+    // Out of range of `colors` by construction (registry palettes hold fewer materials).
+    static constexpr uint16_t kFallbackMaterial = 0xFFFF;
+
     std::vector<glm::vec4> colors;
     std::vector<std::array<uint16_t, 3>> faceLayers{};
     std::vector<BlockState> blocks{};
@@ -159,7 +164,10 @@ public:
     BlockInfo info(Voxel v) const;
     // fullFaces bits | kAoOccluder | kCube; 0 for empty.
     uint8_t cellFlags(Voxel v) const { return v < m_flags.size() ? m_flags[v] : kLegacyCubeFlags; }
-    uint16_t material(Voxel v) const { return v < m_material.size() ? m_material[v] : v; }
+    // Legacy: material = id. Registry: ids beyond `blocks` map to VoxelPalette::kFallbackMaterial.
+    uint16_t material(Voxel v) const {
+        return v < m_material.size() ? m_material[v] : m_legacy ? v : VoxelPalette::kFallbackMaterial;
+    }
     uint8_t fill(Voxel v) const { return v < m_fill.size() ? m_fill[v] : uint8_t(8); }
     bool isCube(Voxel v) const { return (cellFlags(v) & BlockInfo::kCube) != 0; }
     // Rotated geometry of a non-cube id, else nullptr.

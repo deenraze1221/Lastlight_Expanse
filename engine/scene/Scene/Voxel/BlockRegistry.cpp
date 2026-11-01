@@ -326,6 +326,8 @@ BlockTable::BlockTable(const VoxelPalette& palette) : m_palette(palette) {
         m_firstCube = 1;
         return;
     }
+    ZODAR_ENSURE(palette.colors.size() < VoxelPalette::kFallbackMaterial,
+                 "Voxel palette: registry palettes hold at most 65534 materials");
     const size_t n = palette.blocks.size();
     m_flags.assign(n, 0);
     m_material.assign(n, 0);

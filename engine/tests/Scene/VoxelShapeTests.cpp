@@ -263,7 +263,10 @@ TEST_CASE("block table: registry states resolve shape, rotation and material") {
     CHECK(t.info(4).fullFaces == faceBit(int(Face::NegY)));
     CHECK(t.firstCube() == 2);
     CHECK(t.info(9).cube); // beyond the registry: fallback cube
-    CHECK(t.info(9).material == 9);
+    CHECK(t.info(9).material == VoxelPalette::kFallbackMaterial); // never a real material
+    CHECK(t.material(3) == 1);
+    CHECK(p.color(t.material(9)) == glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+    CHECK(p.layer(t.material(9), 0) == 0.0f);
 
     VoxelPalette noCube = p;
     noCube.blocks = {BlockState{}, p.blocks[1]};

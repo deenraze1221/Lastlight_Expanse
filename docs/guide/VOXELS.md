@@ -57,7 +57,8 @@ Extends the existing `VoxelPalette` into a **block registry**; no second id syst
 - `VoxelPalette` *(exists)*: `colors` and `faceLayers` are the material table (indexed by
   material); `blocks` (per id) and `shapes` (shared `ShapeLibrary`). **Legacy mode:** empty
   `blocks` = every non-empty id is a cube with material = id (Highlands, unchanged). Registry
-  mode: ids beyond `blocks` are cubes with material = id (fallback colour when out of range).
+  mode: ids beyond `blocks` (unknown blocks) are cubes with the explicit fallback material
+  `VoxelPalette::kFallbackMaterial` (magenta, texture layer 0), never a real material (V2).
 - `BlockState` (per id) *(exists)*: `material`, `shape` (index into the shape library),
   `rotation` (**4 yaw steps only**, 90° right-handed about +Y: one step turns +X into −Z;
   flip reserved, V1 decision), flags (`kNoCollision`; `kTransparent` reserved, not meshed).
