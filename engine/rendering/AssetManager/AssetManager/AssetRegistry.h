@@ -3,12 +3,14 @@
 #include "AssetManager/AssetManager.h"
 #include "Assets/TextureCache.h"
 #include "Assets/TextureStandards.h"
+#include "Scene/Voxel/BlockRegistry.h"
 
 #include <glm/glm.hpp>
 
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -25,11 +27,11 @@
 //   ModelHandle h = assets.loadModelAsync(registry.sourcePath(crate), modelLoadSettings(crate));
 namespace zodar {
 
-enum class AssetType : uint8_t { Texture, Model, Material, Scene, Prefab };
+enum class AssetType : uint8_t { Texture, Model, Material, Scene, Prefab, Blocks };
 const char* toString(AssetType type);
 std::optional<AssetType> parseAssetType(std::string_view name);
 // From the file name: .png/.jpg/.jpeg/.tga/.bmp texture, .gltf/.glb model, *.material.json,
-// *.scene.json, *.prefab.json. nullopt for anything else.
+// *.scene.json, *.prefab.json, *.blocks.json (Phase V2). nullopt for anything else.
 std::optional<AssetType> detectAssetType(const std::filesystem::path& file);
 
 // --- Palettes (Phase C7) -------------------------------------------------------------------
@@ -273,6 +275,8 @@ struct AssetCheckResult {
     glm::vec3 size{0.0f};
     std::string assetClass;
     uint32_t triangleBudget = 0;
+    // Blocks (Phase V2): block ids (rotation variants included) and texture-array layers.
+    uint32_t blocks = 0, layers = 0;
     // Texture class the sizes were checked against (Phase V2); empty when the entry has none
     // (the standard's default class applies; not written to the report).
     std::string textureClass;
@@ -294,6 +298,9 @@ struct AssetCheckOptions {
     // warning (usually a wrong export scale); <= 0 disables a limit.
     double minModelSize = 1.0 / 16.0;
     double maxModelSize = 64.0;
+    // Shape library resolving block shape names (Phase V2); null: the built-in shapes. Games
+    // that register shapes in code pass their library (ZodarAssetTool knows built-ins only).
+    std::shared_ptr<const voxel::ShapeLibrary> blockShapes;
 };
 
 // Checks one entry / every entry (registry order). Never throws: problems become errors.

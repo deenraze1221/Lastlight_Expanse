@@ -70,8 +70,22 @@ void onUpdate(const zodar::FrameTime&) override {
 ```
 
 Types: `texture` (`usage` color|data|normal, `mips`), `model` (`sampling`
-file|pixelArt|nearest|linear, `compile`, `outputs`), `material`, `scene`, `prefab`. Paths are
-relative to the registry directory. `hash` covers the source and every dependency.
+file|pixelArt|nearest|linear, `compile`, `outputs`), `material`, `scene`, `prefab`, `blocks`
+(`*.blocks.json`, Phase V2). Paths are relative to the registry directory. `hash` covers the
+source and every dependency.
+
+**Blocks assets (Phase V2):** a `*.blocks.json` block definition file (format:
+`docs/guide/VOXELS.md` §3). Dependencies = every texture it references (batch import treats
+them like a glTF's external textures: covered by the blocks entry's hash, no own entry).
+`check` reports: schema errors with JSON paths and unknown shapes (built-in shapes; games with
+code-registered shapes pass `AssetCheckOptions::blockShapes`) as errors; each texture once
+against the entry's `textureClass` (warnings; ≥ 256 errors) and the palette (colour data);
+**texture-array dimensions** (all layers square and of one size) as errors naming the layer's
+JSON path (`texture array: blocks/bunker.blocks.json: /materials/1/textures/side: 32x32
+(panel.png) differs from the texture array size 64x64 (first layer:
+/materials/0/textures/top)`); texel density = layer size × `uvPerMetre` against the
+registry's density target (warning). The report adds `blocks` (ids incl. rotation variants)
+and `layers`.
 
 ```bash
 python3 tools/zodar.py import assets/crate.gltf                      # add/update (nearest assets.json, else ./assets.json)

@@ -1,6 +1,6 @@
 // ZodarAssetTool: asset registry tool (Phase C3). CPU only, no Vulkan device needed.
 //
-//   ZodarAssetTool import <file|dir>... [--registry FILE] [--id ID] [--type texture|model|material|scene|prefab]
+//   ZodarAssetTool import <file|dir>... [--registry FILE] [--id ID] [--type texture|model|material|scene|prefab|blocks]
 //       [--usage color|data|normal] [--no-mips] [--sampling file|pixelArt|nearest|linear] [--compile]
 //       [--sub-palette NAME] [--class NAME] [--texture-class NAME]
 //       Adds or updates registry entries (dependencies + hash). A directory imports every asset

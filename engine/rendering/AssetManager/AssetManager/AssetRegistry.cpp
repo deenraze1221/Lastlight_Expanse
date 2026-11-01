@@ -3,6 +3,7 @@
 #include "Assets/ImageData.h"
 #include "Assets/ModelData.h"
 #include "Core/Error.h"
+#include "SceneFile/BlockFile.h"
 #include "SceneFile/JsonRead.h"
 #include "SceneFile/MaterialFile.h"
 #include "SceneFile/SceneFile.h"
@@ -33,13 +34,14 @@ const char* toString(AssetType type) {
     case AssetType::Material: return "material";
     case AssetType::Scene: return "scene";
     case AssetType::Prefab: return "prefab";
+    case AssetType::Blocks: return "blocks";
     }
     return "texture";
 }
 
 std::optional<AssetType> parseAssetType(std::string_view name) {
     for (const AssetType t : {AssetType::Texture, AssetType::Model, AssetType::Material, AssetType::Scene,
-                              AssetType::Prefab}) {
+                              AssetType::Prefab, AssetType::Blocks}) {
         if (name == toString(t)) {
             return t;
         }
@@ -113,6 +115,7 @@ std::optional<AssetType> detectAssetType(const std::filesystem::path& file) {
     if (name.ends_with(".material.json")) return AssetType::Material;
     if (name.ends_with(".scene.json")) return AssetType::Scene;
     if (name.ends_with(".prefab.json")) return AssetType::Prefab;
+    if (name.ends_with(".blocks.json")) return AssetType::Blocks;
     const std::string ext = lower(file.extension().string());
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") return AssetType::Texture;
     if (ext == ".gltf" || ext == ".glb") return AssetType::Model;
@@ -121,7 +124,7 @@ std::optional<AssetType> detectAssetType(const std::filesystem::path& file) {
 
 std::string defaultAssetId(const std::filesystem::path& file) {
     std::string name = file.filename().string();
-    for (const char* suffix : {".material.json", ".scene.json", ".prefab.json"}) {
+    for (const char* suffix : {".material.json", ".scene.json", ".prefab.json", ".blocks.json"}) {
         if (lower(name).ends_with(suffix)) {
             return name.substr(0, name.size() - std::string_view(suffix).size());
         }
@@ -543,7 +546,7 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
                 e.type = *t;
             } else {
                 issues.add(detail::child(path, "type"),
-                           "unknown asset type '" + type + "' (expected texture, model, material, scene or prefab)");
+                           "unknown asset type '" + type + "' (expected texture, model, material, scene, prefab or blocks)");
             }
         }
         if (e.type == AssetType::Texture) {
@@ -562,7 +565,7 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
                     issues.add(detail::child(path, "class"), problem);
                 }
             }
-        } else if (e.type == AssetType::Material) {
+        } else if (e.type == AssetType::Material || e.type == AssetType::Blocks) {
             detail::checkKeys(a, path,
                               {"id", "type", "source", "textureClass", "hash", "dependencies", "outputs", "palette"},
                               issues);
@@ -880,6 +883,9 @@ std::vector<std::filesystem::path> dependenciesOf(AssetType type, const std::fil
     case AssetType::Texture: break;
     case AssetType::Model: addGltfUris(source, deps); break;
     case AssetType::Material: addMaterialTextures(loadMaterialFile(source), dir, deps); break;
+    case AssetType::Blocks:
+        for (const std::filesystem::path& t : blockFileTextures(loadBlockFile(source), dir)) deps.push_back(t);
+        break;
     case AssetType::Scene:
     case AssetType::Prefab: {
         std::set<std::filesystem::path> seen{normal(source)};
@@ -980,7 +986,7 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
     const std::optional<AssetType> type = options.type ? options.type : detectAssetType(abs);
     if (!type) {
         throw Error("cannot import '" + file.generic_string() +
-             "': unknown asset type (use --type texture|model|material|scene|prefab)");
+             "': unknown asset type (use --type texture|model|material|scene|prefab|blocks)");
     }
     if ((options.usage || options.mips) && *type != AssetType::Texture) {
         throw Error("--usage/--no-mips apply to textures only");
@@ -989,8 +995,8 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
         throw Error("--sampling/--compile/--class apply to models only");
     }
     if (options.textureClass && *type != AssetType::Texture && *type != AssetType::Model &&
-        *type != AssetType::Material) {
-        throw Error("--texture-class applies to textures, models and materials only");
+        *type != AssetType::Material && *type != AssetType::Blocks) {
+        throw Error("--texture-class applies to textures, models, materials and blocks only");
     }
 
     // An existing entry for the same source keeps its id and settings.
@@ -1377,6 +1383,47 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
             }
             break;
         }
+        case AssetType::Blocks: {
+            const std::shared_ptr<const voxel::ShapeLibrary> shapes =
+                options.blockShapes ? options.blockShapes
+                                    : std::make_shared<const voxel::ShapeLibrary>(voxel::ShapeLibrary::builtins());
+            const BlockFileData data = loadBlockFile(file, shapes.get());
+            const BlockCatalogue c = buildBlockCatalogue(data, file.parent_path(), shapes, entry.source);
+            r.materials = static_cast<uint32_t>(data.materials.size());
+            r.blocks = static_cast<uint32_t>(c.palette.blocks.size() - 1);
+            r.layers = static_cast<uint32_t>(c.layers.size());
+            // Every texture once: size per texture class, palette (colour data).
+            std::map<std::filesystem::path, glm::uvec2> dims;
+            bool complete = true;
+            for (const std::filesystem::path& layer : c.layers) {
+                const std::filesystem::path t = normal(layer);
+                if (dims.contains(t)) continue;
+                if (!std::filesystem::exists(t)) {
+                    complete = false; // reported as a missing dependency
+                    continue;
+                }
+                checkImageFile(r, sizes, t, dir, &palette);
+                dims[t] = {r.textures.back().width, r.textures.back().height};
+            }
+            if (complete && !c.layers.empty()) {
+                // One texture array: square layers of one size (errors: the array cannot be built).
+                std::vector<glm::uvec2> layerSizes;
+                for (const std::filesystem::path& layer : c.layers) layerSizes.push_back(dims.at(normal(layer)));
+                const std::vector<DataIssue> sizeIssues = checkBlockLayerSizes(c, layerSizes, entry.source);
+                for (const DataIssue& i : sizeIssues) r.errors.push_back("texture array: " + i.toString());
+                // Texel density: layer size x tiles per metre.
+                if (sizeIssues.empty()) {
+                    r.texelDensity = static_cast<double>(layerSizes[0].x) * static_cast<double>(c.uvPerMetre);
+                    const double target = options.texelDensityTarget.value_or(sizes.standard.densityTarget);
+                    const double tol = options.texelDensityTolerance.value_or(sizes.standard.densityTolerance);
+                    if (tol > 0.0 && (r.texelDensity < target / tol || r.texelDensity > target * tol)) {
+                        r.warnings.push_back(formatText("texel density %.1f texels/m outside %.0f..%.0f (target %.0f)",
+                                                        r.texelDensity, target / tol, target * tol, target));
+                    }
+                }
+            }
+            break;
+        }
         case AssetType::Scene:
         case AssetType::Prefab: {
             const SceneDocument doc = loadSceneFile(file);
@@ -1480,6 +1527,10 @@ std::string assetReportJson(const AssetRegistry& registry, const std::vector<Ass
         a["texelDensity"] = std::round(r.texelDensity * 100.0) / 100.0;
         if (!r.textureClass.empty()) {
             a["textureClass"] = r.textureClass;
+        }
+        if (r.type == AssetType::Blocks) {
+            a["blocks"] = r.blocks;
+            a["layers"] = r.layers;
         }
         if (r.type == AssetType::Model && !r.sourceTool.empty()) {
             a["sourceTool"] = r.sourceTool;
