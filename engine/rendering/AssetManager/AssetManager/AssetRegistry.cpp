@@ -8,6 +8,7 @@
 #include "SceneFile/SceneFile.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdio>
 #include <cstdarg>
@@ -242,6 +243,131 @@ std::string classProblem(const std::string& assetClass, const std::map<std::stri
     return "unknown asset class '" + assetClass + "' (budgets: " + known + ")";
 }
 
+// "" when `textureClass` names a class of the registry's texture standard, otherwise the problem.
+std::string textureClassProblem(const std::string& textureClass, const std::optional<TextureStandard>& standard) {
+    if (!standard) {
+        return "textureClass '" + textureClass + "' but the registry has no \"textureStandards\"";
+    }
+    if (standard->find(textureClass)) {
+        return {};
+    }
+    std::string known;
+    for (const TextureClassRule& c : standard->classes) {
+        known += (known.empty() ? "" : ", ") + c.name;
+    }
+    return "unknown texture class '" + textureClass + "' (classes: " + known + ")";
+}
+
+// "textureStandards": { "classes": { name: [sizes] }, "defaultClass", "prohibitedSize",
+// "densityTarget", "densityTolerance" }. Problems are reported with their JSON path.
+std::optional<TextureStandard> readTextureStandards(const Json& value, detail::Issues& issues) {
+    const std::string path = "/textureStandards";
+    if (!detail::requireObject(value, path, issues)) {
+        return std::nullopt;
+    }
+    detail::checkKeys(value, path, {"classes", "defaultClass", "prohibitedSize", "densityTarget", "densityTolerance"},
+                      issues);
+    TextureStandard s;
+    bool ok = true;
+    detail::readUint(value, "prohibitedSize", path, s.prohibitedSize, issues);
+    if (s.prohibitedSize == 0 || s.prohibitedSize > kTextureSizeProhibited) {
+        issues.add(detail::child(path, "prohibitedSize"),
+                   "prohibitedSize " + std::to_string(s.prohibitedSize) + " must be in 1..256");
+        ok = false;
+    }
+    const auto classes = value.find("classes");
+    if (classes == value.end()) {
+        issues.add(detail::child(path, "classes"), "required field is missing");
+        ok = false;
+    } else if (!classes->is_object() || classes->empty()) {
+        issues.add(detail::child(path, "classes"), "expected a non-empty object of texture class -> allowed sizes");
+        ok = false;
+    } else {
+        for (const auto& [name, sizes] : classes->items()) {
+            const std::string at = detail::child(detail::child(path, "classes"), name);
+            if (!sizes.is_array() || sizes.empty()) {
+                issues.add(at, "expected a non-empty array of square texture sizes");
+                ok = false;
+                continue;
+            }
+            TextureClassRule rule{name, {}};
+            for (std::size_t i = 0; i < sizes.size(); ++i) {
+                const Json& v = sizes[i];
+                const std::string sizePath = detail::child(at, i);
+                if (!v.is_number_unsigned() || v.get<uint64_t>() == 0 ||
+                    v.get<uint64_t>() > std::numeric_limits<uint32_t>::max()) {
+                    issues.add(sizePath, "expected a positive integer size, got " + detail::typeName(v) + " " + v.dump());
+                    ok = false;
+                    continue;
+                }
+                const auto size = static_cast<uint32_t>(v.get<uint64_t>());
+                if (!std::has_single_bit(size)) {
+                    issues.add(sizePath, "size " + std::to_string(size) + " is not a power of two");
+                    ok = false;
+                } else if (size >= s.prohibitedSize) {
+                    issues.add(sizePath, "size " + std::to_string(size) + " is at or above the prohibited size " +
+                                             std::to_string(s.prohibitedSize));
+                    ok = false;
+                } else if (!rule.sizes.empty() && size <= rule.sizes.back()) {
+                    issues.add(sizePath, "sizes must be ascending and unique");
+                    ok = false;
+                }
+                rule.sizes.push_back(size);
+            }
+            s.classes.push_back(std::move(rule));
+        }
+    }
+    if (detail::readString(value, "defaultClass", path, s.defaultClass, issues, true)) {
+        if (ok && !s.find(s.defaultClass)) {
+            issues.add(detail::child(path, "defaultClass"), "unknown texture class '" + s.defaultClass + "'");
+            ok = false;
+        }
+    } else {
+        ok = false;
+    }
+    float target = static_cast<float>(s.densityTarget);
+    if (detail::readFloat(value, "densityTarget", path, target, issues)) {
+        if (!(target > 0.0f)) {
+            issues.add(detail::child(path, "densityTarget"), "expected a positive number of texels per metre");
+            ok = false;
+        }
+        s.densityTarget = target;
+    } else if (value.contains("densityTarget")) {
+        ok = false;
+    }
+    float tolerance = static_cast<float>(s.densityTolerance);
+    if (detail::readFloat(value, "densityTolerance", path, tolerance, issues)) {
+        s.densityTolerance = tolerance;
+    } else if (value.contains("densityTolerance")) {
+        ok = false;
+    }
+    if (!ok) {
+        return std::nullopt;
+    }
+    std::ranges::sort(s.classes, {}, &TextureClassRule::name); // deterministic, as setTextureStandards
+    try {
+        s.validate();
+    } catch (const std::exception& e) {
+        issues.add(path, e.what());
+        return std::nullopt;
+    }
+    return s;
+}
+
+Json textureStandardsJson(const TextureStandard& s) {
+    Json j = Json::object();
+    Json classes = Json::object();
+    for (const TextureClassRule& c : s.classes) {
+        classes[c.name] = c.sizes;
+    }
+    j["classes"] = std::move(classes);
+    j["defaultClass"] = s.defaultClass;
+    j["prohibitedSize"] = s.prohibitedSize;
+    j["densityTarget"] = s.densityTarget;
+    j["densityTolerance"] = s.densityTolerance;
+    return j;
+}
+
 Json paletteSourceJson(const PaletteSource& s) {
     return s.swatch.empty() ? Json(s.colors) : Json(s.swatch);
 }
@@ -275,7 +401,7 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
     if (!detail::requireObject(root, "", issues)) {
         issues.throwIfAny();
     }
-    detail::checkKeys(root, "", {"schema", "version", "palette", "defaults", "budgets", "assets"}, issues);
+    detail::checkKeys(root, "", {"schema", "version", "palette", "defaults", "budgets", "textureStandards", "assets"}, issues);
     if (const auto palette = root.find("palette"); palette != root.end()) {
         PaletteConfig config;
         bool ok = true;
@@ -321,6 +447,16 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
             }
         }
     }
+    // Before defaults and entries: they validate "textureClass" against it.
+    bool standardsInvalid = false;
+    if (const auto standards = root.find("textureStandards"); standards != root.end()) {
+        registry.m_textureStandards = readTextureStandards(*standards, issues);
+        standardsInvalid = !registry.m_textureStandards;
+    }
+    // A "textureClass" problem; none while the declared standard itself is invalid (reported once).
+    const auto textureClassIssue = [&](const std::string& textureClass) -> std::string {
+        return standardsInvalid ? std::string() : textureClassProblem(textureClass, registry.m_textureStandards);
+    };
     if (const auto defaults = root.find("defaults"); defaults != root.end()) {
         if (!defaults->is_object()) {
             issues.add("/defaults", "expected an object of per-type import defaults (texture, model)");
@@ -337,7 +473,7 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
                 }
                 AssetDefaults d;
                 if (*type == AssetType::Texture) {
-                    detail::checkKeys(value, path, {"usage", "mips"}, issues);
+                    detail::checkKeys(value, path, {"usage", "mips", "textureClass"}, issues);
                     std::string usage;
                     if (detail::readString(value, "usage", path, usage, issues)) {
                         d.usage = parseUsage(usage);
@@ -349,7 +485,7 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
                     bool mips = true;
                     if (detail::readBool(value, "mips", path, mips, issues)) d.mips = mips;
                 } else {
-                    detail::checkKeys(value, path, {"sampling", "compile", "class"}, issues);
+                    detail::checkKeys(value, path, {"sampling", "compile", "class", "textureClass"}, issues);
                     std::string sampling;
                     if (detail::readString(value, "sampling", path, sampling, issues)) {
                         d.sampling = parseSampling(sampling);
@@ -367,6 +503,13 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
                         }
                         d.assetClass = assetClass;
                     }
+                }
+                std::string textureClass;
+                if (detail::readString(value, "textureClass", path, textureClass, issues)) {
+                    if (const std::string problem = textureClassIssue(textureClass); !problem.empty()) {
+                        issues.add(detail::child(path, "textureClass"), problem);
+                    }
+                    d.textureClass = textureClass;
                 }
                 registry.m_defaults[*type] = std::move(d);
             }
@@ -405,20 +548,31 @@ AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem:
         }
         if (e.type == AssetType::Texture) {
             detail::checkKeys(a, path,
-                              {"id", "type", "source", "usage", "mips", "hash", "dependencies", "outputs", "palette"},
+                              {"id", "type", "source", "usage", "mips", "textureClass", "hash", "dependencies", "outputs",
+                               "palette"},
                               issues);
         } else if (e.type == AssetType::Model) {
             detail::checkKeys(
                 a, path,
-                {"id", "type", "source", "sampling", "compile", "class", "hash", "dependencies", "outputs", "palette"},
+                {"id", "type", "source", "sampling", "compile", "class", "textureClass", "hash", "dependencies",
+                 "outputs", "palette"},
                 issues);
             if (detail::readString(a, "class", path, e.assetClass, issues)) {
                 if (const std::string problem = classProblem(e.assetClass, registry.m_budgets); !problem.empty()) {
                     issues.add(detail::child(path, "class"), problem);
                 }
             }
+        } else if (e.type == AssetType::Material) {
+            detail::checkKeys(a, path,
+                              {"id", "type", "source", "textureClass", "hash", "dependencies", "outputs", "palette"},
+                              issues);
         } else {
             detail::checkKeys(a, path, {"id", "type", "source", "hash", "dependencies", "outputs", "palette"}, issues);
+        }
+        if (detail::readString(a, "textureClass", path, e.textureClass, issues)) {
+            if (const std::string problem = textureClassIssue(e.textureClass); !problem.empty()) {
+                issues.add(detail::child(path, "textureClass"), problem);
+            }
         }
         if (detail::readString(a, "palette", path, e.palette, issues)) {
             if (!registry.m_palette) {
@@ -509,12 +663,16 @@ std::string AssetRegistry::serialize() const {
             if (d.sampling) t["sampling"] = samplingName(*d.sampling);
             if (d.compile) t["compile"] = *d.compile;
             if (d.assetClass) t["class"] = *d.assetClass;
+            if (d.textureClass) t["textureClass"] = *d.textureClass;
             defaults[toString(type)] = std::move(t);
         }
         root["defaults"] = std::move(defaults);
     }
     if (!m_budgets.empty()) {
         root["budgets"] = m_budgets;
+    }
+    if (m_textureStandards) {
+        root["textureStandards"] = textureStandardsJson(*m_textureStandards);
     }
     Json assets = Json::array();
     for (const AssetEntry& e : m_entries) {
@@ -532,6 +690,9 @@ std::string AssetRegistry::serialize() const {
                 a["class"] = e.assetClass;
             }
         }
+        if (!e.textureClass.empty()) {
+            a["textureClass"] = e.textureClass;
+        }
         if (!e.hash.empty()) {
             a["hash"] = e.hash;
         }
@@ -546,6 +707,15 @@ std::string AssetRegistry::serialize() const {
     }
     root["assets"] = std::move(assets);
     return root.dump(2) + "\n";
+}
+
+void AssetRegistry::setTextureStandards(std::optional<TextureStandard> standard) {
+    if (standard) {
+        standard->validate();
+        std::ranges::sort(standard->classes, {}, &TextureClassRule::name);
+        standard->engineRule = false;
+    }
+    m_textureStandards = std::move(standard);
 }
 
 void AssetRegistry::save(const std::filesystem::path& file) const {
@@ -818,6 +988,10 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
     if ((options.sampling || options.compile || options.assetClass) && *type != AssetType::Model) {
         throw Error("--sampling/--compile/--class apply to models only");
     }
+    if (options.textureClass && *type != AssetType::Texture && *type != AssetType::Model &&
+        *type != AssetType::Material) {
+        throw Error("--texture-class applies to textures, models and materials only");
+    }
 
     // An existing entry for the same source keeps its id and settings.
     AssetEntry entry;
@@ -858,11 +1032,19 @@ const AssetEntry& importAsset(AssetRegistry& registry, const std::filesystem::pa
                 if (defaults.compile) entry.compile = *defaults.compile;
                 if (defaults.assetClass) entry.assetClass = *defaults.assetClass;
             }
+            if (defaults.textureClass) entry.textureClass = *defaults.textureClass;
         }
     }
     if (options.assetClass) entry.assetClass = *options.assetClass;
     if (!entry.assetClass.empty()) {
         if (const std::string problem = classProblem(entry.assetClass, registry.budgets()); !problem.empty()) {
+            throw Error("cannot import '" + source + "': " + problem);
+        }
+    }
+    if (options.textureClass) entry.textureClass = *options.textureClass;
+    if (!entry.textureClass.empty()) {
+        if (const std::string problem = textureClassProblem(entry.textureClass, registry.textureStandards());
+            !problem.empty()) {
             throw Error("cannot import '" + source + "': " + problem);
         }
     }
@@ -936,11 +1118,19 @@ std::vector<std::filesystem::path> findAssetFiles(const AssetRegistry& registry,
 
 namespace {
 
-void addTexture(AssetCheckResult& r, const AssetCheckOptions& options, std::string name, uint32_t w, uint32_t h) {
+// Size check against the registry's texture standard and the entry's texture class: a
+// Violation is a warning (fails --strict), the prohibited size an error.
+struct SizeCheck {
+    const AssetCheckOptions& options;
+    TextureStandard standard;
+    std::string textureClass; // empty: the standard's default class
+};
+
+void addTexture(AssetCheckResult& r, const SizeCheck& check, std::string name, uint32_t w, uint32_t h) {
     r.textures.push_back({name, w, h, classifyTextureSize(w, h)});
-    if (options.checkTextureSizes) {
-        if (auto warning = checkTextureSize(name, w, h)) {
-            r.warnings.push_back(std::move(*warning));
+    if (check.options.checkTextureSizes) {
+        if (auto issue = checkTextureSize(check.standard, name, w, h, check.textureClass)) {
+            (issue->verdict == TextureSizeVerdict::Prohibited ? r.errors : r.warnings).push_back(std::move(issue->message));
         }
     }
 }
@@ -977,7 +1167,7 @@ struct PaletteCheck {
 };
 
 // `palette` is null for non-colour textures (normal, data maps) or without a palette.
-void checkImageFile(AssetCheckResult& r, const AssetCheckOptions& options, const std::filesystem::path& file,
+void checkImageFile(AssetCheckResult& r, const SizeCheck& options, const std::filesystem::path& file,
                     const std::filesystem::path& registryDir, PaletteCheck* palette = nullptr) {
     if (!std::filesystem::exists(file)) {
         return; // reported as a missing dependency
@@ -1093,10 +1283,12 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
     } catch (const std::exception& e) {
         r.errors.push_back(std::string("palette: ") + e.what());
     }
+    r.textureClass = entry.textureClass;
+    const SizeCheck sizes{options, registry.textureStandard(), entry.textureClass};
     try {
         switch (entry.type) {
         case AssetType::Texture:
-            checkImageFile(r, options, file, dir, entry.usage == TextureUsage::Color ? &palette : nullptr);
+            checkImageFile(r, sizes, file, dir, entry.usage == TextureUsage::Color ? &palette : nullptr);
             break;
         case AssetType::Model: {
             GltfLoadOptions load;
@@ -1121,7 +1313,7 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
             }
             for (size_t i = 0; i < data.images.size(); ++i) {
                 const ImageData& image = data.images[i];
-                addTexture(r, options,
+                addTexture(r, sizes,
                            entry.source + "/" + (image.name.empty() ? "image" + std::to_string(i) : image.name),
                            image.width, image.height);
                 if (palette.palette && colourImages.contains(static_cast<int>(i))) {
@@ -1153,8 +1345,8 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
                 }
             }
             r.texelDensity = texelDensity(data);
-            const double target = options.texelDensityTarget;
-            const double tol = options.texelDensityTolerance;
+            const double target = options.texelDensityTarget.value_or(sizes.standard.densityTarget);
+            const double tol = options.texelDensityTolerance.value_or(sizes.standard.densityTolerance);
             if (r.texelDensity > 0.0 && tol > 0.0 &&
                 (r.texelDensity < target / tol || r.texelDensity > target * tol)) {
                 r.warnings.push_back(formatText("texel density %.1f texels/m outside %.0f..%.0f (target %.0f)",
@@ -1180,7 +1372,7 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
             std::set<std::filesystem::path> seen;
             for (const auto& t : textures) {
                 if (seen.insert(normal(t)).second) {
-                    checkImageFile(r, options, normal(t), dir, colour.contains(normal(t)) ? &palette : nullptr);
+                    checkImageFile(r, sizes, normal(t), dir, colour.contains(normal(t)) ? &palette : nullptr);
                 }
             }
             break;
@@ -1216,7 +1408,7 @@ AssetCheckResult checkAsset(const AssetRegistry& registry, const AssetEntry& ent
             std::set<std::filesystem::path> seen;
             for (const auto& t : textures) {
                 if (seen.insert(normal(t)).second) {
-                    checkImageFile(r, options, normal(t), dir, colour.contains(normal(t)) ? &palette : nullptr);
+                    checkImageFile(r, sizes, normal(t), dir, colour.contains(normal(t)) ? &palette : nullptr);
                 }
             }
             break;
@@ -1286,6 +1478,9 @@ std::string assetReportJson(const AssetRegistry& registry, const std::vector<Ass
         a["triangles"] = r.triangles;
         a["materials"] = r.materials;
         a["texelDensity"] = std::round(r.texelDensity * 100.0) / 100.0;
+        if (!r.textureClass.empty()) {
+            a["textureClass"] = r.textureClass;
+        }
         if (r.type == AssetType::Model && !r.sourceTool.empty()) {
             a["sourceTool"] = r.sourceTool;
             a["notes"] = r.notes;

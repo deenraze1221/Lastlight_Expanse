@@ -2,10 +2,11 @@
 //
 //   ZodarAssetTool import <file|dir>... [--registry FILE] [--id ID] [--type texture|model|material|scene|prefab]
 //       [--usage color|data|normal] [--no-mips] [--sampling file|pixelArt|nearest|linear] [--compile]
-//       [--sub-palette NAME] [--class NAME]
+//       [--sub-palette NAME] [--class NAME] [--texture-class NAME]
 //       Adds or updates registry entries (dependencies + hash). A directory imports every asset
 //       file below it in sorted order (findAssetFiles). New entries start from the registry's
-//       "defaults"; --class names a triangle budget of "budgets". --compile (models) bakes the
+//       "defaults"; --class names a triangle budget of "budgets", --texture-class a class of
+//       "textureStandards" (textures, models, materials). --compile (models) bakes the
 //       textures into <model>.zodar/*.ktx2 (ZodarAssetCompiler's cache) and records them.
 //       Pixel-art textures (NEAREST glTF sampler, or --sampling pixelArt|nearest) compile
 //       losslessly (RGBA8); others use BC7.
@@ -15,6 +16,8 @@
 //   ZodarAssetTool check [--registry FILE] [--report FILE.json] [--strict] [--density-target N]
 //       [--palette swatch.png|#rrggbb,#rrggbb...]
 //       Validates every entry (missing/stale/invalid, texture sizes, texel density, palette).
+//       Texture sizes outside the entry's texture class are warnings; 256 and above are errors.
+//       The density target defaults to the registry's "textureStandards" (engine default 32).
 //       Prints one line per asset with problems and a summary; --report writes
 //       zodar.asset_report JSON. --palette replaces the registry's master palette for this run
 //       (entries' sub-palettes still apply); off-palette texels are warnings (--strict: errors).
@@ -44,7 +47,7 @@ namespace {
 constexpr const char* kUsage =
     "usage: ZodarAssetTool import <file>... [--registry FILE] [--id ID] [--type T] [--usage color|data|normal]\n"
     "                   [--no-mips] [--sampling file|pixelArt|nearest|linear] [--compile] [--sub-palette NAME]\n"
-    "                   [--class NAME]   (<file> may be a directory: batch import)\n"
+    "                   [--class NAME] [--texture-class NAME]   (<file> may be a directory: batch import)\n"
     "       ZodarAssetTool list [--registry FILE] [--json]\n"
     "       ZodarAssetTool check [--registry FILE] [--report FILE.json] [--strict] [--density-target N]\n"
     "                   [--palette swatch.png|#rrggbb,#rrggbb...]\n";
@@ -120,6 +123,7 @@ Args parse(int argc, char** argv) {
             a.check.palette = std::move(palette);
         } else if (arg == "--sub-palette") a.import.palette = next();
         else if (arg == "--class") a.import.assetClass = next();
+        else if (arg == "--texture-class") a.import.textureClass = next();
         else if (arg == "--help" || arg == "-h") {
             std::fputs(kUsage, stdout);
             std::exit(0);

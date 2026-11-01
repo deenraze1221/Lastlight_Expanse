@@ -29,11 +29,14 @@ modes, mip control, lighting, shadows, fog, weather). Games choose the look (see
 ## 2. Texture standards
 
 **Final standard (GDD §3 Amendment 1, 2026-11-01; replaces the 2026-10-31 "32 default / 64
-maximum" table and every earlier proposal).** Enforcement status: the engine checks
-(`Assets/TextureStandards.h`, AssetManager, `zodar.py assets check`) still implement the old
-32/64 rule until session V2 makes the standard configurable per game and Lastlight's
-`assets.json` declares this table; the D2 greybox textures (32×32) are replaced by 64×64 ones
-in V5. Textures are never resized automatically; violations are reported.
+maximum" table and every earlier proposal).** Enforcement status: since session V2 the engine
+checks (`Assets/TextureStandards.h`, AssetManager, `zodar.py assets check`) take a configurable
+standard per registry (`"textureStandards"`: texture classes and sizes, default class,
+density target; entries select a class with `"textureClass"`; `docs/guide/ASSETS.md`).
+Lastlight's `assets.json` declares this table in **V5**, together with the 64×64 re-make of the
+D2 greybox textures (32×32); until then it uses the engine default (32 default / 64 maximum).
+Sizes of 256 and above are an error in the asset checks under every standard (V2). Textures
+are never resized automatically; violations are reported.
 
 | Size | Use |
 | --- | --- |
@@ -45,7 +48,7 @@ in V5. Textures are never resized automatically; violations are reported.
 - Sizes are powers of two and square. Above the size allowed for the asset's class, non-square
   or not a power of two is a violation (warning: re-author the texture; nothing is resized).
 - 8×8 and 16×16 are **not approved**: invalid for new assets (the engine's default check still
-  accepts them until V2 applies this standard to Lastlight's registry).
+  accepts them until V5 declares this standard in Lastlight's registry).
 - **Consistent palette.** Each game keeps one master palette. All textures are quantised to it, or
   to documented sub-palettes per biome or faction. Declare them in the game's `assets.json`
   (`"palette"`, `"subPalettes"`); `zodar.py assets check` reports off-palette texels.
@@ -54,8 +57,8 @@ in V5. Textures are never resized automatically; violations are reported.
   one art pixel is 1/64 m (4 texels per Blockbench unit at 16 units/m); a Sub-block face shows a
   32×32 part of the tile (world-space UVs). Environment models stay within 2× (32..128
   texels/m). Characters and weapons (128×128) are exempt when their UV layout needs a different
-  density. (The check's current default target is 32; V2 sets Lastlight's target to 64 and
-  per-class exemptions.)
+  density. (The engine default target is 32; V2 made the target configurable per registry
+  (`textureStandards.densityTarget`); Lastlight sets 64 in V5.)
 - **Consistent pixel-art appearance.** Hard edges, deliberate dithering, no photo sources, no
   upscaled low-res art without cleanup.
 - **Sampling.** Use nearest-neighbour magnification and minification on pixel art

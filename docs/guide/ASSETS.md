@@ -92,16 +92,20 @@ starts from default settings. Sources are relative paths inside the registry dir
 with a warning.
 
 `check` exit code: 1 if any asset has errors (`--strict`: warnings too). Errors: missing
-source or dependency, unreadable/invalid file. Warnings: stale (source/dependency changed
-since import: re-import), texture size violations (above 64×64, non-standard), texel density
-outside 16..64 texels/m (target 32, `--density-target N`), glTF importer warnings, missing
+source or dependency, unreadable/invalid file, textures of 256 or more texels on either side
+(prohibited, Phase V2). Warnings: stale (source/dependency changed since import: re-import),
+texture size violations (outside the entry's texture class; engine default: above 64×64,
+non-standard), texel density outside target/2..target×2 (registry `textureStandards`, engine
+default 32; `--density-target N` overrides), glTF importer warnings, missing
 compiled outputs, triangle budget exceeded and model bounds outside 1/16..64 m (Phase D1).
 glTF importer *notes* (ignored data such as animations, extra UV sets or unsupported
 material extensions) are reported but are not warnings, so `--strict` passes with them. The
 report (`zodar.asset_report` v1) has per asset: status, errors, warnings, textures (size +
 class), meshes, vertices, triangles, materials, texelDensity; models also have `sourceTool`
 (`blockbench|blender|other`, from glTF `asset.generator`), `notes`, `size` [x, y, z] in metres
-and, with a class, `class` and `triangleBudget`.
+and, with a class, `class` and `triangleBudget`; entries with a texture class also have
+`textureClass`. Registries without `textureStandards` produce byte-identical reports to
+before V2 (unless a texture is ≥ 256: now an error).
 
 ### Defaults, budgets and batch import (Phase D1)
 
@@ -196,16 +200,49 @@ Use `linear` for smooth textures (sky, UI gradients, effects).
 
 ## Texture size standards
 
-**Implemented (engine default today):** 32×32 is the default for every asset; 64×64 is the
-absolute maximum; 8×8 and 16×16 are allowed for tiny details. **Lastlight's final standard
-(GDD §3 Amendment 1, ART_DIRECTION §2):** 64×64 standard for environment, blocks, furniture,
-props and equipment; 32×32 small details; 128×128 only characters and weapons; ≥ 256×256
-prohibited without an approved exception; 8×8 and 16×16 not approved (invalid for new
-Lastlight assets). Session V2 makes the standard configurable per
-registry (sizes per asset class, density target) so Lastlight can enforce it; registries
-without a standard (examples, fixtures) keep the engine default. Anything else (above 64, non-square, not a power of two) loads unchanged but adds a warning to
-`TextureAsset::warnings` / `ModelAsset::warnings`, the log and `zodar.py assets check`
-(`Assets/TextureStandards.h`, `checkTextureSizes`). Textures are never resized automatically.
+**Engine default** (`TextureStandard::engineDefault()`, every registry without
+`textureStandards`): 32×32 is the default for every asset; 64×64 is the absolute maximum;
+8×8 and 16×16 are allowed for tiny details; density target 32 texels/m.
+
+**Configurable per registry (Phase V2):**
+
+```json
+"textureStandards": {
+  "classes": { "small": [32], "environment": [64], "character": [128] },
+  "defaultClass": "environment",
+  "prohibitedSize": 256,
+  "densityTarget": 64,
+  "densityTolerance": 2
+},
+"defaults": { "texture": { "textureClass": "environment" }, "model": { "textureClass": "environment" } }
+```
+
+- `classes`: texture class -> allowed square sizes (powers of two, ascending, below
+  `prohibitedSize`); kept sorted by name. `defaultClass` applies to entries without a class.
+  `prohibitedSize` (default and maximum 256), `densityTarget` (default 32) and
+  `densityTolerance` (default 2) are optional. Problems are reported with their JSON path
+  (`/textureStandards/classes/env/1: size 48 is not a power of two`).
+- Entries (`texture`, `model`, `material`) may set `"textureClass"` (`--texture-class NAME` on
+  import, `""` clears; `defaults` for texture and model). It must name a declared class (parse
+  and import error otherwise). **`textureClass` is independent of the model `class`** (triangle
+  budgets): one selects texture sizes, the other a triangle budget.
+- Severity: a size not allowed by the entry's class (or non-square / not a power of two) is a
+  **warning** (fails `--strict`); **256 and above on either side is an error** under every
+  standard, the engine default included. Nothing is resized.
+- Runtime (`AssetManagerDesc::textureStandard`, opt-in): loads by path know no class, so a size
+  allowed by any class passes; prohibited sizes are logged as errors but still load. Without
+  it the engine default warnings stay unchanged.
+
+**Lastlight's final standard** (GDD §3 Amendment 1, ART_DIRECTION §2): 64×64 standard for
+environment, blocks, furniture, props and equipment; 32×32 small details; 128×128 only
+characters and weapons; ≥ 256×256 prohibited without an approved exception; 8×8 and 16×16 not
+approved. Lastlight's `assets.json` declares it in **V5** (approved V2 decision), when the D2
+greybox textures are re-made at 64×64; until then the game registry uses the engine default
+so `tools.game_assets_check --strict` stays green.
+
+Violations load unchanged but add a warning to `TextureAsset::warnings` /
+`ModelAsset::warnings`, the log and `zodar.py assets check` (`Assets/TextureStandards.h`,
+`checkTextureSizes`). Textures are never resized automatically.
 
 ## Pixel-art compression
 

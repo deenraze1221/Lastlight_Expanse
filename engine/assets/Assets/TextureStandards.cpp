@@ -2,6 +2,7 @@
 
 #include "Core/Error.h"
 
+#include <algorithm>
 #include <bit>
 
 namespace zodar {
@@ -118,6 +119,27 @@ std::optional<TextureSizeIssue> checkTextureSize(const TextureStandard& standard
     return TextureSizeIssue{TextureSizeVerdict::Violation,
                             std::string(name) + ": " + size + " is not allowed for texture class '" + rule->name +
                                 "' (" + sizeList(rule->sizes) + "; not resized: re-author the texture)"};
+}
+
+std::optional<TextureSizeIssue> checkTextureSizeAnyClass(const TextureStandard& standard, std::string_view name,
+                                                         uint32_t width, uint32_t height) {
+    if (standard.engineRule) return checkTextureSize(standard, name, width, height);
+    if (auto issue = checkTextureSize(standard, name, width, height, standard.defaultClass)) {
+        if (issue->verdict == TextureSizeVerdict::Prohibited) return issue;
+    } else {
+        return std::nullopt;
+    }
+    std::vector<uint32_t> all;
+    for (const TextureClassRule& c : standard.classes) {
+        for (uint32_t size : c.sizes) {
+            if (size == width && width == height) return std::nullopt;
+            if (std::find(all.begin(), all.end(), size) == all.end()) all.push_back(size);
+        }
+    }
+    std::sort(all.begin(), all.end());
+    return TextureSizeIssue{TextureSizeVerdict::Violation, std::string(name) + ": " + sizeText(width, height) +
+                                                               " is not allowed by any texture class (" +
+                                                               sizeList(all) + "; not resized: re-author the texture)"};
 }
 
 std::optional<std::string> checkTextureSize(std::string_view name, uint32_t width, uint32_t height) {

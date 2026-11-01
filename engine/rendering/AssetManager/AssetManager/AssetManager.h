@@ -110,6 +110,10 @@ struct AssetManagerDesc {
     // Warn (log + asset warnings) about textures outside the size standards
     // (Assets/TextureStandards.h: 32×32 default, 64×64 maximum, 8/16 allowed).
     bool checkTextureSizes = true;
+    // Standard for those warnings (Phase V2, opt-in): a size is accepted when any of its
+    // texture classes allows it (loads by path know no asset class); sizes at or above the
+    // prohibited size are logged as errors (still loaded). nullopt: the engine default rule.
+    std::optional<TextureStandard> textureStandard;
     // Worker pool decoding async loads (e.g. Application::jobs()); must outlive the manager's
     // pending loads. nullptr (or a pool with 0 workers): async loads decode inline in the
     // load call; the GPU upload is still asynchronous.
@@ -355,6 +359,9 @@ private:
     gfx::UploadContext& m_upload;
     gfx::SceneRenderer& m_scene;
     AssetManagerDesc m_desc;
+    // Runtime size standard (desc.textureStandard or the engine default); null when
+    // checkTextureSizes is off. Shared with decode jobs.
+    std::shared_ptr<const TextureStandard> m_sizeStandard;
     AssetCache<TextureAsset> m_textures;
     AssetCache<ModelAsset> m_models;
     AssetCache<MaterialAsset> m_materials;

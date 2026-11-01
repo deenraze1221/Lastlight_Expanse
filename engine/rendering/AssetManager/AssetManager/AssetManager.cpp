@@ -168,7 +168,15 @@ AssetManager::AssetManager(gfx::VulkanContext& context, gfx::UploadContext& uplo
           m.reset();
           context.deletionQueue().retire([handle, &scene] { scene.materials().releaseMaterial(handle); });
       }),
-      m_decodeQueue(std::make_shared<DecodeQueue>()) {}
+      m_decodeQueue(std::make_shared<DecodeQueue>()) {
+    if (m_desc.textureStandard) {
+        m_desc.textureStandard->validate();
+    }
+    if (m_desc.checkTextureSizes) {
+        m_sizeStandard = std::make_shared<const TextureStandard>(
+            m_desc.textureStandard ? *m_desc.textureStandard : TextureStandard::engineDefault());
+    }
+}
 
 AssetManager::~AssetManager() {
     m_context.waitIdle();
@@ -234,15 +242,20 @@ std::unique_ptr<ModelAsset> AssetManager::createModel(const DecodedModel& decode
 namespace {
 
 template <class Decoded>
-Decoded decodeTextureFile(const std::filesystem::path& file, const TextureLoadSettings& settings, bool checkSizes) {
+Decoded decodeTextureFile(const std::filesystem::path& file, const TextureLoadSettings& settings,
+                          const TextureStandard* sizes) {
     Decoded d;
     d.image = loadImage(file, colorSpaceFor(settings.usage));
     d.width = d.image.width;
     d.height = d.image.height;
-    if (checkSizes) {
-        if (auto warning = checkTextureSize(file.filename().string(), d.width, d.height)) {
-            ZODAR_LOG_WARN("{}", *warning);
-            d.warnings.push_back(std::move(*warning));
+    if (sizes) {
+        if (auto issue = checkTextureSizeAnyClass(*sizes, file.filename().string(), d.width, d.height)) {
+            if (issue->verdict == TextureSizeVerdict::Prohibited) {
+                ZODAR_LOG_ERROR("{}", issue->message);
+            } else {
+                ZODAR_LOG_WARN("{}", issue->message);
+            }
+            d.warnings.push_back(std::move(issue->message));
         }
     }
     if (settings.generateMips) {
@@ -252,7 +265,8 @@ Decoded decodeTextureFile(const std::filesystem::path& file, const TextureLoadSe
 }
 
 template <class Decoded>
-Decoded decodeModelFile(const std::filesystem::path& file, const ModelLoadSettings& settings, bool checkSizes) {
+Decoded decodeModelFile(const std::filesystem::path& file, const ModelLoadSettings& settings,
+                        const TextureStandard* sizes) {
     Decoded d;
     GltfLoadOptions loadOptions;
     loadOptions.useCompiledTextures = settings.useCompiledTextures;
@@ -260,11 +274,11 @@ Decoded decodeModelFile(const std::filesystem::path& file, const ModelLoadSettin
     loadOptions.pixelArt = settings.samplerOverride && settings.samplerOverride->magFilter == gfx::Filter::Nearest;
     d.data = loadGltf(file, loadOptions);
     d.warnings = d.data.warnings;
-    if (checkSizes) {
+    if (sizes) {
         for (const ImageData& image : d.data.images) {
             const std::string name = file.filename().string() + "/" + (image.name.empty() ? "image" : image.name);
-            if (auto warning = checkTextureSize(name, image.width, image.height)) {
-                d.warnings.push_back(std::move(*warning));
+            if (auto issue = checkTextureSizeAnyClass(*sizes, name, image.width, image.height)) {
+                d.warnings.push_back(std::move(issue->message));
             }
         }
     }
@@ -296,7 +310,7 @@ TextureHandle AssetManager::loadTexture(const std::filesystem::path& path, const
     m_textureSources.try_emplace(key, TextureSource{file, settings});
     watchNow(file); // baseline before reading: a save during the load is still seen
     TextureHandle handle = m_textures.getOrLoad(key, [&] {
-        auto decoded = decodeTextureFile<DecodedTexture>(file, settings, m_desc.checkTextureSizes);
+        auto decoded = decodeTextureFile<DecodedTexture>(file, settings, m_sizeStandard.get());
         gfx::UploadBatch batch(m_upload);
         auto asset = createTexture(decoded, file, settings, batch);
         batch.submit();
@@ -315,7 +329,7 @@ ModelHandle AssetManager::loadModel(const std::filesystem::path& path, const Mod
     m_modelSources.try_emplace(key, ModelSource{file, settings, std::nullopt});
     trackModel(key);
     ModelHandle handle = m_models.getOrLoad(key, [&] {
-        const auto decoded = decodeModelFile<DecodedModel>(file, settings, m_desc.checkTextureSizes);
+        const auto decoded = decodeModelFile<DecodedModel>(file, settings, m_sizeStandard.get());
         gfx::UploadBatch batch(m_upload);
         auto asset = createModel(decoded, file, settings, batch);
         try {
@@ -519,10 +533,10 @@ TextureHandle AssetManager::loadTextureAsync(const std::filesystem::path& path, 
     }
     const uint64_t id = m_nextRequest++;
     m_textureRequests[id] = {handle, settings, file};
-    const bool checkSizes = m_desc.checkTextureSizes;
-    submitDecode(id, [file, settings, checkSizes] {
+    std::shared_ptr<const TextureStandard> sizes = m_sizeStandard;
+    submitDecode(id, [file, settings, sizes] {
         Decoded d;
-        d.data = decodeTextureFile<DecodedTexture>(file, settings, checkSizes);
+        d.data = decodeTextureFile<DecodedTexture>(file, settings, sizes.get());
         return d;
     });
     return handle;
@@ -541,10 +555,10 @@ ModelHandle AssetManager::loadModelAsync(const std::filesystem::path& path, cons
     }
     const uint64_t id = m_nextRequest++;
     m_modelRequests[id] = {handle, settings, file};
-    const bool checkSizes = m_desc.checkTextureSizes;
-    submitDecode(id, [file, settings, checkSizes] {
+    std::shared_ptr<const TextureStandard> sizes = m_sizeStandard;
+    submitDecode(id, [file, settings, sizes] {
         Decoded d;
-        d.data = decodeModelFile<DecodedModel>(file, settings, checkSizes);
+        d.data = decodeModelFile<DecodedModel>(file, settings, sizes.get());
         return d;
     });
     return handle;
@@ -824,7 +838,7 @@ void AssetManager::reloadTexture(const TextureHandle& texture, AssetReloadResult
     }
     std::unique_ptr<TextureAsset> fresh;
     try {
-        auto decoded = decodeTextureFile<DecodedTexture>(src.file, src.settings, m_desc.checkTextureSizes);
+        auto decoded = decodeTextureFile<DecodedTexture>(src.file, src.settings, m_sizeStandard.get());
         gfx::UploadBatch batch(m_upload);
         fresh = createTexture(decoded, src.file, src.settings, batch);
         batch.submit();
@@ -870,7 +884,7 @@ void AssetManager::reloadModel(const ModelHandle& model, AssetReloadResult& resu
     src.files.reset(); // dependencies may change with the file
     std::unique_ptr<ModelAsset> fresh;
     try {
-        const auto decoded = decodeModelFile<DecodedModel>(src.file, src.settings, m_desc.checkTextureSizes);
+        const auto decoded = decodeModelFile<DecodedModel>(src.file, src.settings, m_sizeStandard.get());
         gfx::UploadBatch batch(m_upload);
         fresh = createModel(decoded, src.file, src.settings, batch);
         batch.submit();

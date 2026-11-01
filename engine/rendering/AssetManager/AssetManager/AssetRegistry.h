@@ -92,6 +92,11 @@ struct AssetEntry {
     // Model asset class ("class", Phase D1): names a triangle budget of the registry's
     // "budgets" (e.g. prop, character, architecture); empty: no budget check.
     std::string assetClass;
+    // Texture class ("textureClass", Phase V2; texture, model and material entries): names a
+    // class of the registry's "textureStandards" and selects the allowed texture sizes of every
+    // texture the asset uses; empty: the standard's default class. Independent of `assetClass`
+    // (triangle budgets).
+    std::string textureClass;
 
     bool operator==(const AssetEntry&) const = default;
 };
@@ -99,13 +104,15 @@ struct AssetEntry {
 // Import defaults per asset type ("defaults", Phase D1): applied when a file is imported for
 // the first time and the option is not given. Existing entries keep their settings, and
 // entries always store their settings explicitly, so changing defaults never changes how
-// imported assets load. Texture: usage, mips. Model: sampling, compile, class.
+// imported assets load. Texture: usage, mips, textureClass. Model: sampling, compile, class,
+// textureClass.
 struct AssetDefaults {
     std::optional<TextureUsage> usage;      // texture
     std::optional<bool> mips;               // texture
     std::optional<ModelSampling> sampling;  // model
     std::optional<bool> compile;            // model
     std::optional<std::string> assetClass;  // model ("class")
+    std::optional<std::string> textureClass; // texture and model ("textureClass")
     bool operator==(const AssetDefaults&) const = default;
 };
 
@@ -148,9 +155,21 @@ public:
     const std::map<std::string, uint32_t>& budgets() const { return m_budgets; }
     void setBudgets(std::map<std::string, uint32_t> budgets) { m_budgets = std::move(budgets); }
 
+    // Optional texture standard (Phase V2): texture classes and their allowed sizes, default
+    // class, prohibited size, texel density target; written as "textureStandards" when set.
+    // Classes are kept sorted by name. Without it the engine default applies
+    // (TextureStandard::engineDefault(): 32 default / 64 maximum, density 32).
+    const std::optional<TextureStandard>& textureStandards() const { return m_textureStandards; }
+    // Throws zodar::Error if the standard is invalid (TextureStandard::validate).
+    void setTextureStandards(std::optional<TextureStandard> standard);
+    // The declared standard or the engine default.
+    TextureStandard textureStandard() const {
+        return m_textureStandards ? *m_textureStandards : TextureStandard::engineDefault();
+    }
+
     bool operator==(const AssetRegistry& other) const {
         return m_entries == other.m_entries && m_palette == other.m_palette && m_defaults == other.m_defaults &&
-               m_budgets == other.m_budgets;
+               m_budgets == other.m_budgets && m_textureStandards == other.m_textureStandards;
     }
 
 private:
@@ -159,6 +178,7 @@ private:
     std::optional<PaletteConfig> m_palette;
     std::map<AssetType, AssetDefaults> m_defaults;
     std::map<std::string, uint32_t> m_budgets;
+    std::optional<TextureStandard> m_textureStandards;
 };
 
 // Loader settings from an entry's import settings.
@@ -187,6 +207,8 @@ struct AssetImportOptions {
     std::optional<bool> compile;       // model (outputs are filled by the caller that compiles)
     std::optional<std::string> palette; // sub-palette name ("" clears); must exist in the registry
     std::optional<std::string> assetClass; // model ("" clears); must name a registry budget
+    std::optional<std::string> textureClass; // texture, model, material ("" clears); must name a class of
+                                             // the registry's "textureStandards"
 };
 // Adds or updates the entry for `file` (settings of an existing entry are kept unless given;
 // a new entry starts from the registry's defaults for its type): type, relative source,
@@ -233,6 +255,7 @@ struct AssetCheckResult {
     std::string source;
     std::vector<std::string> errors;   // unusable: missing/invalid source or dependency
     std::vector<std::string> warnings; // stale hash, size standards, texel density, budget, bounds, glTF warnings
+                                       // (sizes at or above the prohibited size are errors, Phase V2)
     // glTF importer notes (ignored data such as animations or extra UV sets): reported, never
     // a warning, so exports with them pass `check --strict`.
     std::vector<std::string> notes;
@@ -250,14 +273,20 @@ struct AssetCheckResult {
     glm::vec3 size{0.0f};
     std::string assetClass;
     uint32_t triangleBudget = 0;
+    // Texture class the sizes were checked against (Phase V2); empty when the entry has none
+    // (the standard's default class applies; not written to the report).
+    std::string textureClass;
 
     const char* status() const { return !errors.empty() ? "error" : !warnings.empty() ? "warning" : "ok"; }
 };
 
 struct AssetCheckOptions {
-    bool checkTextureSizes = true;    // TextureStandards warnings
-    double texelDensityTarget = 32.0; // docs/ART_DIRECTION.md: 32 texels per metre (32×32 per 1 m face)
-    double texelDensityTolerance = 2.0; // warn outside [target / tol, target * tol]; <= 0 disables
+    bool checkTextureSizes = true;    // TextureStandards warnings (prohibited sizes are errors)
+    // Texel density target (texels per metre) and tolerance (warn outside [target / tol,
+    // target * tol]; <= 0 disables). Unset: the registry's texture standard (engine default:
+    // target 32, tolerance 2). ZodarAssetTool --density-target sets the target.
+    std::optional<double> texelDensityTarget;
+    std::optional<double> texelDensityTolerance;
     // Master palette for this check instead of the registry's (ZodarAssetTool --palette).
     // Without either, no palette check runs (and reports stay as before Phase C7).
     std::optional<PaletteSource> palette;

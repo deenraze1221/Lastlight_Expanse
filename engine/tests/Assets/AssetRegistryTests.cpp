@@ -283,3 +283,190 @@ TEST_CASE("asset registry: hardening (sources outside the directory, ids, URI de
     CHECK_FALSE(std::filesystem::exists(w.dir / "assets.json.tmp"));
     CHECK_THROWS_AS(r.save(w.dir / "missing_dir" / "assets.json"), Error);
 }
+
+// --- Phase V2: configurable texture standards ------------------------------------------------
+
+namespace {
+
+const char* kStandardRegistry = R"({"schema": "zodar.asset_registry", "version": 1,
+    "textureStandards": {"classes": {"environment": [64], "small": [32], "character": [128]},
+                         "defaultClass": "environment", "densityTarget": 64},
+    "defaults": {"texture": {"textureClass": "small"}, "model": {"textureClass": "environment"}},
+    "assets": []})";
+
+} // namespace
+
+TEST_CASE("asset registry: textureStandards parse, validation paths and round-trip") {
+    const AssetRegistry r = AssetRegistry::parse(kStandardRegistry, "reg/assets.json");
+    REQUIRE(r.textureStandards().has_value());
+    const TextureStandard& s = *r.textureStandards();
+    REQUIRE(s.classes.size() == 3);
+    CHECK(s.classes[0].name == "character"); // sorted by name
+    CHECK(s.classes[1].name == "environment");
+    CHECK(s.classes[1].sizes == std::vector<uint32_t>{64});
+    CHECK(s.defaultClass == "environment");
+    CHECK(s.prohibitedSize == 256);
+    CHECK(s.densityTarget == 64.0);
+    CHECK(s.densityTolerance == 2.0);
+    CHECK_FALSE(s.engineRule);
+    CHECK(r.defaults().at(AssetType::Texture).textureClass == std::optional<std::string>("small"));
+    CHECK(r.textureStandard() == s);
+    const AssetRegistry back = AssetRegistry::parse(r.serialize(), "reg/assets.json");
+    CHECK(back == r);
+    CHECK(back.serialize() == r.serialize());
+    CHECK(r.serialize().find("\"textureStandards\"") != std::string::npos);
+
+    // Without the key nothing is written and the engine default applies.
+    const AssetRegistry plain("root");
+    CHECK_FALSE(plain.textureStandards().has_value());
+    CHECK(plain.textureStandard() == TextureStandard::engineDefault());
+    CHECK(plain.serialize().find("textureStandards") == std::string::npos);
+
+    // setTextureStandards validates and sorts the classes (parse == set).
+    AssetRegistry set("reg");
+    TextureStandard unsorted = s;
+    std::swap(unsorted.classes[0], unsorted.classes[2]);
+    set.setTextureStandards(unsorted);
+    CHECK(set.textureStandards() == r.textureStandards());
+    TextureStandard broken = s;
+    broken.defaultClass = "nope";
+    CHECK_THROWS_AS(set.setTextureStandards(broken), Error);
+
+    const auto issues = parseIssues(R"({"schema": "zodar.asset_registry", "version": 1,
+        "textureStandards": {"classes": {"env": [64, 48], "big": [512], "down": [64, 32], "empty": []},
+                             "defaultClass": "env", "prohibitedSize": 300, "densityTarget": -1, "extra": 1},
+        "assets": [
+            {"id": "t", "type": "texture", "source": "t.png", "textureClass": "env"},
+            {"id": "s", "type": "scene", "source": "s.scene.json", "textureClass": "env"}
+        ]})");
+    const auto has = [&](std::string_view path, std::string_view text) {
+        for (const DataIssue& i : issues) {
+            if (i.path == path && i.message.find(text) != std::string::npos) return true;
+        }
+        return false;
+    };
+    CHECK(has("/textureStandards/prohibitedSize", "must be in 1..256"));
+    CHECK(has("/textureStandards/classes/env/1", "size 48 is not a power of two"));
+    CHECK(has("/textureStandards/classes/big/0", "at or above the prohibited size 300"));
+    CHECK(has("/textureStandards/classes/down/1", "ascending and unique"));
+    CHECK(has("/textureStandards/classes/empty", "non-empty array"));
+    CHECK(has("/textureStandards/densityTarget", "positive number"));
+    CHECK(has("/textureStandards/extra", "unknown field"));
+    CHECK(has("/assets/1/textureClass", "unknown field")); // scenes take no texture class
+
+    // An invalid standard is reported once; classes referring to it are not reported again.
+    const auto badDefault = parseIssues(R"({"schema": "zodar.asset_registry", "version": 1,
+        "textureStandards": {"classes": {"env": [64]}, "defaultClass": "nope"},
+        "assets": [{"id": "m", "type": "model", "source": "m.glb", "textureClass": "props"}]})");
+    REQUIRE(badDefault.size() == 1);
+    CHECK(badDefault[0].path == "/textureStandards/defaultClass");
+    const auto classIssues = parseIssues(R"({"schema": "zodar.asset_registry", "version": 1,
+        "textureStandards": {"classes": {"env": [64]}, "defaultClass": "env"},
+        "defaults": {"model": {"textureClass": "props"}},
+        "assets": [{"id": "m", "type": "model", "source": "m.glb", "textureClass": "props"}]})");
+    REQUIRE(classIssues.size() == 2);
+    CHECK(classIssues[0].path == "/defaults/model/textureClass");
+    CHECK(classIssues[0].message.find("unknown texture class 'props' (classes: env)") != std::string::npos);
+    CHECK(classIssues[1].path == "/assets/0/textureClass");
+    const auto noStandard = parseIssues(R"({"schema": "zodar.asset_registry", "version": 1,
+        "assets": [{"id": "t", "type": "texture", "source": "t.png", "textureClass": "env"}]})");
+    REQUIRE(noStandard.size() == 1);
+    CHECK(noStandard[0].path == "/assets/0/textureClass");
+    CHECK(noStandard[0].message.find("the registry has no \"textureStandards\"") != std::string::npos);
+}
+
+TEST_CASE("asset registry: texture sizes are checked against the entry's texture class") {
+    const Workspace ws;
+    ws.write("assets.json", kStandardRegistry);
+    AssetRegistry r = AssetRegistry::load(ws.dir / "assets.json");
+    const auto png = [&](const char* name, uint32_t w, uint32_t h) {
+        REQUIRE(writePng(ws.dir / "textures" / name, w, h, std::vector<uint8_t>(size_t(w) * h * 4, 90)));
+    };
+    png("tile64.png", 64, 64);
+    png("tile32.png", 32, 32);
+    png("hero128.png", 128, 128);
+    png("huge256.png", 256, 256);
+    png("wide.png", 64, 32);
+
+    // Defaults: new textures get "small" (32 only).
+    importAsset(r, ws.dir / "textures" / "tile32.png");
+    CHECK(r.at("tile32").textureClass == "small");
+    CHECK(std::string(checkAsset(r, r.at("tile32")).status()) == "ok");
+    AssetImportOptions env;
+    env.textureClass = "environment";
+    importAsset(r, ws.dir / "textures" / "tile64.png", env);
+    CHECK(std::string(checkAsset(r, r.at("tile64")).status()) == "ok");
+    // 64x64 as "small": a warning naming the class (fails --strict), not an error.
+    AssetImportOptions small;
+    small.textureClass = "small";
+    small.id = "tile64_small";
+    REQUIRE(std::filesystem::copy_file(ws.dir / "textures" / "tile64.png", ws.dir / "textures" / "tile64b.png"));
+    importAsset(r, ws.dir / "textures" / "tile64b.png", small);
+    const AssetCheckResult wrong = checkAsset(r, r.at("tile64_small"));
+    CHECK(wrong.errors.empty());
+    CHECK(contains(wrong.warnings, "64x64 is not allowed for texture class 'small' (32x32;"));
+    CHECK(wrong.textureClass == "small");
+    // 128 only for characters.
+    AssetImportOptions character;
+    character.textureClass = "character";
+    importAsset(r, ws.dir / "textures" / "hero128.png", character);
+    CHECK(std::string(checkAsset(r, r.at("hero128")).status()) == "ok");
+    // 256: an error whatever the class.
+    importAsset(r, ws.dir / "textures" / "huge256.png", character);
+    const AssetCheckResult huge = checkAsset(r, r.at("huge256"));
+    CHECK(contains(huge.errors, "huge256.png: 256x256 is prohibited"));
+    CHECK(huge.warnings.empty());
+    importAsset(r, ws.dir / "textures" / "wide.png", env);
+    CHECK(contains(checkAsset(r, r.at("wide")).warnings, "64x32 is not allowed for texture class 'environment'"));
+    // Unknown classes are rejected at import; "" clears the class (default class applies).
+    AssetImportOptions unknown;
+    unknown.textureClass = "vehicle";
+    CHECK_THROWS_AS(importAsset(r, ws.dir / "textures" / "tile64.png", unknown), Error);
+    AssetImportOptions clear;
+    clear.textureClass = "";
+    importAsset(r, ws.dir / "textures" / "tile32.png", clear);
+    CHECK(r.at("tile32").textureClass.empty());
+    CHECK(contains(checkAsset(r, r.at("tile32")).warnings, "not allowed for texture class 'environment'"));
+    AssetImportOptions sceneClass;
+    sceneClass.textureClass = "small";
+    CHECK_THROWS_AS(importAsset(r, ws.dir / "asset_loading.scene.json", sceneClass), Error);
+
+    // Models: embedded/external images use the model's texture class; density uses the
+    // registry target (64) unless the options override it.
+    importAsset(r, ws.dir / "crate.gltf");
+    CHECK(r.at("crate").textureClass == "environment"); // model default
+    const AssetCheckResult crate = checkAsset(r, r.at("crate"));
+    CHECK(contains(crate.warnings, "32x32 is not allowed for texture class 'environment'"));
+    CHECK(contains(crate.warnings, "texel density 32.0 texels/m outside 32..128 (target 64)") == false);
+    AssetCheckOptions dense;
+    dense.texelDensityTarget = 128.0;
+    CHECK(contains(checkAsset(r, r.at("crate"), dense).warnings, "texel density 32.0 texels/m outside 64..256"));
+    AssetCheckOptions tight;
+    tight.texelDensityTolerance = 1.5;
+    CHECK(contains(checkAsset(r, r.at("crate"), tight).warnings, "texel density 32.0 texels/m outside 43..96 (target 64)"));
+
+    // Round trip keeps texture classes; the report names them.
+    r.save(ws.dir / "assets.json");
+    const AssetRegistry loaded = AssetRegistry::load(ws.dir / "assets.json");
+    CHECK(loaded == r);
+    const std::string report = assetReportJson(loaded, checkRegistry(loaded));
+    CHECK(report.find("\"textureClass\": \"character\"") != std::string::npos);
+    CHECK(report.find("is prohibited") != std::string::npos);
+}
+
+TEST_CASE("asset registry: 256 and above are errors under the engine default too") {
+    const Workspace ws;
+    AssetRegistry r(ws.dir);
+    REQUIRE(writePng(ws.dir / "textures" / "huge.png", 32, 256, std::vector<uint8_t>(32 * 256 * 4, 9)));
+    importAsset(r, ws.dir / "textures" / "huge.png");
+    const AssetCheckResult res = checkAsset(r, r.at("huge"));
+    CHECK(contains(res.errors, "huge.png: 32x256 is prohibited (256x256 and above need an approved exception"));
+    CHECK(res.warnings.empty());
+    AssetCheckOptions off;
+    off.checkTextureSizes = false;
+    CHECK(checkAsset(r, r.at("huge"), off).errors.empty());
+    // 128x128 stays a warning under the engine default (unchanged).
+    REQUIRE(writePng(ws.dir / "textures" / "big.png", 128, 128, std::vector<uint8_t>(128 * 128 * 4, 9)));
+    importAsset(r, ws.dir / "textures" / "big.png");
+    CHECK(checkAsset(r, r.at("big")).errors.empty());
+}

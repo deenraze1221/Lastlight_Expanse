@@ -8,6 +8,7 @@
 #include "AssetPipeline/ModelCompiler.h"
 #include "Assets/Primitives.h"
 #include "Core/ImageIO.h"
+#include "Core/Error.h"
 #include "Core/JobSystem.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Resources/UploadContext.h"
@@ -261,6 +262,54 @@ TEST_CASE("asset manager: failures carry messages; size warnings do not fail") {
         CHECK(e.issues()[0].message.find("missing_a.png") != std::string::npos);
     }
     CHECK(assets.stats().materials == materialsBefore); // the scene's materials were released again
+}
+
+TEST_CASE("asset manager: an opt-in texture standard drives runtime size warnings") {
+    zodar::test::ValidationGuard guard;
+    const AssetDir files;
+    REQUIRE(writePng(files.dir / "hero.png", 128, 128, std::vector<uint8_t>(128 * 128 * 4, 200)));
+    REQUIRE(writePng(files.dir / "huge.png", 256, 256, std::vector<uint8_t>(256 * 256 * 4, 200)));
+    Fixture f;
+    JobSystem jobs(2);
+    AssetManagerDesc desc;
+    desc.root = files.dir;
+    desc.jobs = &jobs;
+    TextureStandard standard;
+    standard.classes = {{"small", {32}}, {"environment", {64}}, {"character", {128}}};
+    standard.defaultClass = "environment";
+    desc.textureStandard = standard;
+    AssetManager assets(*gpu().context, *gpu().upload, f.scene, desc);
+    // Loads by path know no class: any class's size is accepted (32 small, 128 character).
+    const TextureHandle checker = assets.loadTexture("checker.png");
+    const TextureHandle hero = assets.loadTexture("hero.png");
+    REQUIRE(checker.ready());
+    REQUIRE(hero.ready());
+    CHECK(checker->warnings.empty());
+    CHECK(hero->warnings.empty());
+    const TextureHandle odd = assets.loadTextureAsync("odd.png");
+    const TextureHandle huge = assets.loadTexture("huge.png"); // prohibited: logged, still loaded
+    assets.waitAll();
+    REQUIRE(odd.ready());
+    REQUIRE(odd->warnings.size() == 1);
+    CHECK(odd->warnings[0] == "odd.png: 48x48 is not allowed by any texture class (32x32, 64x64, 128x128; not "
+                              "resized: re-author the texture)");
+    REQUIRE(huge.ready());
+    REQUIRE(huge->warnings.size() == 1);
+    CHECK(huge->warnings[0].find("huge.png: 256x256 is prohibited") == 0);
+
+    // Engine default (no standard): 128 warns as before.
+    AssetManagerDesc plain;
+    plain.root = files.dir;
+    AssetManager legacy(*gpu().context, *gpu().upload, f.scene, plain);
+    const TextureHandle legacyHero = legacy.loadTexture("hero.png");
+    REQUIRE(legacyHero.ready());
+    REQUIRE(legacyHero->warnings.size() == 1);
+    CHECK(legacyHero->warnings[0].find("128x128 exceeds the 64x64 maximum") != std::string::npos);
+
+    // An invalid standard is rejected up front.
+    AssetManagerDesc bad = desc;
+    bad.textureStandard->defaultClass = "nope";
+    CHECK_THROWS_AS(AssetManager(*gpu().context, *gpu().upload, f.scene, bad), Error);
 }
 
 TEST_CASE("asset manager: glTF model and scene materials from the asset_loading example") {

@@ -44,6 +44,7 @@ inline constexpr uint32_t kTextureSizeProhibited = 256;
 struct TextureClassRule {
     std::string name;
     std::vector<uint32_t> sizes; // allowed square sizes (powers of two, ascending, unique)
+    bool operator==(const TextureClassRule&) const = default;
 };
 
 struct TextureStandard {
@@ -62,6 +63,7 @@ struct TextureStandard {
     // not powers of two, not ascending/unique, at or above prohibitedSize, prohibitedSize above
     // 256 or not above every allowed size, unknown default class, non-positive density target.
     void validate() const;
+    bool operator==(const TextureStandard&) const = default;
 };
 
 enum class TextureSizeVerdict : uint8_t {
@@ -79,6 +81,12 @@ struct TextureSizeIssue {
 // class is a Violation naming it (registries reject unknown classes when they load).
 std::optional<TextureSizeIssue> checkTextureSize(const TextureStandard& standard, std::string_view name,
                                                  uint32_t width, uint32_t height, std::string_view textureClass = {});
+
+// Runtime form (no asset class known, e.g. AssetManager loads by path): allowed when any class
+// of the standard allows the size; the prohibited size is still an error verdict. The engine
+// default gives the legacy messages.
+std::optional<TextureSizeIssue> checkTextureSizeAnyClass(const TextureStandard& standard, std::string_view name,
+                                                         uint32_t width, uint32_t height);
 
 // Engine default rule: nullopt for an allowed size; otherwise the message naming the texture,
 // its size and the rule ("<name>: 128x128 exceeds the 64x64 maximum texture size ...";
