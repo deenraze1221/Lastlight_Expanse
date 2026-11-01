@@ -120,7 +120,8 @@
   repairable electrical panels + emergency lighting; palette muted/faded post-war (GDD §3).
 
 - **Phase D1 done (2026-11-01):** unified GLB/glTF pipeline for Blockbench and Blender
-  (engine, generic). See the D1 handoff below.
+  (engine, generic), verified with synthetic fixtures only; real-export validation pending
+  (user supplies one export per tool). See the D1 handoff below.
 
 ## Current task
 - **Next session: D2 — game asset layout + static bunker (game).** Step 0 (Git LFS check)
@@ -158,6 +159,9 @@
 - Decisions: notes do not fail `--strict` (needed for the acceptance "valid fixtures pass
   --strict" with animations / Blender material extensions); fixture registry uses
   `compile: false` (no KTX2 caches committed; the GPU case covers compile via defaults).
+- Verified vs not verified: everything above is verified against synthetic fixtures modelled
+  on each exporter's structure only. Real Blockbench and Blender compatibility is NOT
+  verified; it requires the user's real exports in `engine/tests/data/gltf_tools/real/`.
 - Open debts: real Blockbench/Blender exports not provided yet (drop them into
   `engine/tests/data/gltf_tools/real/` as `blockbench_*.glb` / `blender_*.glb`; the unit case
   checks them automatically, then import them into the fixture registry). Fixtures only

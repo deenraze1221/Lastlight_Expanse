@@ -6,6 +6,13 @@ and follow one art standard (`docs/ART_DIRECTION.md`). Registry, check and loadi
 files and treats every export the same way. `asset.generator` is read only to report the
 source tool (`blockbench`, `blender` or `other`).
 
+**Verification status (Phase D1):** the pipeline is verified only against *synthetic*
+fixtures written to resemble each exporter's output (`engine/tests/data/gltf_tools/valid/`).
+Compatibility with real Blockbench and Blender exports is **not yet verified**: it needs one
+real export from each tool in `engine/tests/data/gltf_tools/real/`. The export settings and
+menu names below come from the tools' documented behaviour and have not been checked against
+a real export in this repository.
+
 | | Blockbench (primary) | Blender (secondary) |
 | --- | --- | --- |
 | Use | Props, items, weapons, characters, creatures, modular kit pieces | Large or curved architecture, organic shapes |
