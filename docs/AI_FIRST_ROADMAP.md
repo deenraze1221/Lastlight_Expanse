@@ -1,6 +1,7 @@
 # ZODAR — AI-First Engine Roadmap
 
-**Status:** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
+**Status:** **Phase C complete; Phase D planned and approved (8 sessions,
+`docs/PHASE_D_PLAN.md`), next D1.** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
 (`zodar::Application`, `FixedTimestep`, headless/deterministic modes, game migrated).
 **Phase A2 done** (standard CLI + `runMain`, PNG screenshots, capture sequences, `--camera`,
 run report JSON). **Phase A3 done** (CMake presets, `tools/zodar.py`, `docs/guide/RUNNING.md`,
@@ -124,15 +125,21 @@ Make every app start, run, capture and report the same way.
   textures (existing), audio (WAV/OGG/MP3 via miniaudio decoders).
 - Hot reload of textures, materials, shaders and scene files (file watcher, debug builds). (done: C5/C6)
 
-### Phase D — Gameplay foundation (3 sessions)
-- **Priority (2026-10-31):** plan Phase D around building the Lastlight Expanse bunker first,
-  with a unified Blockbench asset pipeline (Blockbench -> glTF -> registry -> scene files ->
-  hot reload). The items below are scheduled within that plan.
-- Input: action maps (`input.json`), keyboard/mouse/gamepad (SDL3), recorded input files that
-  replay deterministically (agents test gameplay without a human).
-- System scheduling (ordered phases: input, fixed simulation, animation, late update, render),
-  events/messages, timers, deterministic RNG service.
-- Save/load built on scene serialization.
+### Phase D — Gameplay foundation + Lastlight bunker (8 sessions)
+**Plan approved 2026-11-01, not started.** Binding plan: `docs/PHASE_D_PLAN.md` (sessions,
+read lists, tests, acceptance criteria). Approved decisions: script-generated greybox bunker
+kit first, later replaced by real exports; temporary game-side AABB collision behind a
+replaceable `CollisionWorld` interface (Jolt in Phase E); `bunker` is the default level,
+`highlands` stays as the regression scene; Git LFS for `.blend` sources after a support and
+quota check.
+- Asset pipeline: Blockbench (primary) and Blender (secondary, complex architecture and
+  organic models) both export `.glb` into one pipeline (registry defaults, budgets, palette,
+  texel density, hot reload) with one art standard; the engine stays tool-agnostic.
+- D1 unified GLB/glTF pipeline for Blockbench and Blender (engine) · D2 game asset layout +
+  static greybox bunker (game) · D3 input action maps (`input.json`, keyboard/mouse/gamepad)
+  · D4 record/replay + deterministic RNG · D5 system scheduling, events, timers · D6 game
+  components in scene files + save/load · D7 playable bunker (player, collision, doors,
+  power, quick save) · D8 integration, audit, docs.
 - Gameplay stays C++ (agents write C++ well, and it is fastest); a scripting language is
   deferred until a real need appears.
 
@@ -179,3 +186,5 @@ networking (DEAD SECTOR M7 stays on the engine roadmap but after Phase E).
 3. **A3 (next)** CMake presets + `tools/zodar.py` + RUNNING guide; migrate ModelViewer/ZodarBench.
 4. B1 EnTT world, Transform hierarchy, renderer bridge.
 5. B2 scene/material JSON + reflection + round-trip tests.
+6. **D1 (next)** unified GLB/glTF pipeline for Blockbench and Blender; then D2..D8 per
+   `docs/PHASE_D_PLAN.md`.

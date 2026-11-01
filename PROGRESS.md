@@ -108,17 +108,36 @@
 
 ## Current state
 - `main`: **Phase C complete** (C1-C7 + audit, commit `54eae81`; Debug + Release 24/24 ctest,
-  199 unit, 64 GPU cases, 0 warnings, 0 validation messages). Phase D not started.
+  199 unit, 64 GPU cases, 0 warnings, 0 validation messages).
+- **Phase D plan approved (rev 2, 2026-11-01), not started:** `docs/PHASE_D_PLAN.md`
+  (8 sessions D1-D8, read lists, tests, acceptance criteria); roadmap updated.
 
 ## Current task
-- **Phase D planning (not implementation).** Plan Phase D around building the Lastlight
-  Expanse **bunker first** (first playable space), including a **unified Blockbench asset
-  pipeline**: Blockbench -> glTF export -> `zodar.py import` (registry, texture standards,
-  palette, lossless pixel art) -> scene/prefab files -> `LiveScene`/hot reload in the game.
-  Inputs: `docs/ART_DIRECTION.md` (§3 Blockbench workflow, §4 requirements),
-  `docs/AI_FIRST_ROADMAP.md` (Phase D: input, system scheduling, save/load),
-  `docs/guide/ASSETS.md`, `docs/guide/SCENE_FILES.md`. Output: a written Phase D plan
-  (bunker scope, pipeline steps, engine vs game split, sessions, tests) for approval.
+- **Next session: D1 — unified GLB/glTF pipeline for Blockbench and Blender (engine).**
+
+## Handoff (Phase D planning session, 2026-11-01)
+- Done: Phase D planned and approved; `docs/PHASE_D_PLAN.md` written; roadmap Phase D
+  rewritten (8 sessions); ARCHITECTURE "Phase D decisions"; CLAUDE.md links the plan.
+  Documentation only: no code changed, no build or tests run (none needed).
+- Approved decisions: (1) script-generated greybox kit first, replaced later by real exports;
+  the user supplies one real Blockbench `.glb` and one real Blender `.glb` for D1 validation;
+  (2) temporary game-side AABB collision behind `CollisionWorld` (Jolt in Phase E);
+  (3) `bunker` default level, `highlands` kept as regression scene; (4) Phase D = 8 sessions;
+  (5) Git LFS for `.blend` after a support + quota check (D2 step 0; container has git-lfs
+  3.4.1, no LFS files yet; GitHub quota must be confirmed by the user).
+- Workflow: Caveman for chat only; docs/code/commits in normal prose; one session per D-step;
+  handoff block here at the end of each session.
+- Open: real exports not yet provided (D1 can finish with generated fixtures; real-export test
+  added on arrival).
+- **D1 read list:** `CLAUDE.md`, `PROGRESS.md`, `docs/PHASE_D_PLAN.md` (D1 + asset workflow),
+  `docs/guide/ASSETS.md`, `docs/ART_DIRECTION.md` §3-5,
+  `engine/assets/Assets/GltfLoader.cpp`,
+  `engine/rendering/AssetManager/AssetManager/AssetRegistry.h`.
+- **D1 first step:** write `engine/tests/data/gltf_tools/make_fixtures.py` (stdlib only,
+  deterministic) generating the Blockbench-style and Blender-style fixtures plus the three
+  rejected-extension cases, then add failing unit cases that load each fixture and assert the
+  expected meshes, textures, samplers, hierarchy/bounds and notes, before changing
+  `GltfLoader.cpp`.
 
 ## Phase C audit (C1-C7, done)
 - Two independent reviews (runtime/lifetime; registry/pipeline/palette) + doc pass. No Vulkan
@@ -324,12 +343,11 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Write the Phase D plan (see Current task): bunker-first, unified Blockbench pipeline;
-   implement only after approval. Streaming budgets, FBX/audio import and skins stay in later
-   phases. Game: re-author terrain textures to 32×32 (currently 256²/512², violate 64 max).
+1. Phase D sessions D1..D8 per `docs/PHASE_D_PLAN.md` (next: D1). Streaming budgets, FBX/audio
+   import and skins stay in later phases. Optional D2b: re-author terrain textures to 32×32
+   (currently 256²/512², violate the 64 max).
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
-3. Art-direction technical work (docs/ART_DIRECTION.md §4) when scheduled: glTF/Blockbench
-   import checks, pixel-art texture rules, asset validation report; S5 shadows.
+3. S5 shadows when scheduled.
 
 ## Backlog (rendering / game visuals, interleave when needed)
 - S5 shadows (CSM sun) in pbr.frag and voxel.frag.

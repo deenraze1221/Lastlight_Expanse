@@ -402,6 +402,23 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   `meshRenderer` meshes are still bound by name from code (`SceneBindings::meshes`; whole
   glTF models use `modelRenderer`, C4).
 
+## Phase D decisions (approved plan, not implemented)
+
+Binding plan: `docs/PHASE_D_PLAN.md`.
+- New engine modules: `Zodar::Input` (`engine/input/Input`: action maps, record/replay) and
+  `Zodar::Gameplay` (`engine/gameplay/Gameplay`: `SystemScheduler`, `EventBus`, `Timers`,
+  `SaveGame`; depends on World + SceneFile); `Core/Random` (seeded named streams).
+- Determinism: simulation reads input only per fixed step; replays store action states (not
+  raw events); events sent in step N are delivered in step N+1; timers count ticks.
+- Scene files gain a registry for game-defined components; unregistered names stay errors.
+- Asset pipeline is tool-agnostic: Blockbench (primary) and Blender (secondary) both export
+  `.glb` into the same registry/check/hot-reload path with one art standard; the engine reads
+  glTF `asset.generator` only for reporting and never parses `.bbmodel`/`.blend`.
+- Collision until Phase E: game-side static AABBs behind `CollisionWorld` (replaceable by Jolt).
+- `bunker` is the game's default level; `highlands` is the regression scene.
+- `.blend` sources use Git LFS (after a support/quota check); `.bbmodel` is plain JSON in Git;
+  `game/assets/**` is `-text` (registry hashes cover exact bytes).
+
 ## Frame flow (Milestone 1)
 
 ```
