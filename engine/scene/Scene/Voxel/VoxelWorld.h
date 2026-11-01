@@ -54,9 +54,27 @@ struct ChunkMeshEvent {
 
 struct RaycastHit {
     glm::ivec3 voxel{0};  // solid voxel that was hit
-    glm::ivec3 normal{0}; // face normal (empty neighbour = voxel + normal)
-    float distance = 0.0f;
+    // Cube cells: the face that was entered (empty neighbour = voxel + normal). Shape cells: the
+    // dominant axis of the surface normal (ties prefer Y, then X), so voxel + normal is the
+    // cell a block would be placed in. (0, 0, 0) when the ray starts inside the solid.
+    glm::ivec3 normal{0};
+    float distance = 0.0f; // world units along the normalised direction
     Voxel value = kEmpty;
+    glm::vec3 point{0.0f};         // world position of the hit (origin + direction * distance)
+    glm::vec3 surfaceNormal{0.0f}; // unit normal of the surface hit; (0, 0, 0) when starting inside
+};
+
+enum class RaycastMode {
+    // Every non-empty cell, shapes by their exact polygons (what you see is what you hit).
+    // Cells with BlockState::kNoCollision are hit (grates stay selectable).
+    Selection,
+    // Cells that collide: kNoCollision cells are skipped, shapes are hit by their collision
+    // boxes (the same boxes as collectSolidBoxes).
+    Collision,
+};
+
+struct RaycastOptions {
+    RaycastMode mode = RaycastMode::Selection;
 };
 
 // World-space axis-aligned box (world units, min <= max on every axis).
@@ -135,8 +153,20 @@ public:
     // not missing. Throws zodar::Error when `query` has a NaN/infinite coordinate or min > max.
     QueryStatus collectSolidBoxes(const WorldBox& query, std::vector<SolidBox>& out) const;
 
-    // First solid voxel along a ray through loaded chunks (Amanatides-Woo traversal).
-    std::optional<RaycastHit> raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance) const;
+    // First solid voxel along a ray through loaded chunks (Amanatides-Woo traversal; unloaded
+    // chunks read as empty). Cube cells are hit when the ray enters them, exactly as before V3.
+    // Shape cells (docs/guide/VOXELS.md §6):
+    //  - Selection: front faces of the rotated polygons only (back faces and faces within
+    //    1e-7 of parallel to the ray are ignored); a hit counts inside the cell's traversal
+    //    interval (+-1e-5 cell) and within maxDistance. Nearest hit wins; ties prefer the lower
+    //    polygon index, then the lower fan triangle.
+    //  - Collision: the rotated collision boxes (slab test); ties prefer the entry axis X, Y,
+    //    Z, then the lower box index.
+    // A ray that starts inside a cell's solid (cube, Shape::contains, or a collision box) hits
+    // that cell at distance 0 with normal (0, 0, 0); one that starts in the empty part of a
+    // shape cell continues.
+    std::optional<RaycastHit> raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance,
+                                      const RaycastOptions& options = {}) const;
 
     ChunkCoord chunkAt(const glm::vec3& worldPosition) const;
     glm::vec3 chunkOrigin(const ChunkCoord& coord) const;

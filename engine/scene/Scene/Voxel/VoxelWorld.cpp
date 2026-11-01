@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace zodar::voxel {
 namespace {
@@ -542,8 +543,99 @@ QueryStatus VoxelWorld::collectSolidBoxes(const WorldBox& query, std::vector<Sol
     return status;
 }
 
-std::optional<RaycastHit> VoxelWorld::raycast(const glm::vec3& origin, const glm::vec3& direction,
-                                              float maxDistance) const {
+namespace {
+
+// Dominant axis of a normal as an integer face normal (ties prefer Y, then X: the mesher's rule).
+glm::ivec3 dominantFace(const glm::vec3& n) {
+    const glm::vec3 a = glm::abs(n);
+    const int axis = (a.y >= a.x && a.y >= a.z) ? 1 : a.x >= a.z ? 0 : 2;
+    glm::ivec3 f(0);
+    f[axis] = n[axis] > 0.0f ? 1 : -1;
+    return f;
+}
+
+struct LocalHit {
+    float t = 0.0f;
+    glm::vec3 normal{0.0f};
+};
+
+constexpr float kGrazing = 1e-7f;  // |dot(dir, n)| below this: the ray runs along the polygon
+constexpr float kEdgeEps = 1e-6f;  // barycentric tolerance: shared edges never leak
+constexpr float kCellEps = 1e-5f;  // hits this close outside the cell's ray interval still count
+
+// Front faces of the shape's polygons along o + t d (cell-local, voxel units) for t in
+// [t0, t1]. Strict `<` keeps the lowest polygon / triangle index on ties.
+std::optional<LocalHit> polygonHit(const Shape& shape, const glm::vec3& o, const glm::vec3& d, float t0, float t1) {
+    std::optional<LocalHit> best;
+    for (const Shape::Polygon& poly : shape.polygons) {
+        const float facing = glm::dot(d, poly.normal);
+        if (facing > -kGrazing) continue; // back face or grazing
+        const glm::vec3& a = poly.corners[0];
+        for (size_t k = 1; k + 1 < poly.corners.size(); ++k) {
+            const glm::vec3 e1 = poly.corners[k] - a;
+            const glm::vec3 e2 = poly.corners[k + 1] - a;
+            const glm::vec3 q = glm::cross(d, e2);
+            const float det = glm::dot(e1, q);
+            if (det == 0.0f) continue;
+            const float inv = 1.0f / det;
+            const glm::vec3 s = o - a;
+            const float u = glm::dot(s, q) * inv;
+            if (u < -kEdgeEps || u > 1.0f + kEdgeEps) continue;
+            const glm::vec3 r = glm::cross(s, e1);
+            const float v = glm::dot(d, r) * inv;
+            if (v < -kEdgeEps || u + v > 1.0f + kEdgeEps) continue;
+            const float t = glm::dot(e2, r) * inv;
+            if (t < t0 - kCellEps || t > t1 + kCellEps) continue;
+            if (!best || t < best->t) best = LocalHit{t, poly.normal};
+        }
+    }
+    return best;
+}
+
+// Entry into the shape's collision boxes (slab test), cell-local, for t in [t0, t1].
+std::optional<LocalHit> boxHit(const Shape& shape, const glm::vec3& o, const glm::vec3& d, float t0, float t1) {
+    std::optional<LocalHit> best;
+    for (const ShapeBox& b : shape.collision) {
+        float tNear = -std::numeric_limits<float>::infinity();
+        float tFar = std::numeric_limits<float>::infinity();
+        int axis = -1;
+        bool miss = false;
+        for (int i = 0; i < 3 && !miss; ++i) {
+            if (d[i] == 0.0f) {
+                miss = o[i] < b.min[i] || o[i] > b.max[i];
+                continue;
+            }
+            const float inv = 1.0f / d[i];
+            float ta = (b.min[i] - o[i]) * inv;
+            float tb = (b.max[i] - o[i]) * inv;
+            if (ta > tb) std::swap(ta, tb);
+            if (ta > tNear) {
+                tNear = ta;
+                axis = i;
+            }
+            tFar = std::min(tFar, tb);
+        }
+        if (miss || axis < 0 || tNear > tFar || tNear < t0 - kCellEps || tNear > t1 + kCellEps) continue;
+        if (!best || tNear < best->t) {
+            glm::vec3 n(0.0f);
+            n[axis] = d[axis] > 0.0f ? -1.0f : 1.0f;
+            best = LocalHit{tNear, n};
+        }
+    }
+    return best;
+}
+
+bool insideBoxes(const Shape& shape, const glm::vec3& p) {
+    for (const ShapeBox& b : shape.collision) {
+        if (glm::all(glm::greaterThanEqual(p, b.min)) && glm::all(glm::lessThanEqual(p, b.max))) return true;
+    }
+    return false;
+}
+
+} // namespace
+
+std::optional<RaycastHit> VoxelWorld::raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance,
+                                              const RaycastOptions& options) const {
     const float len = glm::length(direction);
     if (len <= 0.0f || maxDistance <= 0.0f) {
         return std::nullopt;
@@ -570,12 +662,35 @@ std::optional<RaycastHit> VoxelWorld::raycast(const glm::vec3& origin, const glm
             tMax[i] = std::numeric_limits<float>::infinity();
         }
     }
+    const BlockTable& table = *m_table;
+    const bool collision = options.mode == RaycastMode::Collision;
+    const glm::ivec3 startCell = cell;
     glm::ivec3 normal(0);
     float t = 0.0f;
     while (t <= maxT) {
         const Voxel v = getVoxel(cell);
-        if (v != kEmpty) {
-            return RaycastHit{cell, normal, t * m_settings.voxelSize, v};
+        const Shape* shape = v != kEmpty && !table.isCube(v) ? table.shape(v) : nullptr;
+        if (v != kEmpty && (!collision || table.collides(v)) && !shape) {
+            // Cube cell: unchanged pre-V3 result; point and surface normal derived from it.
+            const float distance = t * m_settings.voxelSize;
+            return RaycastHit{cell, normal, distance, v, origin + dir * distance, glm::vec3(normal)};
+        }
+        if (shape && (!collision || table.collides(v))) {
+            const glm::vec3 local = p - glm::vec3(cell);
+            const bool start = cell == startCell;
+            if (start && (collision ? insideBoxes(*shape, local) : shape->contains(local))) {
+                return RaycastHit{cell, glm::ivec3(0), 0.0f, v, origin, glm::vec3(0.0f)};
+            }
+            const float tExit = std::min(tMax.x, std::min(tMax.y, tMax.z));
+            const auto hit = collision ? boxHit(*shape, local, dir, t, tExit) : polygonHit(*shape, local, dir, t, tExit);
+            if (hit) {
+                const float th = std::max(hit->t, 0.0f);
+                if (th <= maxT) {
+                    const float distance = th * m_settings.voxelSize;
+                    return RaycastHit{cell, dominantFace(hit->normal), distance, v, origin + dir * distance, hit->normal};
+                }
+                return std::nullopt;
+            }
         }
         const int axis = tMax.x < tMax.y ? (tMax.x < tMax.z ? 0 : 2) : (tMax.y < tMax.z ? 1 : 2);
         t = tMax[axis];
