@@ -445,8 +445,8 @@ def b(lo, hi, texture, faces=ALL):
 # --- Modules -----------------------------------------------------------------------------
 # Planning grid 4 m; clear height 3.6 m; walls 0.3 m (centred on grid lines); pilasters 0.5 m.
 CELL = 4.0
-H = 3.6
-WALL = 0.15  # half wall thickness
+H = 4.0
+WALL = 0.25  # half wall thickness
 BAND = 1.0   # painted lower band
 
 
@@ -925,8 +925,81 @@ def text(obj):
     return (json.dumps(obj, indent=2) + "\n").encode()
 
 
+# V5: named, canonical x-fastest RLE; format owned by the engine's V4 codec.
+VOXEL_ARCHITECTURE = tuple(n for n in ARCHITECTURE if n != "airlock_arch")
+
+
+def bunker_structure():
+    import math
+    cells = {}
+
+    def put(x, y, z, name):
+        cells[(x, y, z)] = name
+
+    for e in level()["entities"]:
+        model = e.get("modelRenderer", {}).get("model")
+        if model not in VOXEL_ARCHITECTURE:
+            continue
+        p = e["transform"]["position"]
+        yaw = round(e["transform"].get("rotationDegrees", [0, 0, 0])[1] / 90) % 4
+        if model == "stairs":
+            # Four half-metre rises, each split into the built-in 0.25 m risers.
+            for i in range(8):
+                x = -25 - i
+                h = i // 2
+                for z in range(-4, 4):
+                    for y in range(-1, h):
+                        put(x, y, z, "floor")
+                    put(x, h, z, "stairs@3" if i % 2 == 0 else "floor")
+            continue
+        for lo, hi, texture, _ in MODULES[model]:
+            if model == "floor_marked" and texture == "marking":
+                continue
+            if texture not in ("concrete", "paint", "floor", "ceiling", "metal"):
+                continue
+            lo, hi = list(lo), list(hi)
+            if model in ("floor", "floor_marked"):
+                lo[1], hi[1] = -0.5, 0
+            if model == "ceiling":
+                lo[1], hi[1] = 4, 4.5
+            if model == "beam":
+                lo[1], hi[1] = 3.5, 4
+            # Round the former thin modules onto the 0.5 m lattice, never zero-width.
+            a = [math.floor(v * 2 + 0.5) for v in lo]
+            b = [max(a[k] + 1, math.floor(hi[k] * 2 + 0.5)) for k in range(3)]
+            for y in range(a[1], b[1]):
+                for z in range(a[2], b[2]):
+                    for x in range(a[0], b[0]):
+                        wx, wz = x, z
+                        for _ in range(yaw):
+                            wx, wz = wz, -wx - 1
+                        wx += round(p[0] * 2)
+                        wz += round(p[2] * 2)
+                        # Keep the main corridor's full four metres between wall faces.
+                        if model in ("wall", "doorway", "opening_wide") and yaw == 0 and p[2] == -2:
+                            wz -= 1
+                        put(wx, y + round(p[1] * 2), wz, texture)
+    lower = tuple(min(p[k] for p in cells) for k in range(3))
+    size = tuple(max(p[k] for p in cells) - lower[k] + 1 for k in range(3))
+    names = sorted({""} | set(cells.values()))
+    linear = sorted((x - lower[0] + size[0] * (z - lower[2] + size[2] * (y - lower[1])), names.index(n))
+                    for (x, y, z), n in cells.items())
+    runs = []
+    for i, n in linear:
+        if runs and runs[-1][0] + runs[-1][1] == i and runs[-1][2] == n:
+            runs[-1][1] += 1
+        else:
+            runs.append([i, 1, n])
+    out = ["zodar.structure 1", " ".join(map(str, size + tuple(-v for v in lower))), str(len(names))]
+    out += [json.dumps(n) for n in names]
+    out += [str(len(runs))] + ["%d %d %d" % tuple(r) for r in runs]
+    out += ["1", '"player_start" %d %d %d' % (-22-lower[0], -lower[1], -lower[2]), "0"]
+    return ("\n".join(out) + "\n").encode()
+
+
 def outputs():
     files = {"palette.png": swatch(list(MASTER)), "palettes/glow.png": swatch(list(GLOW))}
+    files["structures/bunker.zstruct"] = bunker_structure()
     block_names = ("concrete", "paint", "floor", "ceiling", "metal", "marking")
     for name in block_names:
         files["textures/blocks/%s.png" % name] = png(64, 64, TEXTURES[name])

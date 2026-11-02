@@ -4,7 +4,7 @@
 add_library(LastlightGameCore STATIC
     src/Physics/CollisionWorld.cpp
     src/Player/ExplorationWalker.cpp
-    src/Bunker/LevelColliders.cpp)
+    src/Bunker/LevelColliders.cpp src/Bunker/BunkerVoxels.cpp)
 target_include_directories(LastlightGameCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(LastlightGameCore PUBLIC Zodar::SceneFile Zodar::World PRIVATE nlohmann_json::nlohmann_json)
 zodar_set_warnings(LastlightGameCore)

@@ -46,7 +46,7 @@
       "compile": false,
       "class": "architecture",
       "textureClass": "environment",
-      "hash": "fnv1a64:9951cbd198c05e6a",
+      "hash": "fnv1a64:29bcb2410472c8d8",
       "dependencies": []
     },
     {
@@ -57,7 +57,7 @@
       "compile": false,
       "class": "architecture",
       "textureClass": "environment",
-      "hash": "fnv1a64:633cb899c74ec3bc",
+      "hash": "fnv1a64:02883b08865460f1",
       "dependencies": []
     },
     {
@@ -86,7 +86,7 @@
       "id": "bunker",
       "type": "scene",
       "source": "levels/bunker.scene.json",
-      "hash": "fnv1a64:b66c16d8d3336540",
+      "hash": "fnv1a64:1132673733a8997c",
       "dependencies": [
         "materials/sign_airlock.material.json",
         "materials/sign_common.material.json",
@@ -136,7 +136,7 @@
       "compile": false,
       "class": "prop",
       "textureClass": "environment",
-      "hash": "fnv1a64:60727bd27152ff73",
+      "hash": "fnv1a64:e9e4faa01df0a320",
       "dependencies": []
     },
     {
@@ -147,14 +147,14 @@
       "compile": false,
       "class": "architecture",
       "textureClass": "environment",
-      "hash": "fnv1a64:4b95f406eab832e2",
+      "hash": "fnv1a64:a40e3d48b681f718",
       "dependencies": []
     },
     {
       "id": "ceiling_lamp",
       "type": "prefab",
       "source": "prefabs/ceiling_lamp.prefab.json",
-      "hash": "fnv1a64:f21885eaf524e974",
+      "hash": "fnv1a64:595ac56b8c0d9133",
       "dependencies": []
     },
     {
@@ -165,7 +165,7 @@
       "compile": false,
       "class": "architecture",
       "textureClass": "environment",
-      "hash": "fnv1a64:b563e779d72ca79a",
+      "hash": "fnv1a64:86ed2e2d0394ac5f",
       "dependencies": []
     },
     {
@@ -198,7 +198,7 @@
       "compile": false,
       "class": "architecture",
       "textureClass": "environment",
-      "hash": "fnv1a64:81d0e6d2a1f31b2c",
+      "hash": "fnv1a64:c5c8dab05da60547",
       "dependencies": []
     },
     {
@@ -209,7 +209,7 @@
       "compile": false,
       "class": "prop",
       "textureClass": "environment",
-      "hash": "fnv1a64:bed72fba8e2b0dcb",
+      "hash": "fnv1a64:bbea626e37274284",
       "dependencies": []
     },
     {
@@ -266,7 +266,7 @@
       "compile": false,
       "class": "prop",
       "textureClass": "environment",
-      "hash": "fnv1a64:f25355d164049f89",
+      "hash": "fnv1a64:07c47b0ee5148388",
       "dependencies": [],
       "palette": "glow"
     },
@@ -322,7 +322,7 @@
       "compile": false,
       "class": "architecture",
       "textureClass": "environment",
-      "hash": "fnv1a64:5ac381c68c6eba1c",
+      "hash": "fnv1a64:b9a94e0d0541fd71",
       "dependencies": []
     },
     {
@@ -333,7 +333,7 @@
       "compile": false,
       "class": "architecture",
       "textureClass": "environment",
-      "hash": "fnv1a64:33aba81be4f90441",
+      "hash": "fnv1a64:7053293d5fb7a2de",
       "dependencies": []
     },
     {
@@ -510,7 +510,7 @@
       "compile": false,
       "class": "architecture",
       "textureClass": "environment",
-      "hash": "fnv1a64:84badca1de8e11ab",
+      "hash": "fnv1a64:e1148d4ea690ee76",
       "dependencies": []
     },
     {

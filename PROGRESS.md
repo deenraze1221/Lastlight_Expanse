@@ -834,3 +834,6 @@
   registry standards. Focused catalogue: 1 case / 24 assertions; strict assets 44/44,
   generator freshness and bunker GPU smoke passed. Pre-change Highlands on Mesa 25.0.7:
   `5ddd23b4cf86dfd551dfad44e349fcefb2594f31a2c37b72f6d9c00f68045776`.
+- Step 2: canonical named RLE .zstruct generated from the layout; fixed LOD0 loader uses
+  V4 LayeredGenerator over an empty base. No region persistence needed for this static slice.
+  Structure/collision-spawn and existing room walk tests passed; asset/freshness checks clean.
