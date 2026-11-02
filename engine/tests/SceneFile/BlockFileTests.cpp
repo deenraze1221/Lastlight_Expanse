@@ -245,7 +245,8 @@ TEST_CASE("block file: catalogue palettes mesh deterministically (golden hash)")
     test::hashMesh(again, meshChunk(nb, buildBlockCatalogue(parseBlockFile(kBlocks, "b.blocks.json"), "dir").palette, o));
     CHECK(again.get() == first);
     // Golden: captured on GCC 13 (V2); integer-only inputs, single IEEE operations.
-    CHECK(first == 0x2444B9C0D80D2BD6ull);
+    // V6 removes hidden matching partial faces (V2 topology: 0x2444B9C0D80D2BD6).
+    CHECK(first == 0xEC2FF97EB5257032ull);
 }
 
 TEST_CASE("block file: catalogues built from code data are validated with JSON paths") {

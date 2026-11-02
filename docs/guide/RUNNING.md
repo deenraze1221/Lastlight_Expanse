@@ -164,3 +164,11 @@ Reference examples: `engine/samples/ModelViewer` (orbit viewer, A/B reference pa
 `engine/tools/ZodarBench` (fixed camera path, frame pacing, custom report),
 `game/src/main.cpp` (voxel world, streaming). Use `requestCapture(path)` for screenshots at
 app-chosen frames (verified at exit like `--capture-frames`).
+
+## Region-scale benchmark (V6)
+
+`ZodarBench --scene region --headless --warmup 0 --frames 544 --output region.json`
+traverses the synthetic 4 x 4 km envelope and revisits persisted edits. Use a fresh output
+name (its `.regions` directory must be empty). The default path is `graph`; `reference`
+is also supported. Full workload, metric definitions, baseline/candidate evidence and
+software-driver limitations: `docs/reports/v6-region-performance/README.md`.

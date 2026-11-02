@@ -114,7 +114,7 @@ TEST_CASE("shape mesher: isolated shape cells emit closed, outward geometry at e
     }
 }
 
-TEST_CASE("shape mesher: faces are culled only against fully covering neighbours") {
+TEST_CASE("shape mesher: faces are culled only against fully covering neighbours or exact partial matches") {
     const Registry reg;
     SUBCASE("slab on a cube: both touching faces disappear") {
         VoxelChunk c;
@@ -133,13 +133,13 @@ TEST_CASE("shape mesher: faces are culled only against fully covering neighbours
         CHECK(countFaces(m, {0, 0, 1}, 2, 3.0f) == 2);  // cube +Z face kept
         CHECK(countFaces(m, {0, 0, -1}, 2, 3.0f) == 0); // stair front culled
     }
-    SUBCASE("two partial faces against each other are both kept") {
+    SUBCASE("identical partial faces against each other are hidden") {
         VoxelChunk c;
         c.set(3, 3, 3, reg.id("slab_low"));
         c.set(4, 3, 3, reg.id("slab_low"));
         const MeshData m = meshChunk(single(c), reg.palette, {});
-        CHECK(countFaces(m, {1, 0, 0}, 0, 4.0f) == 2);
-        CHECK(countFaces(m, {-1, 0, 0}, 0, 4.0f) == 2);
+        CHECK(countFaces(m, {1, 0, 0}, 0, 4.0f) == 0);
+        CHECK(countFaces(m, {-1, 0, 0}, 0, 4.0f) == 0);
     }
     SUBCASE("rotation moves the full face: stair turned once is full on +X") {
         VoxelChunk c;
@@ -499,4 +499,23 @@ TEST_CASE("voxel world: shape worlds mesh identically with worker threads") {
         REQUIRE(actual.count(coord) == 1);
         CHECK(sameBytes(actual.at(coord), mesh));
     }
+}
+
+TEST_CASE("shape mesh: identical partial boundaries cull exactly across chunks") {
+    Registry registry;
+    const auto slab=registry.id("slab_low");
+    VoxelChunk chunk;
+    chunk.set(4,4,4,slab); chunk.set(5,4,4,slab);
+    const auto pair=meshChunk(single(chunk),registry.palette,{});
+    CHECK(pair.indices.size()==60); // ten exposed quads, two internal quads removed
+    CHECK(meshVolume(pair)==doctest::Approx(1));
+    chunk.set(5,4,4,registry.id("slab_high"));
+    CHECK(meshChunk(single(chunk),registry.palette,{}).indices.size()==72);
+
+    VoxelChunk left, right;
+    left.set(31,4,4,slab); right.set(0,4,4,slab);
+    auto nb=single(left); nb.chunks[ChunkNeighborhood::slot(1,0,0)]=&right;
+    CHECK(meshChunk(nb,registry.palette,{}).indices.size()==30);
+    MeshOptions sealed; sealed.sealFaces=faceBit(int(Face::PosX));
+    CHECK(meshChunk(nb,registry.palette,sealed).indices.size()==36);
 }

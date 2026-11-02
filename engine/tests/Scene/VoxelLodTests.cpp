@@ -124,7 +124,9 @@ std::pair<int, int> probeSeams(const std::map<ChunkCoord, LiveMesh>& live, float
 
 } // namespace
 
-TEST_CASE("voxel LOD regression: streamed shape worlds match the pre-V3 golden hash") {
+// V6 removes exactly matched internal partial faces; pre-V3 topology hash was
+// 0x1823C9036434EA3A. LOD selection, seam rays and threaded determinism stay checked.
+TEST_CASE("voxel LOD regression: streamed shape worlds match the V6 partial-face golden hash") {
     const ShapeRegistry reg;
     VoxelWorld world(std::make_shared<QueryTerrain>(7, QueryTerrain::Mode::Shapes, reg.shapeCount(), reg.noCollisionOffset),
                      reg.palette, test::queryWorldSettings(1.0f));
@@ -136,7 +138,7 @@ TEST_CASE("voxel LOD regression: streamed shape worlds match the pre-V3 golden h
     CHECK(lods[0] > 0); // the world spans LOD 0, 1 and 2
     CHECK(lods[1] > 0);
     CHECK(lods[2] > 0);
-    CHECK(liveHash(live) == 0x1823C9036434EA3Aull);
+    CHECK(liveHash(live) == 0x3D6335241A09076Eull);
 }
 
 TEST_CASE("voxel LOD known limitation: one-cell walls vanish from LOD 2 (majority rule)") {
@@ -202,7 +204,7 @@ TEST_CASE("voxel LOD regression: structural flags change nothing while structura
     const ShapeRegistry reg;
     const auto gen = std::make_shared<QueryTerrain>(7, QueryTerrain::Mode::Shapes, reg.shapeCount(), reg.noCollisionOffset);
     VoxelWorld world(gen, withStructural(reg, {reg.cube}), test::queryWorldSettings(1.0f));
-    CHECK(liveHash(settleLive(world, {8, 8, 8})) == 0x1823C9036434EA3Aull); // the pre-V3 golden
+    CHECK(liveHash(settleLive(world, {8, 8, 8})) == 0x3D6335241A09076Eull); // V6 topology golden (pre-V3: 0x1823C9036434EA3A)
 }
 
 TEST_CASE("voxel LOD: structural chunks keep LOD 0 inside structuralLod0Distance") {
@@ -244,11 +246,11 @@ TEST_CASE("voxel LOD: structural chunks keep LOD 0 inside structuralLod0Distance
     }
     SUBCASE("only chunks that contain a structural block are affected; edits update the LOD") {
         // Structural only on the kNoCollision cube (id 2), which the hashed shape world never
-        // generates: before any edit every chunk uses distance LOD (output = the pre-V3 golden).
+        // generates: before any edit every chunk uses distance LOD (output = the V6 partial-face golden).
         const Voxel rare = reg.ghostCube;
         VoxelWorld world(gen, withStructural(reg, {rare}), settings);
         auto live = settleLive(world, observer);
-        CHECK(liveHash(live) == 0x1823C9036434EA3Aull);
+        CHECK(liveHash(live) == 0x3D6335241A09076Eull);
         std::optional<ChunkCoord> lod1Chunk;
         for (const auto& [c, m] : live) {
             CHECK(m.lod == world.lodFor(c, obsChunk));

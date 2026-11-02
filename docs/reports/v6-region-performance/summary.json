@@ -1,0 +1,18 @@
+{
+  "base": {
+    "cpuFrameMeanMs": 19.2779,
+    "cpuFrameP95Ms": 40.8203,
+    "gpuFrameMeanMs": 16.8471,
+    "gpuFrameP95Ms": 37.5612,
+    "meshingTotalMs": 300.54,
+    "uploadedBytes": 98062720
+  },
+  "candidate": {
+    "cpuFrameMeanMs": 18.1635,
+    "cpuFrameP95Ms": 41.5892,
+    "gpuFrameMeanMs": 15.9123,
+    "gpuFrameP95Ms": 35.9158,
+    "meshingTotalMs": 256.479,
+    "uploadedBytes": 43756160
+  }
+}

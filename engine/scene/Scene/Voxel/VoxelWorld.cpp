@@ -4,6 +4,7 @@
 #include "Core/JobSystem.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -174,6 +175,7 @@ void VoxelWorld::update(const glm::vec3& observer) {
             {
                 auto job = [this, coord, generator=std::move(generator)] {
                     GenerateResult result{coord, {}, {}, false, {}};
+                    const auto start=std::chrono::steady_clock::now();
                     try {
                         auto data = std::make_shared<VoxelChunk>();
                         generator->generate(coord, *data);
@@ -183,6 +185,7 @@ void VoxelWorld::update(const glm::vec3& observer) {
                         result.data=std::move(data);
                     } catch (const std::exception& e) { result.outcome=WorkOutcome::Failure; result.error=e.what(); }
                       catch (...) { result.outcome=WorkOutcome::Failure; result.error="unknown generation failure"; }
+                    result.elapsedMs=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
                     std::lock_guard lock(m_resultMutex);
                     m_generateResults.push_back(std::move(result));
                 };
@@ -269,10 +272,12 @@ void VoxelWorld::scheduleMesh(const ChunkCoord& coord, Entry& entry, int lod, ui
             nb.chunks[i] = inputs[i].get();
         }
         MeshResult result{coord, options.lod, options.sealFaces, version, {}, {}};
+        const auto start=std::chrono::steady_clock::now();
         try { result.mesh=meshChunk(nb,*m_table,options); }
         catch (const std::exception& e) { result.outcome=WorkOutcome::Failure; result.error=e.what(); }
         catch (...) { result.outcome=WorkOutcome::Failure; result.error="unknown mesh failure"; }
         std::lock_guard lock(m_resultMutex);
+        result.elapsedMs=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
         m_meshResults.push_back(std::move(result));
     };
     if (m_jobs) m_jobs->submit(std::move(job));
@@ -297,6 +302,7 @@ void VoxelWorld::integrateResults() {
     for (GenerateResult& r : generated) {
         --m_generateInFlight;
         ++m_totalGenerated;
+        m_generationMs+=r.elapsedMs;
         auto it = m_chunks.find(r.coord);
         if (it == m_chunks.end() || !it->second.generating) {
             continue; // unloaded while generating
@@ -311,6 +317,7 @@ void VoxelWorld::integrateResults() {
     for (MeshResult& r : meshes) {
         --m_meshInFlight;
         ++m_totalMeshed;
+        m_meshingMs+=r.elapsedMs;
         auto it = m_chunks.find(r.coord);
         if (it == m_chunks.end()) {
             ++m_staleDropped;
@@ -818,6 +825,7 @@ VoxelWorldStats VoxelWorld::stats() const {
     s.generateInFlight = m_generateInFlight;
     s.meshInFlight = m_meshInFlight;
     s.editedChunks = static_cast<uint32_t>(m_edits.size());
+    s.generationMs=m_generationMs; s.meshingMs=m_meshingMs;
     s.generated = m_totalGenerated;
     s.meshed = m_totalMeshed;
     s.staleMeshesDropped = m_staleDropped;

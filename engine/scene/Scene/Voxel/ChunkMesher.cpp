@@ -3,6 +3,7 @@
 #include "Core/Error.h"
 
 #include <string>
+#include <unordered_map>
 
 namespace zodar::voxel {
 namespace {
@@ -124,9 +125,29 @@ int dominantAxis(const glm::vec3& n) {
 // are culled when the neighbour fully covers the touching face. AO approximation: the
 // polygon is treated like a cube face along its dominant normal axis; each corner samples the
 // three neighbours of the cell in front of it toward the nearest cell corner.
+// Identical adjacent shapes can hide a partial boundary polygon too. Match the
+// opposite polygon exactly (reverse cyclic winding), never infer coverage from a
+// sampled mask: thin panels and unequal/sloped faces must retain their geometry.
+bool selfCovered(const Shape& shape, const Shape::Polygon& polygon) {
+    glm::vec3 offset(0);
+    offset[polygon.boundaryFace >> 1] = (polygon.boundaryFace & 1) ? 1.0f : -1.0f;
+    for (const auto& other : shape.polygons) {
+        if (other.boundaryFace != (polygon.boundaryFace ^ 1) || other.corners.size()!=polygon.corners.size()) continue;
+        const size_t n=polygon.corners.size();
+        for (size_t start=0; start<n; ++start) {
+            bool same=true;
+            for (size_t i=0; i<n; ++i)
+                same = same && polygon.corners[i] == other.corners[(start+n-i)%n]+offset;
+            if (same) return true;
+        }
+    }
+    return false;
+}
+
 void emitShapes(const CellGrid& grid, const BlockTable& table, const MeshOptions& options, float cellSize,
                 float uvFactor, MeshData& mesh, MeshStats& stats) {
     const VoxelPalette& palette = table.palette();
+    std::unordered_map<const Shape::Polygon*, bool> coverage;
     const int n = grid.size();
     for (int y = 0; y < n; ++y) {
         for (int z = 0; z < n; ++z) {
@@ -144,6 +165,11 @@ void emitShapes(const CellGrid& grid, const BlockTable& table, const MeshOptions
                         glm::ivec3 dir(0);
                         dir[f >> 1] = (f & 1) ? 1 : -1;
                         if (grid.covers(cell + dir, f ^ 1)) continue;
+                        if (grid.at(cell + dir) == id) {
+                            auto [it, inserted] = coverage.try_emplace(&poly, false);
+                            if (inserted) it->second = selfCovered(*shape, poly);
+                            if (it->second) continue;
+                        }
                     }
                     const glm::vec3 normal = poly.normal;
                     const int a = dominantAxis(normal);

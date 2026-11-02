@@ -50,6 +50,7 @@
 #include "Renderer/Vulkan/VulkanContext.h"
 #include "Renderer/Vulkan/VulkanSwapchain.h"
 #include "Runtime/Application.h"
+#include "RegionScenario.h"
 #include "Runtime/CommandLine.h"
 
 #include <SDL3/SDL.h>
@@ -77,7 +78,7 @@ using namespace zodar;
 using namespace zodar::gfx;
 
 constexpr std::string_view kUsage =
-    "ZodarBench [standard options] [--scene grid|unique|city|model|lights] [--model file.glb] [--objects N]\n"
+    "ZodarBench [standard options] [--scene grid|unique|city|model|lights|region] [--model file.glb] [--objects N]\n"
     "           [--blocks N] [--lights N] [--warmup N] [--path gpu|graph|reference]\n"
     "           [--present immediate|low-latency|vsync] [--output report.json] [--screenshot-frame N] [--per-frame]\n"
     "           [--frame-cap FPS] [--source-textures] [--no-transfer-queue] [--environment none|sky|file.hdr]\n"
@@ -95,6 +96,7 @@ struct Options {
     uint32_t frames = 600; // measured frames (standard --frames)
     std::string path = "gpu"; // gpu: GPU-driven (GpuScene); graph: CPU draw list; reference: pre-graph path
     PresentMode present = PresentMode::Immediate;
+    bool pathSet = false;
     bool perFrameSeries = false; // Include per-frame visible/draw/triangle series in the report.
     std::filesystem::path output = "zodarbench.json";
     std::optional<std::filesystem::path> screenshot; // standard --screenshot, moved here
@@ -131,7 +133,7 @@ Options parse(std::span<const std::string> args) {
         else if (a == "--debug-view") o.debugView = parseLightingDebugView(next());
         else if (a == "--warmup") o.warmup = static_cast<uint32_t>(std::stoul(next()));
         else if (a == "--path") {
-            o.path = next();
+            o.path = next(); o.pathSet = true;
             if (o.path != "gpu" && o.path != "graph" && o.path != "reference") fail("--path must be gpu, graph or reference");
         } else if (a == "--present") {
             const std::string p = next();
@@ -147,12 +149,17 @@ Options parse(std::span<const std::string> args) {
         else if (a == "--output") o.output = next();
         else fail("Unknown argument '" + std::string(a) + "' (see --help)");
     }
+    if (o.scene == "region") {
+        if (!o.pathSet) o.path = "graph";
+        if (o.path == "gpu") fail("region uses streamed meshes: choose graph or reference");
+        if (!o.lightsSet) o.lights = 0;
+    }
     if (o.scene == "model" && !o.model) fail("--scene model needs --model <file>");
     if (o.scene == "lights" && !o.lightsSet) o.lights = 4096;
     // Lights scene: 4096 lights with 3 m ranges over a 154 m square (16384 objects) keep the
     // busiest clusters well below the high preset's 256-light lists at 1080p.
     if (o.scene == "lights" && !o.objectsSet) o.objects = 16384;
-    if (o.scene != "grid" && o.scene != "unique" && o.scene != "city" && o.scene != "model" && o.scene != "lights") {
+    if (o.scene != "grid" && o.scene != "unique" && o.scene != "city" && o.scene != "model" && o.scene != "lights" && o.scene != "region") {
         fail("Unknown scene '" + o.scene + "'");
     }
     return o;
@@ -337,6 +344,14 @@ protected:
                 uniqueMaterials = 57;
                 uniqueMeshes = 3;
                 cityHalf = half;
+            } else if (o.scene == "region") {
+                meshes.emplace_back(batch, primitives::cube(1), &scene().geometry());
+                MaterialDesc d;
+                d.baseColorFactor = {0.6f,0.5f,0.3f,1};
+                materialsForRegion = scene().materials().createMaterial(d);
+                region = std::make_unique<RegionScenario>(renderer().context(), upload(), materialsForRegion,
+                                                          o.output.string()+".regions");
+                uniqueMaterials=1; uniqueMeshes=1;
             } else {
                 GltfLoadOptions loadOptions;
                 loadOptions.useCompiledTextures = !o.sourceTextures;
@@ -358,6 +373,7 @@ protected:
             batch.submit(); // Transfer queue + graphics acquire, blocking.
             transferMs = msSince(transferStart);
         }
+        if (region) bounds.expand(Bounds{{0,0,0},{4000,32,4000}});
         for (const auto& d : draws) bounds.expand(d.mesh->bounds().transformed(d.transform));
         centre = bounds.center();
         radius = std::max(0.5f * glm::length(bounds.extent()), 0.1f);
@@ -446,6 +462,16 @@ protected:
             view.camera.position = centre + glm::vec3(std::sin(angle), 0.45f, std::cos(angle)) * radius * 1.1f;
             view.camera.lookAt(centre);
         }
+        if (region) {
+            draws.clear();
+            region->update(rendered,view,draws);
+            // Reuse one prop mesh and material; bounded to the current streaming window.
+            for (int z=-4; z<4; ++z) for (int x=-4; x<4; ++x) {
+                const glm::vec3 p = view.camera.position + glm::vec3(float(x*4),-14,float(z*4-16));
+                draws.push_back({&meshes[0],0,materialsForRegion,glm::translate(glm::mat4(1),p)});
+            }
+            view.draws=draws;
+        }
         // Dynamic lights: new positions every frame (deterministic along the path).
         for (size_t i = 0, p = 0, sp = 0; i < moving.size(); ++i) {
             const MovingLight& m = moving[i];
@@ -531,6 +557,7 @@ protected:
         triangles.add(static_cast<double>(st.triangles));
     }
 
+    if (region) region->flush();
     // --- Report ----------------------------------------------------------------------
     const auto& ctx = renderer().context();
     const auto& info = ctx.deviceInfo();
@@ -551,6 +578,7 @@ protected:
     j << "  \"sceneDetails\": {\"objects\": " << draws.size() << ", \"uniqueMeshes\": " << uniqueMeshes
       << ", \"uniqueMaterials\": " << uniqueMaterials << ", \"pointLights\": " << view.lighting.pointLights.size()
       << (o.scene == "city" ? ", \"blocks\": " + std::to_string(o.blocks) : std::string()) << "},\n";
+    if (region) region->writeReport(j);
     j << "  \"resolution\": [" << renderer().swapchain().extent().width << ", " << renderer().swapchain().extent().height
       << "], \"presentMode\": \"" << toString(desc().presentMode) << "\",\n";
     j << "  \"warmupFrames\": " << o.warmup << ", \"measuredFrames\": " << cpuFrame.samples.size() << ",\n";
@@ -641,6 +669,8 @@ protected:
 
 private:
     Options o;
+    std::unique_ptr<RegionScenario> region;
+    MaterialHandle materialsForRegion = 0;
     // Scene
     std::vector<GpuMesh> meshes;
     std::unique_ptr<Model> model;

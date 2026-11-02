@@ -731,3 +731,14 @@ those faces, with a 1 cm gap; the exit sign sits above the lintel. CPU tests che
 intersections and an unobstructed front-to-wall ray using the committed glTF bounds.
 The game rejects structures outside its fixed mesh preload and generation rejects changes
 to the fixed exit stair placement. This adds guards, not a new streaming or gameplay system.
+
+### V6 region-scale benchmark and partial boundary culling
+
+`ZodarBench --scene region` exercises bounded region streaming over a synthetic 4 x 4 km
+route with structural blocks, props, persisted edits and reload verification. The engine
+contains no game content. Completed voxel jobs expose cumulative generation/meshing wall
+time through `VoxelWorldStats`; the benchmark records residency, payload and backlog data.
+The existing CPU streamed-mesh graph/reference paths remain in use. Identical shape blocks
+can cull matching partial boundary polygons by exact reverse cyclic vertex comparison;
+no sampled-coverage approximation or renderer-path replacement is used. Evidence and
+limitations: `docs/reports/v6-region-performance/README.md`.

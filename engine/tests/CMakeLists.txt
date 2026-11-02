@@ -227,3 +227,9 @@ if(TARGET ZodarVoxelTool AND Python3_Interpreter_FOUND)
     add_test(NAME tools.voxel_cli
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/VoxelCliTests.py $<TARGET_FILE:ZodarVoxelTool>)
 endif()
+
+if(ZODAR_GPU_TESTS AND TARGET ZodarBench AND Python3_Interpreter_FOUND)
+    add_test(NAME gpu.region_bench
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/RegionBenchTests.py $<TARGET_FILE:ZodarBench>)
+    set_tests_properties(gpu.region_bench PROPERTIES TIMEOUT 300 ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
+endif()

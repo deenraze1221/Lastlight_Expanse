@@ -1,0 +1,40 @@
+{
+  "tool": "ZodarBench", "engineVersion": "0.1.0",
+  "device": "llvmpipe (LLVM 19.1.7, 256 bits)", "driver": "llvmpipe Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+  "softwareRasterizer": true,
+  "note": "Software rasterizer: GPU times are NOT GPU performance.",
+  "scene": "region", "renderPath": "graph", "overlay": false,
+  "sceneDetails": {"objects": 76, "uniqueMeshes": 1, "uniqueMaterials": 1, "pointLights": 0},
+  "region": {"extentMeters":[4000,4000],"stopFrames":32,"stops":17,"inlineJobs":true,"generated":604,"meshed":232,"generationMs":18.048,"meshingMs":329.987,"edits":17,"loads":425,"saves":16,"reloads":25,"peakCpuBytes":134227647,"peakGpuAndStagingBytes":11835040,"uploadedBytes":98062720,"peakChunks":39,"peakRegions":25,"unsettledUpdates":278,"reloadVerified":true,"finalSettled":true,"finalBacklog":0,"updateIncludingMeshingAndIoMs":{"samples":546,"avg":0.855,"p50":0.138,"p95":3.351,"p99":6.574},"uploadSubmitMs":{"samples":546,"avg":0.165,"p50":0.002,"p95":0.769,"p99":2.442}},
+  "resolution": [320, 180], "presentMode": "immediate",
+  "warmupFrames": 0, "measuredFrames": 544,
+  "cpuFrameMs": {"avg": 21.4651, "p50": 16.1795, "p95": 51.8707, "p99": 153.1881, "max": 259.4313},
+  "gpuFrameMs": {"avg": 19.1519, "p50": 14.3548, "p95": 46.9785, "p99": 152.5032, "max": 256.5148},
+  "gpuPassesMs": {
+    "Frame": {"avg": 19.1519, "p50": 14.3548, "p95": 46.9785, "p99": 152.5032, "max": 256.5148},
+    "Lighting.ClusterCull": {"avg": 0.4139, "p50": 0.1558, "p95": 1.3299, "p99": 2.8367, "max": 25.0219},
+    "Lighting.Stats": {"avg": 0.4294, "p50": 0.1676, "p95": 1.7860, "p99": 3.0357, "max": 8.9793},
+    "Lighting.Upload": {"avg": 0.4847, "p50": 0.2260, "p95": 1.5914, "p99": 3.3273, "max": 15.8085},
+    "Resolve": {"avg": 1.8982, "p50": 0.9149, "p95": 4.1785, "p99": 18.4508, "max": 85.0111},
+    "Scene": {"avg": 10.9698, "p50": 8.7207, "p95": 24.3702, "p99": 86.8682, "max": 246.6814},
+    "Scene.DepthPrepass": {"avg": 4.3503, "p50": 3.2027, "p95": 10.2049, "p99": 26.8115, "max": 137.0652}
+  },
+  "cpuScopesMs": {
+    "Build graph": {"avg": 0.1506, "p50": 0.0509, "p95": 0.2463, "p99": 1.5210, "max": 18.6143},
+    "Fixed update": {"avg": 0.0001, "p50": 0.0001, "p95": 0.0002, "p99": 0.0003, "max": 0.0004},
+    "Prepare + build graph": {"avg": 0.0862, "p50": 0.0255, "p95": 0.1073, "p99": 0.7064, "max": 18.2768},
+    "Record": {"avg": 0.0470, "p50": 0.0222, "p95": 0.0659, "p99": 0.9025, "max": 2.6306},
+    "Submit + present": {"avg": 19.8179, "p50": 14.8307, "p95": 50.1208, "p99": 152.9166, "max": 258.1805},
+    "Update": {"avg": 1.0379, "p50": 0.1577, "p95": 4.5038, "p99": 8.3828, "max": 11.3059},
+    "Wait + acquire": {"avg": 0.3952, "p50": 0.1608, "p95": 1.3990, "p99": 4.4288, "max": 10.9176}
+  },
+  "perFrame": {"frames": 544, "drawCalls": {"avg": 6.8290, "p50": 10.0000, "p95": 12.0000, "p99": 12.0000, "max": 12.0000}, "visibleObjects": {"avg": 61.8290, "p50": 65.0000, "p95": 67.0000, "p99": 67.0000, "max": 67.0000}, "culledObjects": {"avg": 9.8438, "p50": 10.0000, "p95": 13.0000, "p99": 13.0000, "max": 13.0000}, "triangles": {"avg": 18267.0257, "p50": 27834.0000, "p95": 33870.0000, "p99": 33886.0000, "max": 33886.0000}},
+  "frameCap": {"fps": 0.000, "waitMs": null},
+  "pipelineStatistics": {"supported": true, "Scene": {"fragmentInvocations": {"avg": 38927.9077, "p50": 56458.0000, "p95": 57526.0000, "p99": 57526.0000, "max": 57526.0000}, "fragmentInvocationsPerPixel": 0.676, "rasterPrimitives": {"avg": 4602.7343, "p50": 5391.0000, "p95": 7560.0000, "p99": 7560.0000, "max": 7560.0000}}},
+  "assets": {"uploadQueue": "graphics", "loadMs": 0.000, "stageMs": 1.044, "transferMs": 0.144, "stagedMiB": 0.002, "textureMiB": 0.000, "textures": {"compiled": 0, "source": 0, "runtimeMips": 0, "stale": 0}},
+  "lighting": {"quality": "high", "pointLights": 0, "spotLights": 0, "clusters": [5, 3, 32], "maxLightsPerCluster": 512, "clusterAssignments": {"avg": 0.0000, "p50": 0.0000, "p95": 0.0000, "p99": 0.0000, "max": 0.0000}, "maxLightsFoundInCluster": 0, "overflowClusters": 0, "bruteForce": false, "depthPrepass": true, "multiscatter": true, "debugView": "none", "environment": "none", "iblBakeMs": 0.000, "iblMiB": 0.000, "clusterBuffersMiB": 0.494},
+  "commandDraws": 10, "statsLatencyFrames": 0,
+  "lastFrame": {"drawCalls": 10, "visibleObjects": 65, "submittedObjects": 76, "culledObjects": 11, "triangles": 27850},
+  "memory": {"deviceLocalUsageMiB": 893.250, "deviceLocalBudgetMiB": 34087.895, "allocationMiB": 34.632, "allocations": 41, "budgetFromDriver": true},
+  "validation": {"enabled": false, "errors": 0, "warnings": 0}
+}

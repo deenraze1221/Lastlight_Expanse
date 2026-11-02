@@ -890,3 +890,24 @@
 - Delivery: full tools/gate.sh is required on the clean commit by tools/hooks/pre-push,
   including Debug/Release, all goldens and the unchanged local Highlands 5ddd23b4...045776
   baseline. The final push/gate outcome is reported with the delivery commit.
+
+## V6 — Region-scale performance
+
+- Added `ZodarBench --scene region`: synthetic 4 x 4 km route with bounded streaming,
+  structural walls/slabs, shared-mesh props, edits, saves and verified reloads. Engine content
+  stays generic; no D7/V7 work. Completed generation/meshing job times are exposed in stats.
+- Measured Release on Mesa llvmpipe, three baseline/candidate runs interleaved. Rendering
+  dominated; removed only exactly matching hidden partial boundary polygons between identical
+  blocks. Existing cube, unequal-shape, sealing, graph/reference and other rendering paths
+  remain. No Hi-Z, binary greedy meshing, mesh shaders or packed-vertex work.
+- Median CPU/GPU frame means: 19.278/16.847 ms baseline, 18.164/15.912 ms candidate.
+  CPU p95 rose 1.9% (noise); uploaded payload fell 55.4%, typical triangles 54.1%.
+  All six region screenshots were byte-identical. Hardware performance remains unmeasured.
+- Final full Debug/Release gate passed: 39/39 CTest entries in each, warnings as errors,
+  Vulkan validation enabled. Both Highlands goldens match base with zero validation messages.
+  Intentional topology golden changes are documented with old hashes preserved; seam,
+  threaded-determinism, volume and cross-chunk sealing checks pass. Two pre-existing unit
+  cases remain skipped. Initial topology-golden failures remain in the local gate history.
+- Evidence, commands, raw reports and limitations: `docs/reports/v6-region-performance/README.md`.
+  This validates a 1-meter grid, discontinuous route and deterministic inline streaming;
+  hardware GPU, Windows/MSVC, 0.5-meter stress and async throughput remain unmeasured.

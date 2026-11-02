@@ -118,6 +118,7 @@ struct VoxelWorldStats {
     bool memoryPressure = false;
     uint64_t voxelBytes = 0;       // dense chunk arrays (uniform chunks cost nothing)
     uint32_t lodHistogram[kMaxLod + 1]{};
+    double generationMs = 0, meshingMs = 0; // cumulative completed worker wall time
     uint64_t generated = 0;        // totals since creation
     uint64_t meshed = 0;
     uint64_t staleMeshesDropped = 0;
@@ -235,6 +236,7 @@ private:
         bool structural;
         std::string error;
         WorkOutcome outcome = WorkOutcome::Success;
+        double elapsedMs = 0;
     };
     struct MeshResult {
         ChunkCoord coord;
@@ -244,6 +246,7 @@ private:
         MeshData mesh;
         std::string error;
         WorkOutcome outcome = WorkOutcome::Success;
+        double elapsedMs = 0;
     };
 
     void integrateResults();
@@ -279,6 +282,7 @@ private:
 
     uint32_t m_generateInFlight = 0;
     uint32_t m_meshInFlight = 0;
+    double m_generationMs = 0, m_meshingMs = 0;
     uint64_t m_totalGenerated = 0;
     uint64_t m_totalMeshed = 0;
     uint64_t m_staleDropped = 0;
