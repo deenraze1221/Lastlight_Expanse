@@ -11,13 +11,31 @@
     "model": {
       "sampling": "pixelArt",
       "compile": false,
-      "class": "prop"
+      "class": "prop",
+      "textureClass": "environment"
     }
   },
   "budgets": {
     "architecture": 3000,
     "character": 6000,
     "prop": 1500
+  },
+  "textureStandards": {
+    "classes": {
+      "character": [
+        128
+      ],
+      "environment": [
+        64
+      ],
+      "small": [
+        32
+      ]
+    },
+    "defaultClass": "environment",
+    "prohibitedSize": 256,
+    "densityTarget": 64.0,
+    "densityTolerance": 2.0
   },
   "assets": [
     {
@@ -27,7 +45,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:5f8fece3e53d1e0e",
+      "textureClass": "environment",
+      "hash": "fnv1a64:9951cbd198c05e6a",
       "dependencies": []
     },
     {
@@ -37,7 +56,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:1987f418795124af",
+      "textureClass": "environment",
+      "hash": "fnv1a64:633cb899c74ec3bc",
       "dependencies": []
     },
     {
@@ -47,7 +67,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:d331c766bc186a9b",
+      "textureClass": "environment",
+      "hash": "fnv1a64:7e1b118b44ac0adf",
       "dependencies": []
     },
     {
@@ -57,14 +78,15 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:6871d697dfd1f48e",
+      "textureClass": "environment",
+      "hash": "fnv1a64:b3a0d6572c747489",
       "dependencies": []
     },
     {
       "id": "bunker",
       "type": "scene",
       "source": "levels/bunker.scene.json",
-      "hash": "fnv1a64:9dd31968139d8ce3",
+      "hash": "fnv1a64:b66c16d8d3336540",
       "dependencies": [
         "materials/sign_airlock.material.json",
         "materials/sign_common.material.json",
@@ -93,13 +115,28 @@
       ]
     },
     {
+      "id": "bunker_blocks",
+      "type": "blocks",
+      "source": "blocks/bunker_blocks.blocks.json",
+      "hash": "fnv1a64:6a7e19452257303a",
+      "dependencies": [
+        "textures/blocks/ceiling.png",
+        "textures/blocks/concrete.png",
+        "textures/blocks/floor.png",
+        "textures/blocks/marking.png",
+        "textures/blocks/metal.png",
+        "textures/blocks/paint.png"
+      ]
+    },
+    {
       "id": "cable_tray",
       "type": "model",
       "source": "models/cable_tray.glb",
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:a7e300a49f75606a",
+      "textureClass": "environment",
+      "hash": "fnv1a64:60727bd27152ff73",
       "dependencies": []
     },
     {
@@ -109,7 +146,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:7882581b09523ded",
+      "textureClass": "environment",
+      "hash": "fnv1a64:4b95f406eab832e2",
       "dependencies": []
     },
     {
@@ -126,7 +164,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:0b0bb30130d255c7",
+      "textureClass": "environment",
+      "hash": "fnv1a64:b563e779d72ca79a",
       "dependencies": []
     },
     {
@@ -136,7 +175,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:15e5dd290c90c605",
+      "textureClass": "environment",
+      "hash": "fnv1a64:eda76b884b9752e5",
       "dependencies": []
     },
     {
@@ -146,7 +186,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:a9f3c3d583e5f629",
+      "textureClass": "environment",
+      "hash": "fnv1a64:3ae591e1cd215e01",
       "dependencies": []
     },
     {
@@ -156,7 +197,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:a7deb942b0815cb3",
+      "textureClass": "environment",
+      "hash": "fnv1a64:81d0e6d2a1f31b2c",
       "dependencies": []
     },
     {
@@ -166,7 +208,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:66ff199fdb9cb623",
+      "textureClass": "environment",
+      "hash": "fnv1a64:bed72fba8e2b0dcb",
       "dependencies": []
     },
     {
@@ -176,7 +219,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:fdb2e3343c8b0004",
+      "textureClass": "environment",
+      "hash": "fnv1a64:7fc88bfd7cdfdbac",
       "dependencies": [],
       "palette": "glow"
     },
@@ -187,7 +231,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:aeaf02ab6a2d2d19",
+      "textureClass": "environment",
+      "hash": "fnv1a64:dde585ab07e79c6e",
       "dependencies": [],
       "palette": "glow"
     },
@@ -198,7 +243,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:1ad5f1e8c752339c",
+      "textureClass": "environment",
+      "hash": "fnv1a64:6ec7a9b54527b12f",
       "dependencies": []
     },
     {
@@ -208,7 +254,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:9dd6820bd62c53af",
+      "textureClass": "environment",
+      "hash": "fnv1a64:74b26268d960ffdb",
       "dependencies": []
     },
     {
@@ -218,7 +265,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:fe51c5890d7b2ce4",
+      "textureClass": "environment",
+      "hash": "fnv1a64:f25355d164049f89",
       "dependencies": [],
       "palette": "glow"
     },
@@ -229,7 +277,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:3fe9433575bdff5e",
+      "textureClass": "environment",
+      "hash": "fnv1a64:9e9e0be2e9c380c7",
       "dependencies": [],
       "palette": "glow"
     },
@@ -240,7 +289,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:b8ba6c9a19e62c62",
+      "textureClass": "environment",
+      "hash": "fnv1a64:ec3ef3a8017e299c",
       "dependencies": []
     },
     {
@@ -250,14 +300,15 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:de6a222ebd99705f",
+      "textureClass": "environment",
+      "hash": "fnv1a64:9b24a7590ddfe0fb",
       "dependencies": []
     },
     {
       "id": "merchant_stall",
       "type": "prefab",
       "source": "prefabs/merchant_stall.prefab.json",
-      "hash": "fnv1a64:0042fdcb3957247a",
+      "hash": "fnv1a64:af0ab2951889cf7e",
       "dependencies": [
         "materials/sign_weapons.material.json",
         "textures/signs/weapons.png"
@@ -270,7 +321,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:cfd5a76c56a40ac8",
+      "textureClass": "environment",
+      "hash": "fnv1a64:5ac381c68c6eba1c",
       "dependencies": []
     },
     {
@@ -280,14 +332,15 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:2064d9c6532580bb",
+      "textureClass": "environment",
+      "hash": "fnv1a64:33aba81be4f90441",
       "dependencies": []
     },
     {
       "id": "room_sign",
       "type": "prefab",
       "source": "prefabs/room_sign.prefab.json",
-      "hash": "fnv1a64:9f723d50752a8a5d",
+      "hash": "fnv1a64:bc0eaf9ecd084104",
       "dependencies": [
         "materials/sign_dormitory.material.json",
         "textures/signs/dormitory.png"
@@ -300,14 +353,16 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:34f99123610fd1d3",
+      "textureClass": "environment",
+      "hash": "fnv1a64:c2b00a6137900fa7",
       "dependencies": []
     },
     {
       "id": "sign_airlock",
       "type": "material",
       "source": "materials/sign_airlock.material.json",
-      "hash": "fnv1a64:e01df989f7a940d0",
+      "textureClass": "environment",
+      "hash": "fnv1a64:a18bc4206e27705f",
       "dependencies": [
         "textures/signs/airlock.png"
       ]
@@ -316,7 +371,8 @@
       "id": "sign_common",
       "type": "material",
       "source": "materials/sign_common.material.json",
-      "hash": "fnv1a64:d57a1143f3600ee5",
+      "textureClass": "environment",
+      "hash": "fnv1a64:35a896acb11fe130",
       "dependencies": [
         "textures/signs/common.png"
       ]
@@ -325,7 +381,8 @@
       "id": "sign_dormitory",
       "type": "material",
       "source": "materials/sign_dormitory.material.json",
-      "hash": "fnv1a64:240291c9b01eb091",
+      "textureClass": "environment",
+      "hash": "fnv1a64:0b06e0602953b788",
       "dependencies": [
         "textures/signs/dormitory.png"
       ]
@@ -334,7 +391,8 @@
       "id": "sign_generator",
       "type": "material",
       "source": "materials/sign_generator.material.json",
-      "hash": "fnv1a64:2d482e47702b547f",
+      "textureClass": "environment",
+      "hash": "fnv1a64:1cbaf7501d24a47d",
       "dependencies": [
         "textures/signs/generator.png"
       ]
@@ -343,7 +401,8 @@
       "id": "sign_lockers",
       "type": "material",
       "source": "materials/sign_lockers.material.json",
-      "hash": "fnv1a64:2ea7751ac78bd99d",
+      "textureClass": "environment",
+      "hash": "fnv1a64:661db6db511d535a",
       "dependencies": [
         "textures/signs/lockers.png"
       ]
@@ -352,7 +411,8 @@
       "id": "sign_medic",
       "type": "material",
       "source": "materials/sign_medic.material.json",
-      "hash": "fnv1a64:e737835ff07b6f14",
+      "textureClass": "environment",
+      "hash": "fnv1a64:9bc84b5450410476",
       "dependencies": [
         "textures/signs/medic.png"
       ]
@@ -361,7 +421,8 @@
       "id": "sign_resources",
       "type": "material",
       "source": "materials/sign_resources.material.json",
-      "hash": "fnv1a64:61985749c7acac23",
+      "textureClass": "environment",
+      "hash": "fnv1a64:f9cb002efb7b2505",
       "dependencies": [
         "textures/signs/resources.png"
       ]
@@ -370,7 +431,8 @@
       "id": "sign_scout",
       "type": "material",
       "source": "materials/sign_scout.material.json",
-      "hash": "fnv1a64:fccc50054d4c87ea",
+      "textureClass": "environment",
+      "hash": "fnv1a64:417a8acb7b80c65a",
       "dependencies": [
         "textures/signs/scout.png"
       ]
@@ -379,7 +441,8 @@
       "id": "sign_technician",
       "type": "material",
       "source": "materials/sign_technician.material.json",
-      "hash": "fnv1a64:7683bd661d045de3",
+      "textureClass": "environment",
+      "hash": "fnv1a64:ad953868f3763ce6",
       "dependencies": [
         "textures/signs/technician.png"
       ]
@@ -388,7 +451,8 @@
       "id": "sign_weapons",
       "type": "material",
       "source": "materials/sign_weapons.material.json",
-      "hash": "fnv1a64:8f7921b6fa48b6f2",
+      "textureClass": "environment",
+      "hash": "fnv1a64:d94b91cdccf1c4e6",
       "dependencies": [
         "textures/signs/weapons.png"
       ]
@@ -400,7 +464,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:a7922b6a2b190a92",
+      "textureClass": "environment",
+      "hash": "fnv1a64:7d67bb08cb7185e0",
       "dependencies": []
     },
     {
@@ -410,7 +475,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:e80393418c446369",
+      "textureClass": "environment",
+      "hash": "fnv1a64:12106298f53a7fa5",
       "dependencies": []
     },
     {
@@ -420,7 +486,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:5e6985454fcde9fd",
+      "textureClass": "environment",
+      "hash": "fnv1a64:9a4e0089cc776744",
       "dependencies": [],
       "palette": "glow"
     },
@@ -431,7 +498,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:02d1557d7d9a2988",
+      "textureClass": "environment",
+      "hash": "fnv1a64:8e81e32a192cf360",
       "dependencies": []
     },
     {
@@ -441,7 +509,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "architecture",
-      "hash": "fnv1a64:b37004c28dfcdbbe",
+      "textureClass": "environment",
+      "hash": "fnv1a64:84badca1de8e11ab",
       "dependencies": []
     },
     {
@@ -451,7 +520,8 @@
       "sampling": "pixelArt",
       "compile": false,
       "class": "prop",
-      "hash": "fnv1a64:1220f78cfce79154",
+      "textureClass": "environment",
+      "hash": "fnv1a64:cc2f001424d0a9ec",
       "dependencies": [],
       "palette": "glow"
     },

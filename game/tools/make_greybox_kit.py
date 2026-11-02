@@ -395,7 +395,7 @@ def model_gltf(name, generator, prims_by_texture, sampler, tangents=False):
     prims = [primitive(b, prims_by_texture[t], i, tangents) for i, t in enumerate(textures)]
     images, materials = [], []
     for i, t in enumerate(textures):
-        images.append({"name": t, "mimeType": "image/png", "bufferView": b.view(png(32, 32, TEXTURES[t]))})
+        images.append({"name": t, "mimeType": "image/png", "bufferView": b.view(png(64, 64, lambda x, y: TEXTURES[t](x // 2, y // 2)))})
         metallic, roughness, emissive = MATERIAL[t]
         m = {"name": t, "pbrMetallicRoughness": {"baseColorTexture": {"index": i}, "metallicFactor": metallic,
                                                   "roughnessFactor": roughness}}
@@ -927,11 +927,21 @@ def text(obj):
 
 def outputs():
     files = {"palette.png": swatch(list(MASTER)), "palettes/glow.png": swatch(list(GLOW))}
+    block_names = ("concrete", "paint", "floor", "ceiling", "metal", "marking")
+    for name in block_names:
+        files["textures/blocks/%s.png" % name] = png(64, 64, TEXTURES[name])
+    files["blocks/bunker_blocks.blocks.json"] = text({
+        "schema": "zodar.blocks", "version": 1, "uvPerMetre": 1,
+        "materials": [{"name": n, "textures": "../textures/blocks/%s.png" % n,
+                       "roughness": MATERIAL[n][1], "metallic": MATERIAL[n][0]} for n in block_names],
+        "blocks": [{"name": n, "material": n, "structural": True} for n in block_names] +
+                  [{"name": "stairs", "material": "floor", "shape": "stair", "rotations": 4,
+                    "structural": True}]})
     for name, boxes in MODULES.items():
         files["models/%s.glb" % name] = blockbench(name, boxes)
     files["models/airlock_arch.glb"] = airlock_arch()
     for name, icon in SIGNS.items():
-        files["textures/signs/%s.png" % name] = png(32, 32, sign(icon))
+        files["textures/signs/%s.png" % name] = png(64, 64, lambda x, y: sign(icon)(x // 2, y // 2))
         files["materials/sign_%s.material.json" % name] = text(sign_material(name))
     files["prefabs/ceiling_lamp.prefab.json"] = text(ceiling_lamp_prefab())
     files["prefabs/wall_light_unit.prefab.json"] = text(wall_light_prefab())

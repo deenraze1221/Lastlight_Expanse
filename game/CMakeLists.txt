@@ -25,7 +25,7 @@ zodar_compile_shaders(LastlightExpanse SOURCES shaders/voxel.frag)
 
 if(ZODAR_BUILD_TESTS)
     add_executable(LastlightGameTests tests/main.cpp tests/CollisionTests.cpp tests/BunkerWalkTests.cpp
-        tests/HighlandsMeshTests.cpp src/World/LastlightTerrain.cpp src/Rendering/BlockTextures.cpp)
+        tests/HighlandsMeshTests.cpp tests/BunkerVoxelTests.cpp src/World/LastlightTerrain.cpp src/Rendering/BlockTextures.cpp)
     target_link_libraries(LastlightGameTests PRIVATE LastlightGameCore Zodar::Scene doctest::doctest)
     target_compile_definitions(LastlightGameTests PRIVATE LASTLIGHT_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
     zodar_set_warnings(LastlightGameTests)

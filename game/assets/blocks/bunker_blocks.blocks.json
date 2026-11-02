@@ -1,0 +1,82 @@
+{
+  "schema": "zodar.blocks",
+  "version": 1,
+  "uvPerMetre": 1,
+  "materials": [
+    {
+      "name": "concrete",
+      "textures": "../textures/blocks/concrete.png",
+      "roughness": 0.9,
+      "metallic": 0.0
+    },
+    {
+      "name": "paint",
+      "textures": "../textures/blocks/paint.png",
+      "roughness": 0.7,
+      "metallic": 0.0
+    },
+    {
+      "name": "floor",
+      "textures": "../textures/blocks/floor.png",
+      "roughness": 0.6,
+      "metallic": 0.0
+    },
+    {
+      "name": "ceiling",
+      "textures": "../textures/blocks/ceiling.png",
+      "roughness": 0.95,
+      "metallic": 0.0
+    },
+    {
+      "name": "metal",
+      "textures": "../textures/blocks/metal.png",
+      "roughness": 0.45,
+      "metallic": 0.7
+    },
+    {
+      "name": "marking",
+      "textures": "../textures/blocks/marking.png",
+      "roughness": 0.6,
+      "metallic": 0.0
+    }
+  ],
+  "blocks": [
+    {
+      "name": "concrete",
+      "material": "concrete",
+      "structural": true
+    },
+    {
+      "name": "paint",
+      "material": "paint",
+      "structural": true
+    },
+    {
+      "name": "floor",
+      "material": "floor",
+      "structural": true
+    },
+    {
+      "name": "ceiling",
+      "material": "ceiling",
+      "structural": true
+    },
+    {
+      "name": "metal",
+      "material": "metal",
+      "structural": true
+    },
+    {
+      "name": "marking",
+      "material": "marking",
+      "structural": true
+    },
+    {
+      "name": "stairs",
+      "material": "floor",
+      "shape": "stair",
+      "rotations": 4,
+      "structural": true
+    }
+  ]
+}

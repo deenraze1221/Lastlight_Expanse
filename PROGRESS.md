@@ -828,3 +828,9 @@
 - Remaining limits unchanged: single writer per save directory, no fsync/cross-file durability,
   explicit provider flush before destruction, managed byte estimates rather than RSS/driver
   padding. Windows exclusive creation/replacement implemented but not validated this session.
+
+## V5 implementation (v5/voxel-bunker)
+- Step 1: game block catalogue, structural states, 64x64 block/model/sign textures and A1
+  registry standards. Focused catalogue: 1 case / 24 assertions; strict assets 44/44,
+  generator freshness and bunker GPU smoke passed. Pre-change Highlands on Mesa 25.0.7:
+  `5ddd23b4cf86dfd551dfad44e349fcefb2594f31a2c37b72f6d9c00f68045776`.
