@@ -1,6 +1,10 @@
 #include "Bunker/BunkerApp.h"
 
 #include "Bunker/LevelColliders.h"
+#include "Bunker/BunkerVoxels.h"
+#include "AssetManager/BlockMaterials.h"
+#include "Renderer/StreamedMeshSet.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include "Physics/CollisionWorld.h"
 #include "Player/ExplorationWalker.h"
 
@@ -69,6 +73,21 @@ protected:
         if (m_explore) {
             m_colliderTable = loadColliderTable(m_assetDir / "colliders.json");
         }
+        m_voxels = std::make_unique<BunkerVoxels>(m_assetDir, &jobs());
+        m_blockMaterials = std::make_unique<BlockMaterials>(renderer().context(), upload(), scene(),
+                                                          m_voxels->catalogue);
+        m_voxelMeshes = std::make_unique<StreamedMeshSet>(renderer().context(), upload());
+        for (const auto& e : m_voxels->world->takeMeshEvents()) {
+            if (e.type != zodar::voxel::ChunkMeshEvent::Type::Upsert) continue;
+            constexpr uint64_t mask = (1ull << 21) - 1;
+            const auto& c = e.coord;
+            const uint64_t key = (uint64_t(uint32_t(c.x)) & mask) |
+                ((uint64_t(uint32_t(c.y)) & mask) << 21) | ((uint64_t(uint32_t(c.z)) & mask) << 42);
+            m_voxelMeshes->upsert(key, e.mesh, glm::translate(glm::mat4(1), e.origin), m_blockMaterials->material());
+        }
+        m_voxelMeshes->update();
+        upload().queue().waitIdle();
+        m_voxelMeshes->update();
         tryLoadLevel();
     }
 
@@ -147,6 +166,7 @@ protected:
 
     void finishFrame(const FrameTime& time) {
         m_draws.clear();
+        m_voxelMeshes->appendDraws(m_draws);
         collectDraws(m_world, m_draws); // modelRenderer modules + meshRenderer signs (CPU path)
         collectLighting(m_world, m_view); // room lights, ambient, fog (re-read: hot reload)
         m_view.draws = m_draws;
@@ -174,6 +194,10 @@ protected:
         }
         m_view.draws = {};
         m_draws.clear();
+        m_voxelMeshes.reset();
+        m_blockMaterials.reset();
+        m_collision.setVoxelWorld(nullptr);
+        m_voxels.reset();
         m_level.reset();
         m_world.clear();
         m_warmModels = {};
@@ -229,6 +253,7 @@ private:
 
     void rebuildColliders() {
         m_collision.clear();
+        m_collision.setVoxelWorld(m_voxels->world.get());
         const SceneBindings& bindings = m_level->bindings();
         const LevelColliderStats stats = buildLevelColliders(
             m_level->document(), m_colliderTable,
@@ -257,6 +282,9 @@ private:
     std::optional<GpuMesh> m_signMesh;
     SceneModelAssets m_warmModels;
     SceneMaterialAssets m_warmMaterials;
+    std::unique_ptr<BunkerVoxels> m_voxels;
+    std::unique_ptr<BlockMaterials> m_blockMaterials;
+    std::unique_ptr<StreamedMeshSet> m_voxelMeshes;
     World m_world;
     std::unique_ptr<LiveScene> m_level; // destroyed first (destroys its entities)
     std::vector<MeshDraw> m_draws;

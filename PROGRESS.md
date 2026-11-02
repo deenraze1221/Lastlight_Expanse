@@ -840,3 +840,7 @@
 - Step 3: CollisionWorld composes imported AABBs with V3 voxel boxes and Collision-mode rays.
   Swept queries cover the whole axis travel; missing data stops that axis, overlaps returns
   blocked, incomplete rays throw. Focused collision/walker/voxel tests: 7 cases / 72 assertions.
+- Step 4: bunker renders V3 meshes with BlockMaterials alongside imported model draws;
+  waits for complete CPU world and GPU uploads before exploration. Removed replaced model
+  architecture and collider entries. All 10 game cases / 128 assertions passed; both bunker
+  GPU smokes, strict assets and generator checks passed.

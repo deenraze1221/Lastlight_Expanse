@@ -50,17 +50,6 @@
       "dependencies": []
     },
     {
-      "id": "beam",
-      "type": "model",
-      "source": "models/beam.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:02883b08865460f1",
-      "dependencies": []
-    },
-    {
       "id": "bench",
       "type": "model",
       "source": "models/bench.glb",
@@ -86,7 +75,7 @@
       "id": "bunker",
       "type": "scene",
       "source": "levels/bunker.scene.json",
-      "hash": "fnv1a64:1132673733a8997c",
+      "hash": "fnv1a64:7bc70e9e63c02986",
       "dependencies": [
         "materials/sign_airlock.material.json",
         "materials/sign_common.material.json",
@@ -140,32 +129,10 @@
       "dependencies": []
     },
     {
-      "id": "ceiling",
-      "type": "model",
-      "source": "models/ceiling.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:a40e3d48b681f718",
-      "dependencies": []
-    },
-    {
       "id": "ceiling_lamp",
       "type": "prefab",
       "source": "prefabs/ceiling_lamp.prefab.json",
       "hash": "fnv1a64:595ac56b8c0d9133",
-      "dependencies": []
-    },
-    {
-      "id": "corner",
-      "type": "model",
-      "source": "models/corner.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:86ed2e2d0394ac5f",
       "dependencies": []
     },
     {
@@ -188,17 +155,6 @@
       "class": "prop",
       "textureClass": "environment",
       "hash": "fnv1a64:3ae591e1cd215e01",
-      "dependencies": []
-    },
-    {
-      "id": "doorway",
-      "type": "model",
-      "source": "models/doorway.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:c5c8dab05da60547",
       "dependencies": []
     },
     {
@@ -235,28 +191,6 @@
       "hash": "fnv1a64:dde585ab07e79c6e",
       "dependencies": [],
       "palette": "glow"
-    },
-    {
-      "id": "floor",
-      "type": "model",
-      "source": "models/floor.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:6ec7a9b54527b12f",
-      "dependencies": []
-    },
-    {
-      "id": "floor_marked",
-      "type": "model",
-      "source": "models/floor_marked.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:74b26268d960ffdb",
-      "dependencies": []
     },
     {
       "id": "generator",
@@ -313,28 +247,6 @@
         "materials/sign_weapons.material.json",
         "textures/signs/weapons.png"
       ]
-    },
-    {
-      "id": "opening_wide",
-      "type": "model",
-      "source": "models/opening_wide.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:b9a94e0d0541fd71",
-      "dependencies": []
-    },
-    {
-      "id": "pillar",
-      "type": "model",
-      "source": "models/pillar.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:7053293d5fb7a2de",
-      "dependencies": []
     },
     {
       "id": "room_sign",
@@ -458,17 +370,6 @@
       ]
     },
     {
-      "id": "stairs",
-      "type": "model",
-      "source": "models/stairs.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:7d67bb08cb7185e0",
-      "dependencies": []
-    },
-    {
       "id": "table",
       "type": "model",
       "source": "models/table.glb",
@@ -500,17 +401,6 @@
       "class": "prop",
       "textureClass": "environment",
       "hash": "fnv1a64:8e81e32a192cf360",
-      "dependencies": []
-    },
-    {
-      "id": "wall",
-      "type": "model",
-      "source": "models/wall.glb",
-      "sampling": "pixelArt",
-      "compile": false,
-      "class": "architecture",
-      "textureClass": "environment",
-      "hash": "fnv1a64:e1148d4ea690ee76",
       "dependencies": []
     },
     {

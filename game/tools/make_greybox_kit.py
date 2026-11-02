@@ -635,7 +635,7 @@ def rnd(v):
     return [round(c, 4) + 0.0 for c in v]
 
 
-def level():
+def level(authoring=False):
     cells = {}
     for rid, _, (i0, i1), (j0, j1) in ROOMS:
         for i in range(i0, i1 + 1):
@@ -651,6 +651,8 @@ def level():
         return n
 
     def add(room, model, pos, yaw=0.0, name=None):
+        if model in VOXEL_ARCHITECTURE and not authoring:
+            return
         n = next_id(room, model)
         e = {"id": "%s/%s_%d" % (room, model, n), "name": name or "%s %d" % (model.replace("_", " "), n),
              "parent": room, "transform": {"position": rnd(pos)}}
@@ -868,6 +870,8 @@ def colliders():
     (markings, screens, trims under 2 cm) are left out."""
     models = {}
     for name, boxes in MODULES.items():
+        if name in VOXEL_ARCHITECTURE:
+            continue
         out = []
         if name not in NON_SOLID:
             for lo, hi, _, _ in boxes:
@@ -936,7 +940,7 @@ def bunker_structure():
     def put(x, y, z, name):
         cells[(x, y, z)] = name
 
-    for e in level()["entities"]:
+    for e in level(authoring=True)["entities"]:
         model = e.get("modelRenderer", {}).get("model")
         if model not in VOXEL_ARCHITECTURE:
             continue
@@ -1011,6 +1015,8 @@ def outputs():
                   [{"name": "stairs", "material": "floor", "shape": "stair", "rotations": 4,
                     "structural": True}]})
     for name, boxes in MODULES.items():
+        if name in VOXEL_ARCHITECTURE:
+            continue
         files["models/%s.glb" % name] = blockbench(name, boxes)
     files["models/airlock_arch.glb"] = airlock_arch()
     for name, icon in SIGNS.items():

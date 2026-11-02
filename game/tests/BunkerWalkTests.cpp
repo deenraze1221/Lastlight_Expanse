@@ -2,6 +2,7 @@
 // the entrance through every room and corridor (doorways wide enough, no blocking geometry,
 // never falling through the floor).
 #include "Bunker/LevelColliders.h"
+#include "Bunker/BunkerVoxels.h"
 #include "Player/ExplorationWalker.h"
 
 #include "SceneFile/SceneFile.h"
@@ -22,8 +23,10 @@ const std::filesystem::path kAssets = LASTLIGHT_ASSETS_DIR;
 struct Level {
     zodar::SceneDocument doc = zodar::loadSceneFile(kAssets / "levels/bunker.scene.json");
     ColliderTable table = loadColliderTable(kAssets / "colliders.json");
+    BunkerVoxels voxels{kAssets};
     CollisionWorld world;
     LevelColliderStats stats = buildLevelColliders(doc, table, nullptr, world);
+    Level() { world.setVoxelWorld(voxels.world.get()); }
 };
 
 glm::vec3 spawnPoint(const zodar::SceneDocument& doc) {
@@ -54,7 +57,7 @@ TEST_CASE("bunker: every modelRenderer has collision data; the entrance spawn st
     Level level;
     CHECK(level.stats.skipped == 0);
     CHECK(level.stats.fromBounds == 0);
-    CHECK(level.stats.boxes > 500);
+    CHECK(level.stats.boxes > 100);
     ExplorationWalker walker;
     walker.spawn(spawnPoint(level.doc));
     CHECK_FALSE(level.world.overlaps(walker.box()));
