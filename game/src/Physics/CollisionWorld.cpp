@@ -1,5 +1,8 @@
 #include "Physics/CollisionWorld.h"
 
+#include "Scene/Voxel/VoxelWorld.h"
+#include "Core/Error.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -11,12 +14,26 @@ constexpr float kSkin = 0.001f;
 
 } // namespace
 
+bool CollisionWorld::gather(const Aabb& query, std::vector<Aabb>& boxes) const {
+    boxes = m_boxes;
+    if (!m_voxels) return true;
+    std::vector<zodar::voxel::SolidBox> solids;
+    const auto status = m_voxels->collectSolidBoxes({query.min, query.max}, solids);
+    for (const auto& solid : solids) boxes.push_back({solid.min, solid.max});
+    return status == zodar::voxel::QueryStatus::Complete;
+}
+
 float CollisionWorld::sweepAxis(Aabb& box, int axis, float delta) const {
     if (delta == 0.0f) {
         return 0.0f;
     }
+    Aabb query = box;
+    query.min[axis] += std::min(0.0f, delta);
+    query.max[axis] += std::max(0.0f, delta);
+    std::vector<Aabb> boxes;
+    if (!gather(query, boxes)) return 0.0f;
     float allowed = delta;
-    for (const Aabb& s : m_boxes) {
+    for (const Aabb& s : boxes) {
         if (s.overlaps(box)) {
             continue; // already inside (e.g. spawned in a wall): never trap the mover
         }
@@ -91,11 +108,23 @@ std::optional<CollisionWorld::RayHit> CollisionWorld::raycast(const glm::vec3& o
         hit.normal[nearAxis] = dir[nearAxis] > 0.0f ? -1.0f : 1.0f;
         best = hit;
     }
+    if (m_voxels) {
+        const glm::vec3 end = origin + dir * maxDistance;
+        std::vector<Aabb> coverage;
+        ZODAR_ENSURE(gather({glm::min(origin, end), glm::max(origin, end)}, coverage),
+                     "collision ray touches missing voxel chunks");
+        const auto hit = m_voxels->raycast(origin, dir, maxDistance,
+                                          {zodar::voxel::RaycastMode::Collision});
+        if (hit && (!best || hit->distance < best->distance))
+            best = RayHit{hit->distance, hit->point, hit->surfaceNormal};
+    }
     return best;
 }
 
 bool CollisionWorld::overlaps(const Aabb& box) const {
-    return std::ranges::any_of(m_boxes, [&](const Aabb& s) { return s.overlaps(box); });
+    std::vector<Aabb> boxes;
+    if (!gather(box, boxes)) return true;
+    return std::ranges::any_of(boxes, [&](const Aabb& s) { return s.overlaps(box); });
 }
 
 } // namespace lastlight

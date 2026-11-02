@@ -6,6 +6,8 @@
 #include <optional>
 #include <vector>
 
+namespace zodar::voxel { class VoxelWorld; }
+
 namespace lastlight {
 
 // Axis-aligned box in world space (metres).
@@ -35,6 +37,8 @@ public:
         glm::vec3 normal{0.0f};
     };
 
+    // Non-owning; voxel world must outlive this adapter. Missing data blocks movement.
+    void setVoxelWorld(const zodar::voxel::VoxelWorld* world) { m_voxels = world; }
     void addStatic(const Aabb& box) { m_boxes.push_back(box); }
     void clear() { m_boxes.clear(); }
     size_t size() const { return m_boxes.size(); }
@@ -51,6 +55,8 @@ public:
 private:
     float sweepAxis(Aabb& box, int axis, float delta) const;
 
+    bool gather(const Aabb& query, std::vector<Aabb>& boxes) const;
+    const zodar::voxel::VoxelWorld* m_voxels = nullptr;
     std::vector<Aabb> m_boxes;
 };
 

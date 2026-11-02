@@ -837,3 +837,6 @@
 - Step 2: canonical named RLE .zstruct generated from the layout; fixed LOD0 loader uses
   V4 LayeredGenerator over an empty base. No region persistence needed for this static slice.
   Structure/collision-spawn and existing room walk tests passed; asset/freshness checks clean.
+- Step 3: CollisionWorld composes imported AABBs with V3 voxel boxes and Collision-mode rays.
+  Swept queries cover the whole axis travel; missing data stops that axis, overlaps returns
+  blocked, incomplete rays throw. Focused collision/walker/voxel tests: 7 cases / 72 assertions.

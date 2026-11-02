@@ -39,3 +39,30 @@ TEST_CASE("bunker voxels: structure is canonical and spans negative coordinates"
     CHECK(world.getVoxel({10, 2, 0}) == 0);
     CHECK(world.getVoxel({0, -1, 0}) != 0);
 }
+
+#include "Bunker/BunkerVoxels.h"
+#include "Physics/CollisionWorld.h"
+
+TEST_CASE("bunker voxels: hybrid collision blocks walls and missing chunks") {
+    lastlight::BunkerVoxels bunker(LASTLIGHT_ASSETS_DIR);
+    lastlight::CollisionWorld collision;
+    collision.setVoxelWorld(bunker.world.get());
+    const lastlight::Aabb body{{-11.2f, 0.01f, -0.2f}, {-10.8f, 1.81f, 0.2f}};
+    CHECK_FALSE(collision.overlaps(body));
+    const auto ground = collision.sweep(body, {0, -2, 0});
+    CHECK(ground.hitY);
+    CHECK(ground.moved.y > -0.02f);
+    collision.addStatic({{-10, 0, -0.5f}, {-9.5f, 2, 0.5f}});
+    const auto wall = collision.sweep(body, {20, 0, 0});
+    CHECK(wall.hitX);
+    CHECK(wall.moved.x < 1);
+    const auto model = collision.raycast({-11, 1, 0}, {1, 0, 0}, 10);
+    REQUIRE(model);
+    CHECK(model->distance == doctest::Approx(1));
+    const auto floor = collision.raycast({-11, 1, 0}, {0, -1, 0}, 10);
+    REQUIRE(floor);
+    CHECK(floor->distance == doctest::Approx(1));
+    CHECK(collision.overlaps({{1000, 0, 0}, {1001, 2, 1}}));
+    CHECK(collision.sweep(body, {1000, 0, 0}).moved.x == 0);
+    CHECK_THROWS(collision.raycast({-11, 1, 0}, {1, 0, 0}, 1000));
+}
