@@ -16,7 +16,9 @@ with tempfile.TemporaryDirectory(prefix="zodar-region-bench-") as directory:
     assert region["reloadVerified"] and region["reloads"] > 0
     assert region["edits"] == 17 and region["saves"] >= 16
     assert region["meshed"] > 100 and region["generated"] > 100
-    assert 0 < region["peakCpuBytes"] < 512 * 1024**2
+    assert 200 * 1024**2 < region["peakCpuBytes"] < 256 * 1024**2
+    assert 0 < region["peakRegionCpuBytes"] < 256 * 1024**2
+    assert report["sceneDetails"]["uniqueMeshes"] == report["sceneDetails"]["objects"] - 64 + 1
     assert 0 < region["peakGpuAndStagingBytes"] < 128 * 1024**2
     assert region["peakChunks"] <= 100 and region["peakRegions"] <= 40
     assert region["finalSettled"] and region["finalBacklog"] == 0

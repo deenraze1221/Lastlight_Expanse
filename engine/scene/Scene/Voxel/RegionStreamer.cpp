@@ -35,6 +35,7 @@ void RegionStreamer::submit(RegionCoord coord, bool save) const {
     const auto revision = entry.revision;
     entry.pending = true;
     m_requests.emplace(id, Request{id, coord, save, revision, cancel, snapshot});
+    (void)memoryBytes(); // include request scratch reservations before inline work
     auto job = [this, id, coord, save, snapshot, revision, cancel] {
         Result result{{id, coord, save, Outcome::Success, {}}, revision, {}};
         try {
@@ -181,6 +182,7 @@ uint64_t RegionStreamer::memoryBytes() const {
         if(auto data=it->lock()) { if(counted.insert(data.get()).second) bytes+=regionMemoryBytes(*data); ++it; }
         else it=m_snapshots.erase(it);
     }
+    m_peakBytes=std::max(m_peakBytes,bytes);
     return bytes;
 }
 size_t RegionStreamer::residentRegions() const { size_t n=0; for(const auto& [c,e]:m_entries) n+=bool(e.data); return n; }

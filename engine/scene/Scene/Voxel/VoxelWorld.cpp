@@ -172,6 +172,7 @@ void VoxelWorld::update(const glm::vec3& observer) {
             entry.ownership=m_generator->retainChunk(coord);
             entry.generating = true;
             ++m_generateInFlight;
+            (void)stats(); // capture the reservation before inline execution/integration
             {
                 auto job = [this, coord, generator=std::move(generator)] {
                     GenerateResult result{coord, {}, {}, false, {}};
@@ -237,7 +238,9 @@ void VoxelWorld::update(const glm::vec3& observer) {
     if (m_generateInFlight + m_meshInFlight > 0) {
         settled = false;
     }
-    integrateResults(); // inline mode: results of this update are visible immediately
+    integrateResults();
+    (void)stats(); // retain data/event high-water before the caller consumes mesh events
+    // inline mode: results of this update are visible immediately
     m_settled = settled && m_generateInFlight + m_meshInFlight == 0;
 }
 
@@ -261,6 +264,7 @@ void VoxelWorld::scheduleMesh(const ChunkCoord& coord, Entry& entry, int lod, ui
     }
     entry.meshPending = true;
     ++m_meshInFlight;
+    (void)stats(); // capture the reservation before inline execution/integration
     MeshOptions options = m_settings.mesh;
     options.lod = lod;
     options.voxelSize = m_settings.voxelSize;
@@ -821,6 +825,8 @@ VoxelWorldStats VoxelWorld::stats() const {
     for(const auto& [coord,data]:m_edits) if(counted.insert(data.get()).second) s.cpuBytes+=data->memoryBytes()+sizeof(VoxelChunk);
     for(const auto& e:m_events) s.cpuBytes+=e.mesh.vertices.capacity()*sizeof(Vertex)+e.mesh.indices.capacity()*4;
     s.cpuBytes+=uint64_t(m_generateInFlight)*2*kChunkVolume*sizeof(Voxel)+uint64_t(m_meshInFlight)*m_meshReservation;
+    m_peakCpuBytes=std::max(m_peakCpuBytes,s.cpuBytes);
+    s.peakCpuBytes=m_peakCpuBytes;
     s.memoryPressure=m_memoryPressure;
     s.generateInFlight = m_generateInFlight;
     s.meshInFlight = m_meshInFlight;

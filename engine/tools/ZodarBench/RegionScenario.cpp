@@ -99,7 +99,8 @@ void RegionScenario::update(uint32_t tick, SceneView& view, std::vector<MeshDraw
     meshes.appendDraws(draws);
     uploadMs.push_back(elapsed(start));
     const auto cpu=world->stats(); const auto gpu=meshes.stats();
-    peakCpu=std::max(peakCpu,cpu.cpuBytes+regions->memoryBytes());
+    peakCpu=cpu.peakCpuBytes;
+    peakRegionCpu=regions->peakMemoryBytes();
     peakGpu=std::max(peakGpu,gpu.gpuBytes+gpu.stagingBytes);
     peakChunks=std::max(peakChunks,uint64_t(cpu.chunksWithData));
     peakRegions=std::max(peakRegions,uint64_t(regions->residentRegions()));
@@ -112,7 +113,8 @@ void RegionScenario::writeReport(std::ostream& out) const {
         << "\"inlineJobs\":true,\"generated\":" << cpu.generated << ",\"meshed\":" << cpu.meshed
         << ",\"generationMs\":" << cpu.generationMs << ",\"meshingMs\":" << cpu.meshingMs
         << ",\"edits\":" << edits << ",\"loads\":" << loads << ",\"saves\":" << saves << ",\"reloads\":" << reloads
-        << ",\"peakCpuBytes\":" << peakCpu << ",\"peakGpuAndStagingBytes\":" << peakGpu
+        << ",\"peakCpuBytes\":" << peakCpu << ",\"peakRegionCpuBytes\":" << peakRegionCpu
+        << ",\"peakGpuAndStagingBytes\":" << peakGpu
         << ",\"uploadedBytes\":" << gpu.uploadedBytes << ",\"peakChunks\":" << peakChunks
         << ",\"peakRegions\":" << peakRegions << ",\"unsettledUpdates\":" << unsettled
         << ",\"reloadVerified\":" << (reloadVerified?"true":"false")

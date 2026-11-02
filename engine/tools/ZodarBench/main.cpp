@@ -575,7 +575,7 @@ protected:
       << "\",\n";
     j << "  \"scene\": \"" << o.scene << "\", \"renderPath\": \"" << (o.path)
       << "\", \"overlay\": " << (desc().overlay ? "true" : "false") << ",\n";
-    j << "  \"sceneDetails\": {\"objects\": " << draws.size() << ", \"uniqueMeshes\": " << uniqueMeshes
+    j << "  \"sceneDetails\": {\"objects\": " << draws.size() << ", \"uniqueMeshes\": " << (region ? region->uniqueMeshCount() : uniqueMeshes)
       << ", \"uniqueMaterials\": " << uniqueMaterials << ", \"pointLights\": " << view.lighting.pointLights.size()
       << (o.scene == "city" ? ", \"blocks\": " + std::to_string(o.blocks) : std::string()) << "},\n";
     if (region) region->writeReport(j);

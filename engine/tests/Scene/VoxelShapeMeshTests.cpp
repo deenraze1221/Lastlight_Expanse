@@ -519,3 +519,63 @@ TEST_CASE("shape mesh: identical partial boundaries cull exactly across chunks")
     MeshOptions sealed; sealed.sealFaces=faceBit(int(Face::PosX));
     CHECK(meshChunk(nb,registry.palette,sealed).indices.size()==36);
 }
+
+TEST_CASE("shape mesh: rotated neighbours agree inside chunks and across every boundary") {
+    Registry registry;
+    for (uint16_t shape=1; shape<registry.lib->size(); ++shape) for (int rotation=0; rotation<4; ++rotation) {
+        const auto id=Registry::id(shape,rotation);
+        for (int face=0; face<6; ++face) {
+            CAPTURE(shape); CAPTURE(rotation); CAPTURE(face);
+            const int axis=face/2, sign=(face&1)?1:-1;
+            glm::ivec3 direction(0); direction[axis]=sign;
+            glm::ivec3 boundary(8); boundary[axis]=sign>0?31:0;
+            glm::ivec3 localNeighbour=boundary; localNeighbour[axis]=sign>0?0:31;
+            VoxelChunk center, neighbour, interior;
+            center.set(boundary.x,boundary.y,boundary.z,id);
+            neighbour.set(localNeighbour.x,localNeighbour.y,localNeighbour.z,id);
+            auto nb=single(center);
+            nb.chunks[ChunkNeighborhood::slot(direction.x,direction.y,direction.z)]=&neighbour;
+            const auto cross=meshChunk(nb,registry.palette,{});
+            glm::ivec3 cell(8), adjacent=cell+direction;
+            interior.set(cell.x,cell.y,cell.z,id);
+            interior.set(adjacent.x,adjacent.y,adjacent.z,id);
+            const auto pair=meshChunk(single(interior),registry.palette,{});
+            // Opposite chunks together must emit the same number of triangles as an
+            // interior pair. Translation does not change the exact-coverage decision.
+            auto reverse=single(neighbour);
+            reverse.chunks[ChunkNeighborhood::slot(-direction.x,-direction.y,-direction.z)]=&center;
+            CHECK(cross.indices.size()+meshChunk(reverse,registry.palette,{}).indices.size()==pair.indices.size());
+            if (shape==*registry.lib->find("slab_low") && axis!=1)
+                CHECK(meshVolume(pair)==doctest::Approx(1).epsilon(1e-4));
+            MeshOptions sealed; sealed.sealFaces=faceBit(face);
+            CHECK(sameBytes(meshChunk(nb,registry.palette,sealed),meshChunk(single(center),registry.palette,{})));
+        }
+    }
+}
+
+TEST_CASE("voxel memory: job reservation high-water survives integration and event consumption") {
+    struct Floor final : IVoxelGenerator {
+        void generate(const ChunkCoord&, VoxelChunk& chunk) const override { chunk.fillLayer(0,1); }
+    };
+    for (uint32_t workers : {0u,2u}) {
+        JobSystem jobs(workers);
+        StreamingSettings settings;
+        settings.viewRadius=0; settings.minChunkY=0; settings.maxChunkY=0;
+        settings.lodDistances.clear(); settings.cpuBudgetBytes=256*1024*1024;
+        VoxelPalette palette; palette.colors={glm::vec4(0),glm::vec4(1)};
+        VoxelWorld world(std::make_shared<Floor>(),palette,settings,&jobs);
+        uint64_t previous=0;
+        for (int i=0; i<128; ++i) {
+            world.update({16,16,16}); world.finishPendingWork();
+            (void)world.takeMeshEvents();
+            const auto stats=world.stats();
+            CHECK(stats.peakCpuBytes>=previous);
+            CHECK(stats.peakCpuBytes>=stats.cpuBytes);
+            previous=stats.peakCpuBytes;
+            if(world.isSettled()) break;
+        }
+        REQUIRE(world.isSettled());
+        CHECK(world.stats().peakCpuBytes>100*1024*1024);
+        CHECK(world.stats().cpuBytes<world.stats().peakCpuBytes);
+    }
+}

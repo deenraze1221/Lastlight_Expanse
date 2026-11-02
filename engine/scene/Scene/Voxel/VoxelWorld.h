@@ -118,6 +118,7 @@ struct VoxelWorldStats {
     bool memoryPressure = false;
     uint64_t voxelBytes = 0;       // dense chunk arrays (uniform chunks cost nothing)
     uint32_t lodHistogram[kMaxLod + 1]{};
+    uint64_t peakCpuBytes = 0; // lifetime high-water of world accounting, including job reservations
     double generationMs = 0, meshingMs = 0; // cumulative completed worker wall time
     uint64_t generated = 0;        // totals since creation
     uint64_t meshed = 0;
@@ -282,6 +283,7 @@ private:
 
     uint32_t m_generateInFlight = 0;
     uint32_t m_meshInFlight = 0;
+    mutable uint64_t m_peakCpuBytes = 0;
     double m_generationMs = 0, m_meshingMs = 0;
     uint64_t m_totalGenerated = 0;
     uint64_t m_totalMeshed = 0;

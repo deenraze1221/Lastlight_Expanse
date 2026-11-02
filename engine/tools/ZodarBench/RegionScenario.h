@@ -12,6 +12,8 @@ public:
     void update(uint32_t tick, zodar::gfx::SceneView&, std::vector<zodar::gfx::MeshDraw>&);
     void writeReport(std::ostream&) const;
     void flush();
+    uint32_t uniqueMeshCount() const { return meshes.stats().meshes + 1; } // shared prop mesh
+
 private:
     std::shared_ptr<zodar::voxel::RegionStreamer> regions;
     std::unique_ptr<zodar::voxel::VoxelWorld> world;
@@ -22,5 +24,5 @@ private:
     uint64_t nextKey = 1, edits = 0, loads = 0, saves = 0, reloads = 0;
     std::map<zodar::voxel::RegionCoord, bool> visited;
     std::vector<double> updateMs, uploadMs;
-    uint64_t peakCpu = 0, peakGpu = 0, peakRegions = 0, peakChunks = 0, unsettled = 0;
+    uint64_t peakCpu = 0, peakRegionCpu = 0, peakGpu = 0, peakRegions = 0, peakChunks = 0, unsettled = 0;
 };

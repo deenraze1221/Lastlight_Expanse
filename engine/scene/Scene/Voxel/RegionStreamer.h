@@ -32,6 +32,7 @@ public:
     void retryFailures() { m_failed.clear(); }
     std::vector<Event> takeEvents();
     uint64_t memoryBytes() const;
+    uint64_t peakMemoryBytes() const { (void)memoryBytes(); return m_peakBytes; }
     size_t residentRegions() const;
     bool pressured() const { return m_pressure; }
 private:
@@ -58,5 +59,6 @@ private:
     mutable std::set<RegionCoord> m_failed;
     mutable uint64_t m_next=1;
     mutable bool m_pressure=false;
+    mutable uint64_t m_peakBytes=0;
 };
 } // namespace zodar::voxel

@@ -59,7 +59,7 @@ payload and geometry reductions are deterministic.
 | Upload submit mean, ms | 0.080 | 0.078 |
 | Uploaded bytes | 98,062,720 | 43,756,160 |
 | Peak GPU + staging bytes | 11,835,040 | 5,280,800 |
-| Peak CPU accounted bytes | 134,227,647 | 134,227,647 |
+| Historical post-update CPU sample, bytes | 134,227,647 | 134,227,647 |
 | Typical visible triangles (p50) | 27,834 | 12,786 |
 | Typical draw calls (p50) | 10 | 10 |
 | Typical visible / culled objects (p50) | 65 / 10 | 65 / 10 |
@@ -73,8 +73,10 @@ polygon only when an identical adjacent block has an exactly matching opposite p
 Unequal shapes, different block states, non-boundary faces, sealing and cube meshing retain
 their existing paths. No vertex-format, renderer, Hi-Z, binary greedy or mesh-shader change.
 
-CPU mean improved 5.8%, GPU mean 5.5%; p95 CPU worsened 1.9%, inside the noise band. Treat
-these as software regression observations, not hardware performance claims. Uploaded payload
+Timing gains are inconclusive. Ratios of separate medians suggest 5.8% CPU and 5.5% GPU
+reductions, but two of three paired runs regress: CPU changes are -48.6%, +16.6%, +18.0%;
+GPU changes are -50.1%, +20.6%, +16.3%. This variation prevents a reliable timing speedup
+claim. CPU p95 also rises 1.9%. These software timings do not establish hardware performance. Uploaded payload
 and peak GPU/staging accounting fell 55.4%; typical triangles fell 54.1%.
 
 All six region captures were byte-identical:
@@ -106,3 +108,30 @@ retained at `/workspace/v6-gate/gate-failures.log`; no unchanged failing run was
 
 The full region route also passed on `--path reference` with Vulkan validation enabled
 (zero errors/warnings); its capture matched the graph baseline/candidate hash above.
+
+
+## Audit corrections
+
+The six original reports above are retained unchanged as historical evidence. Their
+`peakCpuBytes` sampled post-update residency and missed temporary inline reservations;
+`sceneDetails.uniqueMeshes` incorrectly counted only the shared prop mesh.
+New reports use the world's lifetime accounted-memory high-water for `peakCpuBytes`,
+including generation/meshing reservations sampled before execution and data/events before
+consumption. `peakRegionCpuBytes` separately includes region request scratch reservations.
+These component peaks can occur at different times and must not be added as a simultaneous
+peak. Accounting is conservative engine bookkeeping, not measured RSS. Unique mesh counts
+now include drawable streamed meshes plus the shared prop mesh.
+Regression coverage includes inline/threaded high-water retention, report mesh counts,
+and adjacent built-in shapes at all four rotations across all six chunk boundary directions,
+with sealed-boundary and volume checks. Rendering, collision and existing goldens are unchanged.
+
+`audit-fix-validation.json` records the corrected counters: world peak 231,741,248 bytes,
+region peak 134,225,883 bytes, and 13 unique drawable meshes. Uploaded bytes remain
+43,756,160 and the region screenshot retains the original pixel hash. Validation reported
+zero errors/warnings. This run overlapped compilation and enabled validation; its timings
+must not be used for performance comparisons.
+
+Audit-fix verification: focused 13 cases / 14,082 assertions and full-route report regression
+passed. Full `tools/gate.sh` passed Debug 39/39 and Release 39/39 with validation and warnings
+as errors. Highlands and region pixel hashes, topology goldens and collision checks remain
+unchanged; no validation errors/warnings. Existing skipped unit cases remain skipped.

@@ -901,7 +901,8 @@
   blocks. Existing cube, unequal-shape, sealing, graph/reference and other rendering paths
   remain. No Hi-Z, binary greedy meshing, mesh shaders or packed-vertex work.
 - Median CPU/GPU frame means: 19.278/16.847 ms baseline, 18.164/15.912 ms candidate.
-  CPU p95 rose 1.9% (noise); uploaded payload fell 55.4%, typical triangles 54.1%.
+  Timing gains are inconclusive: two of three paired runs regress. CPU p95 rose 1.9%;
+  uploaded payload fell 55.4%, typical triangles 54.1%.
   All six region screenshots were byte-identical. Hardware performance remains unmeasured.
 - Final full Debug/Release gate passed: 39/39 CTest entries in each, warnings as errors,
   Vulkan validation enabled. Both Highlands goldens match base with zero validation messages.
@@ -911,3 +912,20 @@
 - Evidence, commands, raw reports and limitations: `docs/reports/v6-region-performance/README.md`.
   This validates a 1-meter grid, discontinuous route and deterministic inline streaming;
   hardware GPU, Windows/MSVC, 0.5-meter stress and async throughput remain unmeasured.
+
+### V6 audit fixes
+
+- World CPU accounting now retains its lifetime high-water, including temporary generation
+  and meshing reservations before inline execution and mesh events before consumption.
+  Region accounting separately retains request/scratch high-water; component peaks are not
+  combined because they can occur at different instants.
+- Region reports count drawable streamed meshes plus the shared prop mesh. Corrected validation
+  evidence records 231,741,248 world CPU bytes, 134,225,883 region CPU bytes and 13 unique meshes.
+- Added adjacent built-in shape tests at all four rotations and all six chunk boundary
+  directions, including sealing, plus inline/threaded memory high-water regression checks.
+- Timing gains are inconclusive (two of three paired runs regress). Historical reports remain
+  unchanged; geometry/upload reductions are verified. No mesher, collision or golden changes.
+- Focused tests: 13 cases, 14,082 assertions, plus the full-route report regression passed.
+  Full tools/gate.sh passed Debug 39/39 and Release 39/39 with warnings as errors and Vulkan
+  validation. Both Highlands hashes and the region pixel hash remain unchanged; zero validation
+  errors/warnings. Existing skipped unit cases remain skipped. No V7 work.

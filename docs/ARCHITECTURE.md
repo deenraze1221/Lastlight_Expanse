@@ -742,3 +742,8 @@ The existing CPU streamed-mesh graph/reference paths remain in use. Identical sh
 can cull matching partial boundary polygons by exact reverse cyclic vertex comparison;
 no sampled-coverage approximation or renderer-path replacement is used. Evidence and
 limitations: `docs/reports/v6-region-performance/README.md`.
+
+V6 audit: world and region CPU accounting retain separate lifetime high-water marks,
+sampling job/request reservations before execution (including inline jobs). Region benchmark
+reports do not sum component peaks from different instants. Scene metadata counts drawable
+streamed meshes as well as the shared prop mesh. Geometry and collision paths are unchanged.
