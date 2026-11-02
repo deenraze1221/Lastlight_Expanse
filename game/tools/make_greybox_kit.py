@@ -4,15 +4,15 @@ standard library only, deterministic bytes.
 
 Design: a maintained, modern underground military / civil-defence shelter built for long-term
 survival (GDD 10: one permanent shared bunker with merchants, NPC space, private lockers and
-common areas). 4 m planning grid, 4 m wide main corridor, 3.6 m clear ceiling height,
-reinforced 0.3 m walls with 0.5 m pilasters, ceiling beams, organised cable trays and vents,
+common areas). 4 m planning grid, 4 m wide main corridor, 4.0 m clear ceiling height,
+reinforced 0.5 m walls with 0.5 m pilasters, ceiling beams, organised cable trays and vents,
 neutral linear overhead lights, warm wall lights, lit exit signs, room signage. Muted, faded
 GDD 3 palette with subtle wear only.
 
 Writes into game/assets/:
   palette.png, palettes/glow.png        master palette (GDD 3) and the "glow" sub-palette
   models/<module>.glb                    27 Blockbench-style modules + 1 Blender-style arch
-  textures/signs/<name>.png              merchant and room signs (32x32)
+  textures/signs/<name>.png              merchant and room signs (64x64)
   materials/sign_<name>.material.json    sign materials (pixel-art sampling)
   prefabs/*.prefab.json                  ceiling_lamp, wall_light, room_sign, merchant_stall
   levels/bunker.scene.json               the static bunker level (GDD 10)
@@ -547,6 +547,10 @@ MODULES = {
     "bench": [b((-0.9, 0.43, -0.18), (0.9, 0.47, 0.18), "wood"),
               b((-0.85, 0, -0.15), (-0.8, 0.43, 0.15), "metal"), b((0.8, 0, -0.15), (0.85, 0.43, 0.15), "metal")],
 }
+# Imported trims remain models; structural jambs/headers become voxels.
+MODULES["door_frame"] = [box for box in MODULES["doorway"] if box[2] == "metal"]
+MODULES["wide_frame"] = [box for box in MODULES["opening_wide"] if box[2] == "metal"]
+
 ARCHITECTURE = ("floor", "floor_marked", "ceiling", "wall", "doorway", "opening_wide", "corner", "pillar", "beam",
                 "stairs", "airlock_arch")
 GLOWING = ("lamp", "wall_light", "exit_sign", "emergency_light", "terminal", "generator")  # "glow" sub-palette
@@ -652,7 +656,10 @@ def level(authoring=False):
 
     def add(room, model, pos, yaw=0.0, name=None):
         if model in VOXEL_ARCHITECTURE and not authoring:
-            return
+            if model in ("doorway", "opening_wide"):
+                model = "door_frame" if model == "doorway" else "wide_frame"
+            else:
+                return
         n = next_id(room, model)
         e = {"id": "%s/%s_%d" % (room, model, n), "name": name or "%s %d" % (model.replace("_", " "), n),
              "parent": room, "transform": {"position": rnd(pos)}}
@@ -957,6 +964,8 @@ def bunker_structure():
                     put(x, h, z, "stairs@3" if i % 2 == 0 else "floor")
             continue
         for lo, hi, texture, _ in MODULES[model]:
+            if model in ("doorway", "opening_wide") and texture == "metal":
+                continue
             if model == "floor_marked" and texture == "marking":
                 continue
             if texture not in ("concrete", "paint", "floor", "ceiling", "metal"):
@@ -1047,12 +1056,13 @@ def main():
             "game/assets/materials/sign_%s.material.json" % name for name in SIGNS) + " " +
             " ".join("game/assets/prefabs/%s.prefab.json" % p
                      for p in ("ceiling_lamp", "wall_light_unit", "room_sign", "merchant_stall")))
-        print("python3 tools/zodar.py import " + " ".join(models + m + ".glb" for m in ARCHITECTURE) +
+        print("python3 tools/zodar.py import " + " ".join(models + m + ".glb" for m in ("airlock_arch",)) +
               " --class architecture")
         print("python3 tools/zodar.py import " + " ".join(models + m + ".glb" for m in GLOWING) +
               " --sub-palette glow")
         return 0
-    stale = []
+    stale = ["models/%s.glb (obsolete architecture)" % n for n in VOXEL_ARCHITECTURE
+             if (args.out / ("models/%s.glb" % n)).exists()] if args.check else []
     files = outputs()
     for name, data in sorted(files.items()):
         path = args.out / name

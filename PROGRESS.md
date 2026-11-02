@@ -715,8 +715,8 @@
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. Review V4 on `v4/regions-streaming`; no merge performed. Subsequent approved roadmap:
-   V5 → D3–D6 → D7 → V6 → D8 (none started here).
+1. V4 is present in main at `0822c40`; V5 implemented on `v5/voxel-bunker` (no merge).
+   Next approved roadmap: D3–D6 → D7 → V6 → D8 (not started).
    Streaming budgets, FBX/audio import and skins stay in later phases. Highlands keeps its
    legacy 256²/512² terrain textures (regression scene, not migrated; VOXELS §12).
 2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
@@ -844,3 +844,30 @@
   waits for complete CPU world and GPU uploads before exploration. Removed replaced model
   architecture and collider entries. All 10 game cases / 128 assertions passed; both bunker
   GPU smokes, strict assets and generator checks passed.
+- Step 5: fixed-step `--bunker-walkthrough` (8 moving waypoints); full CPU route visits every
+  room and verifies stair ascent. Threaded (3 workers) and inline authored cells match.
+  Final focused checks: 11 game cases / 132 assertions; all five bunker/asset/freshness ctests.
+  Door/opening metal trims split into retained model assets, not voxel structure geometry.
+- Visual review caught a startup bug in step 4: UploadQueue::waitIdle completes transfers
+  but does not acquire them, leaving voxel uploads pending. Fixed with wait(last ticket),
+  stable mesh upload order and a runtime guard requiring drawable meshes / no pending uploads.
+  The failed diagnostic was captured in session output; successful subsequent captures and
+  smokes verify the fix (no gate checks disabled).
+- Repeated deterministic final corridor screenshots are byte-identical:
+  `a510f1d2493eabc336e11e8934fb2cbc9249782e4a1c62e25404048fdf4a7ce2`.
+- Limits: finite preloaded LOD0 bunker; no region persistence or runtime edits; voxel catalogue
+  and structure reload require restart. Model/material/scene hot reload remains. No D3–D7,
+  V6, co-op, NPC/locker/trading functionality or engine runtime changes. Real GPU and Windows/MSVC
+  not verified here. Local toolchain/dependencies live outside the repo under /workspace/work.
+
+- First full gate: Debug 38/38; Release 37/38. Both Highlands images match the original
+  `5ddd23b4...045776` baseline; zero Vulkan validation messages. Release exposed a V4 test
+  race in `region regression: empty exception messages remain terminal failures`: a worker
+  may fail during update's final integration, before finishPendingWork. The test now wraps
+  both valid delivery boundaries in the same CHECK_THROWS_AS, still checks drained counters,
+  subsequent terminal failure and one generated result. No engine runtime change.
+  Corrected focused test passed in Debug and Release (1 case / 8 assertions each).
+  Failure remains in /workspace/work/v5-gate/gate-failures.log; no checks disabled.
+- Delivery gate: enable tools/hooks/pre-push and run the complete Debug/Release gate on the
+  clean fifth commit before the V5-only push. Expected Highlands hash is the local baseline
+  above. Final delivery outcome is reported with the pushed commit; no merge authorized.

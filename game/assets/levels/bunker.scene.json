@@ -98,6 +98,176 @@
       }
     },
     {
+      "id": "airlock/door_frame_1",
+      "name": "door frame 1",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotationDegrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "door_frame"
+      }
+    },
+    {
+      "id": "weapon_dealer/wide_frame_1",
+      "name": "wide frame 1",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wide_frame"
+      }
+    },
+    {
+      "id": "corridor/door_frame_1",
+      "name": "door frame 1",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "door_frame"
+      }
+    },
+    {
+      "id": "corridor/door_frame_2",
+      "name": "door frame 2",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "door_frame"
+      }
+    },
+    {
+      "id": "medic/wide_frame_1",
+      "name": "wide frame 1",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wide_frame"
+      }
+    },
+    {
+      "id": "corridor/wide_frame_1",
+      "name": "wide frame 1",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wide_frame"
+      }
+    },
+    {
+      "id": "resource_trader/wide_frame_1",
+      "name": "wide frame 1",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          30.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wide_frame"
+      }
+    },
+    {
+      "id": "corridor/wide_frame_2",
+      "name": "wide frame 2",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          38.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wide_frame"
+      }
+    },
+    {
+      "id": "technician/wide_frame_1",
+      "name": "wide frame 1",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          42.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wide_frame"
+      }
+    },
+    {
+      "id": "corridor/door_frame_3",
+      "name": "door frame 3",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          50.0,
+          0.0,
+          2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "door_frame"
+      }
+    },
+    {
+      "id": "scout/wide_frame_1",
+      "name": "wide frame 1",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          54.0,
+          0.0,
+          -2.0
+        ]
+      },
+      "modelRenderer": {
+        "model": "wide_frame"
+      }
+    },
+    {
       "id": "corridor/cable_tray_1",
       "name": "cable tray 1",
       "parent": "corridor",

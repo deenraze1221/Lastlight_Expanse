@@ -391,13 +391,15 @@ generic; Lastlight content only in V5. Every session: Highlands screenshot byte-
   (V3 handoff).
 
 ### V4 — Structures, regions, layered generators (engine)
-Implementation verified on `v4/regions-streaming`; not merged. Usage, failure contracts and
+Implementation and audit fixes are present in main at `0822c40`. Usage, failure contracts and
 limits: VOXELS "V4 region API and storage"; results: PROGRESS V4 handoff.
 - `*.zstruct` templates (stamp with rotation, capture), `*.zregion` storage (palette + RLE,
   diff-only, versioned, async), generator composition (base → structures → authored →
   runtime edits), `zodar.py` voxel commands (info, capture, stamp). Region = 64 × 64 m.
 
 ### V5 — Bunker on voxels (game)
+Implementation on `v5/voxel-bunker`: finite preloaded LOD0 structure, hybrid collision,
+64x64 game textures and moving walkthrough. Full verification: PROGRESS V5 handoff.
 - Read: GDD §3 (A1), §10; `game/assets/README.md`, `game/tools/make_greybox_kit.py`,
   `game/src/Bunker/*`.
 - Lastlight block catalogue (`game/assets/blocks/*.blocks.json`, 64×64 textures, palette);

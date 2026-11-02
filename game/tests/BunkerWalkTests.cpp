@@ -97,6 +97,7 @@ TEST_CASE("bunker: walk from the entrance through every room and corridor") {
     for (const Waypoint& w : route) {
         CAPTURE(w.what);
         CHECK(walkTo(walker, level.world, w.x, w.z, minY));
+        if (std::string(w.what) == "up the exit stairs") CHECK(walker.feet().y > 1.0f);
     }
     CHECK(minY > -0.01f);
     CHECK_FALSE(level.world.overlaps(walker.box()));

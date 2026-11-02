@@ -55,7 +55,7 @@ using namespace zodar::gfx;
 using namespace zodar::voxel;
 
 constexpr std::string_view kUsage =
-    "LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR] [--explore]\n"
+    "LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR] [--explore] [--bunker-walkthrough]\n"
     "                 highlands: [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]\n"
     "                 [--untextured] [--no-fog] [--spawn-height H] [--pitch DEG]";
 
@@ -63,6 +63,7 @@ constexpr std::string_view kUsage =
 struct Options {
     std::string level = "bunker";                 // bunker | highlands
     std::filesystem::path assets = LASTLIGHT_ASSETS_DIR; // game/assets (bunker)
+    bool walkthrough = false;
     bool explore = false;                         // bunker: first-person walk with collision
     int viewRadius = 10;
     LightingQuality quality = LightingQuality::High;
@@ -84,6 +85,7 @@ Options parseOptions(std::span<const std::string> args) {
             o.level = next();
             if (o.level != "bunker" && o.level != "highlands") fail("--level must be bunker or highlands");
         } else if (arg == "--assets") o.assets = next();
+        else if (arg == "--bunker-walkthrough") { o.walkthrough = true; o.explore = true; }
         else if (arg == "--explore") o.explore = true;
         else if (arg == "--view-radius") o.viewRadius = static_cast<int>(parseIntArgument(arg, next()));
         else if (arg == "--lighting-quality") o.quality = parseLightingQuality(next());
@@ -346,7 +348,7 @@ int main(int argc, char** argv) {
                              std::span<const std::string> args) -> std::unique_ptr<zodar::Application> {
                               const Options options = parseOptions(args);
                               if (options.level == "bunker") {
-                                  return lastlight::makeBunkerApp(desc, options.assets, options.explore);
+                                  return lastlight::makeBunkerApp(desc, options.assets, options.explore, options.walkthrough);
                               }
                               if (options.explore) fail("--explore needs --level bunker");
                               return std::make_unique<LastlightApp>(desc, options);

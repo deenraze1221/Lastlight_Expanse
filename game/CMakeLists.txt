@@ -72,6 +72,12 @@ if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS)
                 --height 180 --threads 2 --screenshot ${CMAKE_BINARY_DIR}/lastlight_bunker_explore.png)
     set_tests_properties(gpu.lastlight_bunker_explore_smoke PROPERTIES TIMEOUT 300
         PASS_REGULAR_EXPRESSION "Explorer at \\(-11\\.00, 0\\.00, 0\\.00\\), on the ground")
+    add_test(NAME gpu.lastlight_bunker_walkthrough
+        COMMAND LastlightExpanse --level bunker --bunker-walkthrough --headless --deterministic
+                --fixed-dt 0.05 --frames 900 --width 160 --height 90 --threads 2
+                --screenshot ${CMAKE_BINARY_DIR}/bunker_walkthrough.png
+                --report ${CMAKE_BINARY_DIR}/bunker_walkthrough.json)
+    set_tests_properties(gpu.lastlight_bunker_walkthrough PROPERTIES TIMEOUT 300)
     # Phase A exit criterion: `zodar.py shot game --frames 120` yields a PNG and a run report
     # headless (tools/zodar.py exits non-zero if the game fails or either file is missing).
     find_package(Python3 COMPONENTS Interpreter)

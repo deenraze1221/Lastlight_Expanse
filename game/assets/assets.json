@@ -75,7 +75,7 @@
       "id": "bunker",
       "type": "scene",
       "source": "levels/bunker.scene.json",
-      "hash": "fnv1a64:7bc70e9e63c02986",
+      "hash": "fnv1a64:dbd580360cf94a12",
       "dependencies": [
         "materials/sign_airlock.material.json",
         "materials/sign_common.material.json",
@@ -144,6 +144,17 @@
       "class": "prop",
       "textureClass": "environment",
       "hash": "fnv1a64:eda76b884b9752e5",
+      "dependencies": []
+    },
+    {
+      "id": "door_frame",
+      "type": "model",
+      "source": "models/door_frame.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "textureClass": "environment",
+      "hash": "fnv1a64:58d08129733c74ab",
       "dependencies": []
     },
     {
@@ -420,6 +431,17 @@
       "type": "prefab",
       "source": "prefabs/wall_light_unit.prefab.json",
       "hash": "fnv1a64:46e1528acb43e844",
+      "dependencies": []
+    },
+    {
+      "id": "wide_frame",
+      "type": "model",
+      "source": "models/wide_frame.glb",
+      "sampling": "pixelArt",
+      "compile": false,
+      "class": "prop",
+      "textureClass": "environment",
+      "hash": "fnv1a64:4cb5985754068ac5",
       "dependencies": []
     }
   ]

@@ -66,3 +66,19 @@ TEST_CASE("bunker voxels: hybrid collision blocks walls and missing chunks") {
     CHECK(collision.sweep(body, {1000, 0, 0}).moved.x == 0);
     CHECK_THROWS(collision.raycast({-11, 1, 0}, {1, 0, 0}, 1000));
 }
+
+#include "Core/JobSystem.h"
+
+TEST_CASE("bunker voxels: threaded startup preserves authored content and produces meshes") {
+    lastlight::BunkerVoxels inlineWorld(LASTLIGHT_ASSETS_DIR);
+    zodar::JobSystem jobs(3);
+    lastlight::BunkerVoxels threadedWorld(LASTLIGHT_ASSETS_DIR, &jobs);
+    CHECK_FALSE(inlineWorld.world->takeMeshEvents().empty());
+    CHECK_FALSE(threadedWorld.world->takeMeshEvents().empty());
+    bool equal = true;
+    for (int y = -1; y <= 8; ++y)
+        for (int z = -28; z <= 28; ++z)
+            for (int x = -34; x <= 122; ++x)
+                equal &= inlineWorld.world->getVoxel({x,y,z}) == threadedWorld.world->getVoxel({x,y,z});
+    CHECK(equal);
+}

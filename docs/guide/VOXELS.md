@@ -407,6 +407,16 @@ the cube-only mesher hash test green.
   until `Collider` components exist (D6/D7).
 - The exploration mode and the walkthrough test run on the voxel bunker.
 
+### V5 implementation
+
+The game preloads a fixed LOD0 bunker through LayeredGenerator; .zstruct and block textures
+come from the deterministic greybox generator. Door trims/blast frames and props stay models.
+CollisionWorld composes V3 boxes with model colliders and blocks incomplete sweeps; incomplete
+collision rays throw. Runtime acquires upload tickets before allowing exploration and checks
+that voxel meshes are drawable. `--bunker-walkthrough` is a fixed-step moving smoke; CPU tests
+visit every room. Block/structure changes require restart; model/scene hot reload is retained.
+No game rules or bunker content were added to engine/. D3–D7 and V6 remain separate.
+
 ## V4 region API and storage (engine)
 
 `Scene/Voxel/Region.h`, `Structure.h` and `RegionStreamer.h` extend the existing world.

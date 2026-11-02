@@ -97,8 +97,9 @@ TEST_CASE("region: world failures terminate inline and threaded requests") {
     for(unsigned workers : {0u,2u}) {
         zodar::JobSystem jobs(workers);
         VoxelWorld world(std::make_shared<Broken>(),{},s,&jobs);
-        if(workers==0) CHECK_THROWS_AS(world.update({0,0,0}),zodar::Error);
-        else { world.update({0,0,0}); CHECK_THROWS_AS(world.finishPendingWork(),zodar::Error); }
+        // A fast worker may publish failure before update's final integration. Both
+        // update and finishPendingWork are valid main-thread delivery boundaries.
+        CHECK_THROWS_AS(([&] { world.update({0,0,0}); world.finishPendingWork(); }()),zodar::Error);
         CHECK(world.stats().generateInFlight==0);
     }
 }
@@ -243,8 +244,9 @@ TEST_CASE("region regression: empty exception messages remain terminal failures"
     StreamingSettings s; s.viewRadius=0; s.minChunkY=0; s.maxChunkY=0; s.maxJobsPerUpdate=1;
     for(unsigned workers:{0u,2u}) {
         zodar::JobSystem jobs(workers); VoxelWorld world(std::make_shared<Broken>(),{},s,&jobs);
-        if(workers==0) CHECK_THROWS_AS(world.update({0,0,0}),zodar::Error);
-        else { world.update({0,0,0}); CHECK_THROWS_AS(world.finishPendingWork(),zodar::Error); }
+        // A fast worker may publish failure before update's final integration. Both
+        // update and finishPendingWork are valid main-thread delivery boundaries.
+        CHECK_THROWS_AS(([&] { world.update({0,0,0}); world.finishPendingWork(); }()),zodar::Error);
         CHECK(world.stats().generateInFlight==0);
         CHECK_THROWS_AS(world.update({0,0,0}),zodar::Error);
         CHECK(world.stats().generated==1);

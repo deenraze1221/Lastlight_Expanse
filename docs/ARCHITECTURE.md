@@ -698,3 +698,27 @@ V4 audit fixes: retained chunk entries hold provider ownership tokens through un
 Generation/mesh results use explicit outcomes, independent of diagnostic message text. Region
 parsing charges input and metadata before allocation. Region and CLI output share the Core
 exclusive sibling-file replacement helper; existing temporary paths are never reused.
+
+
+## V5 explorable voxel bunker
+
+Game-only `BunkerVoxels` loads the Lastlight block catalogue and deterministic `.zstruct`;
+V4 LayeredGenerator stamps it over empty space. The finite slice is fully loaded at LOD0
+around a fixed observer; Highlands and engine defaults remain unchanged. No RegionStreamer
+save directory is needed until runtime edits/persistence exist.
+
+CollisionWorld keeps its existing walker API and composes swept V3 full-resolution boxes
+with model AABBs. Missing data blocks movement/overlap; incomplete rays fail explicitly.
+BunkerApp combines voxel and model CPU draws under the existing scene lighting. It sorts
+startup mesh events, acquires the upload ticket with UploadQueue::wait (waitIdle only completes
+transfers), then requires drawable meshes with no pending uploads before exploration.
+
+Generated architecture model files/registry/collider entries are removed. Door trims and
+blast-door frames remain imported models. Generator freshness rejects obsolete architecture
+files. A1 standards apply to game assets; legacy Highlands textures/shader stay untouched.
+Static voxel content reload requires restart; existing model/material/scene hot reload remains.
+The moving CLI smoke is a temporary V5 test driver, not D3/D4/D7 input or replay infrastructure.
+
+The delivery gate exposed a pre-existing V4 test race: asynchronous failure may surface in
+update's final result integration or finishPendingWork. Its exception assertion now covers
+both calls; drained-work and terminal-failure assertions remain. Engine runtime is unchanged.

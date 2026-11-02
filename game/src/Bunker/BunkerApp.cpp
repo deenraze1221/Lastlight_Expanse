@@ -27,6 +27,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <algorithm>
 #include <cmath>
 #include <optional>
@@ -43,8 +44,8 @@ constexpr const char* kLevel = "levels/bunker.scene.json";
 
 class BunkerApp final : public Application {
 public:
-    BunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore)
-        : Application(desc), m_assetDir(std::move(assetDir)), m_explore(explore) {}
+    BunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore, bool walkthrough)
+        : Application(desc), m_assetDir(std::move(assetDir)), m_explore(explore), m_walkthrough(walkthrough) {}
 
 protected:
     void onStart() override {
@@ -77,7 +78,11 @@ protected:
         m_blockMaterials = std::make_unique<BlockMaterials>(renderer().context(), upload(), scene(),
                                                           m_voxels->catalogue);
         m_voxelMeshes = std::make_unique<StreamedMeshSet>(renderer().context(), upload());
-        for (const auto& e : m_voxels->world->takeMeshEvents()) {
+        auto meshEvents = m_voxels->world->takeMeshEvents();
+        std::stable_sort(meshEvents.begin(), meshEvents.end(), [](const auto& a, const auto& b) {
+            return a.coord < b.coord;
+        });
+        for (const auto& e : meshEvents) {
             if (e.type != zodar::voxel::ChunkMeshEvent::Type::Upsert) continue;
             constexpr uint64_t mask = (1ull << 21) - 1;
             const auto& c = e.coord;
@@ -86,8 +91,12 @@ protected:
             m_voxelMeshes->upsert(key, e.mesh, glm::translate(glm::mat4(1), e.origin), m_blockMaterials->material());
         }
         m_voxelMeshes->update();
-        upload().queue().waitIdle();
+        upload().queue().wait({upload().queue().stats().submitted});
         m_voxelMeshes->update();
+        const auto voxelStats = m_voxelMeshes->stats();
+        ZODAR_ENSURE(voxelStats.meshes > 0 && voxelStats.pendingUploads == 0,
+                     "bunker voxel meshes not ready");
+        ZODAR_LOG_INFO("Bunker voxels: {} meshes, {} triangles", voxelStats.meshes, voxelStats.triangles);
         tryLoadLevel();
     }
 
@@ -104,6 +113,17 @@ protected:
                       float(keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]);
         input.sprint = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
         input.jump = keys[SDL_SCANCODE_SPACE];
+        if (m_walkthrough) {
+            if (m_waypoint < m_route.size()) {
+                const glm::vec2 target = m_route[m_waypoint];
+                const glm::vec2 delta(target.x - m_walker.feet().x, target.y - m_walker.feet().z);
+                if (glm::length(delta) < 0.25f) ++m_waypoint;
+                else {
+                    m_yaw = std::atan2(-delta.x, -delta.y);
+                    input.forward = 1;
+                }
+            }
+        }
         input.yaw = m_yaw;
         m_walker.step(m_collision, input, static_cast<float>(dt));
     }
@@ -187,6 +207,10 @@ protected:
             if (m_collision.overlaps(m_walker.box()) || p.y < -1.0f) {
                 fail("exploration walker ended inside geometry or below the floor");
             }
+        }
+        if (m_walkthrough) {
+            if (m_waypoint != m_route.size()) fail("bunker walkthrough did not finish");
+            ZODAR_LOG_INFO("Bunker walkthrough complete: {} waypoints", m_waypoint);
         }
         if (m_level) {
             ZODAR_LOG_INFO("Bunker: {} entities, {} draws in the last frame", m_world.entityCount(),
@@ -291,6 +315,11 @@ private:
     SceneView m_view;
     std::string m_lastError;
     bool m_explore = false;
+    bool m_walkthrough = false;
+    size_t m_waypoint = 0;
+    // Real fixed-step movement, including stairs, airlock, a room and full corridor.
+    const std::array<glm::vec2, 8> m_route{{{-15, 0}, {-11, 0}, {-4, 0}, {6, 0},
+                                         {6, 3.5f}, {6, 0}, {38, 0}, {58, 0}}};
     ColliderTable m_colliderTable;
     CollisionWorld m_collision;
     ExplorationWalker m_walker;
@@ -303,8 +332,8 @@ private:
 
 } // namespace
 
-std::unique_ptr<Application> makeBunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore) {
-    return std::make_unique<BunkerApp>(desc, std::move(assetDir), explore);
+std::unique_ptr<Application> makeBunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore, bool walkthrough) {
+    return std::make_unique<BunkerApp>(desc, std::move(assetDir), explore, walkthrough);
 }
 
 } // namespace lastlight
