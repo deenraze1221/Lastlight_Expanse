@@ -20,6 +20,7 @@ Engine code never includes game headers or links game targets.
 | `engine/rendering/SceneFile` | `Zodar::SceneFile` | `*.scene.json` / `*.material.json`: parse + validate (`DataError`), serialize, `createSceneMaterials`, `instantiateScene` into a World (B2); material texture slots (C) |
 | `engine/rendering/AssetManager` | `Zodar::AssetManager` | Runtime asset manager (C): cached GPU textures (PNG/JPEG/TGA/BMP), glTF models, material files with textures, scene materials; release via the deletion queue; async loads (C2); `AssetRegistry` (`assets.json`, import, hashes, checks; CPU only, C3) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
+| `engine/input/Input` | `Zodar::Input` | JSON actions, priority contexts, SDL adapter, fixed-tick injection and checked action recordings (D3–D4) |
 | `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON. Used by the game, ModelViewer and ZodarBench |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarAssetTool (asset registry CLI, C3), ZodarUISandbox |
 | `engine/ui` | `Zodar::UI` | Engine/tooling UI, UI resources |
@@ -747,3 +748,19 @@ V6 audit: world and region CPU accounting retain separate lifetime high-water ma
 sampling job/request reservations before execution (including inline jobs). Region benchmark
 reports do not sum component peaks from different instants. Scene metadata counts drawable
 streamed meshes as well as the shared prop mesh. Geometry and collision paths are unchanged.
+
+## D0/D3/D4 reliability and input
+
+Terminal voxel generation/mesh failures drain submitted jobs outside the result mutex, then
+integrate all terminal results and counters before propagating the error. No public API changed.
+`Zodar::Input` links Core and the existing SceneFile `DataError` implementation, with private
+JSON/SDL dependencies; Runtime exposes Input and Core/Random. This reuses diagnostics without
+moving existing error types. There are no game concepts in these engine APIs.
+Action sampling and game movement/editing happen at fixed ticks; SDL conversion is confined
+to the engine adapter. Replay checks app/content/map/clock compatibility and per-tick state/RNG
+fingerprints. Protocol, ownership, limitations and commands: `docs/guide/INPUT.md`.
+
+Review hardening: replay termination is tick-based even when rendering is skipped; the final
+render retries with frozen simulation/visual time. Recording publication follows successful
+shutdown/output/report validation. UI-consumed presses/motion do not reach gameplay, while
+releases still clear held actions. Recorded Highlands streaming/query work is tick-driven.

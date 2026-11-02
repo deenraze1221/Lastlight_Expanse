@@ -18,6 +18,7 @@
 // Runs on zodar::Application (engine/runtime): it owns the window, renderer and frame loop.
 
 #include "Bunker/BunkerApp.h"
+#include "GameInput.h"
 #include "Rendering/BlockTextures.h"
 #include "World/LastlightTerrain.h"
 
@@ -31,7 +32,6 @@
 #include "Runtime/CommandLine.h"
 #include "Scene/Voxel/VoxelWorld.h"
 
-#include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -120,8 +120,15 @@ public:
         : Application(desc), m_options(options), m_seed(desc.seed.value_or(1337)) {}
 
 protected:
+    std::string inputLevelHash() const override {
+        return inputHash("highlands-v1:"+std::to_string(m_seed)+":"+std::to_string(m_options.viewRadius));
+    }
+    std::string inputState() const override {
+        return lastlight::playerFingerprint(m_view.camera.position,m_yaw,m_pitch)+m_editState;
+    }
     void onStart() override;
-    void onEvent(const SDL_Event& e) override;
+    void onFixedUpdate(double dt) override;
+    std::string m_editState;
     void onUpdate(const FrameTime& time) override;
     void onRender(RenderContext& rc) override;
     void onShutdown() override;
@@ -143,14 +150,12 @@ private:
     std::vector<MeshDraw> m_draws;
     float m_yaw = 0.0f;
     float m_pitch = 0.0f;
-    bool m_looking = false;
-    bool m_digRequested = false;
-    bool m_placeRequested = false;
     double m_statsElapsed = 0.0;
     uint64_t m_statsFrames = 0;
 };
 
 void LastlightApp::onStart() {
+    input().setContext("explore", false);
     // --- World ------------------------------------------------------------------------
     m_terrain = std::make_shared<lastlight::LastlightTerrain>(m_seed);
     m_streaming.viewRadius = m_options.viewRadius;
@@ -250,48 +255,44 @@ void LastlightApp::onStart() {
                    s.chunksWithData, s.generated, s.meshed);
 }
 
-void LastlightApp::onEvent(const SDL_Event& e) {
-    if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_F && !e.key.repeat) m_placeRequested = true;
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_RIGHT) m_looking = true;
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_RIGHT) m_looking = false;
-    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT) m_digRequested = true;
-    if (e.type == SDL_EVENT_MOUSE_MOTION && m_looking) {
-        m_yaw -= e.motion.xrel * 0.0035f;
-        m_pitch = std::clamp(m_pitch - e.motion.yrel * 0.0035f, -1.55f, 1.55f);
+void LastlightApp::onFixedUpdate(double step) {
+    const float dt = static_cast<float>(step);
+    if (input().action("look_hold").held || input().action("look_hold").pressed) {
+        m_yaw -= input().action("look").x * 0.0035f;
+        m_pitch = std::clamp(m_pitch - input().action("look").y * 0.0035f, -1.55f, 1.55f);
+    }
+    m_view.camera.setYawPitch(m_yaw, m_pitch);
+    glm::vec3 move = m_view.camera.forward() * input().action("move").y +
+                     m_view.camera.right() * input().action("move").x;
+    move.y += input().action("vertical").x;
+    if (glm::length(move) > 0.0f) {
+        const float speed = input().action("sprint").held ? 60.0f : 15.0f;
+        m_view.camera.position += glm::normalize(move) * speed * dt;
+    }
+    // Recording/playback must sample the same terrain at each tick, even when
+    // several ticks share one render frame. Normal interactive streaming stays async.
+    if (desc().deterministic || desc().recordInput) {
+        m_world->update(m_view.camera.position);
+        m_world->finishPendingWork();
+    }
+    const bool dig = input().action("dig").pressed;
+    const bool place = input().action("place").pressed;
+    if (dig || place) {
+        if (auto hit = m_world->raycast(m_view.camera.position, m_view.camera.forward(), 64.0f)) {
+            const auto target = dig ? hit->voxel : hit->voxel + hit->normal;
+            const bool changed = m_world->setVoxel(target, dig ? lastlight::Air : lastlight::Stone);
+            m_editState=inputHash(m_editState+":"+std::to_string(target.x)+","+std::to_string(target.y)+","+
+                                  std::to_string(target.z)+":"+(dig?"dig":"place")+":"+
+                                  std::to_string(changed)+":"+std::to_string(m_world->getVoxel(target)));
+        }
     }
 }
 
 void LastlightApp::onUpdate(const FrameTime& time) {
-    const float dt = static_cast<float>(time.dt);
-
-    // Fly camera.
-    m_view.camera.setYawPitch(m_yaw, m_pitch);
-    const bool* keys = SDL_GetKeyboardState(nullptr);
-    glm::vec3 move(0.0f);
-    if (keys[SDL_SCANCODE_W]) move += m_view.camera.forward();
-    if (keys[SDL_SCANCODE_S]) move -= m_view.camera.forward();
-    if (keys[SDL_SCANCODE_D]) move += m_view.camera.right();
-    if (keys[SDL_SCANCODE_A]) move -= m_view.camera.right();
-    if (keys[SDL_SCANCODE_SPACE]) move.y += 1.0f;
-    if (keys[SDL_SCANCODE_LCTRL]) move.y -= 1.0f;
-    if (glm::length(move) > 0.0f) {
-        const float speed = keys[SDL_SCANCODE_LSHIFT] ? 60.0f : 15.0f;
-        m_view.camera.position += glm::normalize(move) * speed * dt;
-    }
-
-    // Interaction: dig / place at the targeted voxel.
-    if (m_digRequested || m_placeRequested) {
-        if (auto hit = m_world->raycast(m_view.camera.position, m_view.camera.forward(), 64.0f)) {
-            if (m_digRequested) m_world->setVoxel(hit->voxel, lastlight::Air);
-            else m_world->setVoxel(hit->voxel + hit->normal, lastlight::Stone);
-        }
-        m_digRequested = m_placeRequested = false;
-    }
-
     // Streaming: integrate finished chunks, schedule new ones, apply mesh changes.
     {
         ZODAR_CPU_SCOPE(cpuProfiler(), "World streaming");
-        m_world->update(m_view.camera.position);
+        if (!desc().deterministic && !desc().recordInput) m_world->update(m_view.camera.position);
         for (ChunkMeshEvent& e : m_world->takeMeshEvents()) {
             if (e.type == ChunkMeshEvent::Type::Upsert) {
                 m_chunkMeshes->upsert(chunkKey(e.coord), e.mesh, glm::translate(glm::mat4(1.0f), e.origin),
@@ -347,10 +348,12 @@ int main(int argc, char** argv) {
                           [](const zodar::ApplicationDesc& desc,
                              std::span<const std::string> args) -> std::unique_ptr<zodar::Application> {
                               const Options options = parseOptions(args);
+                              auto configured = desc;
+                              if (!configured.inputMap) configured.inputMap = options.assets / "input.json";
                               if (options.level == "bunker") {
-                                  return lastlight::makeBunkerApp(desc, options.assets, options.explore, options.walkthrough);
+                                  return lastlight::makeBunkerApp(configured, options.assets, options.explore, options.walkthrough);
                               }
                               if (options.explore) fail("--explore needs --level bunker");
-                              return std::make_unique<LastlightApp>(desc, options);
+                              return std::make_unique<LastlightApp>(configured, options);
                           });
 }

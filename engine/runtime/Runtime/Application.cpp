@@ -53,6 +53,16 @@ std::filesystem::path executableDirectory() {
 
 Application::Application(ApplicationDesc desc)
     : m_desc(std::move(desc)), m_timestep(m_desc.timestep) {
+    if (m_desc.recordInput && m_desc.replayInput) fail("cannot record and replay simultaneously");
+    if ((m_desc.recordInput || m_desc.replayInput) && !m_desc.inputMap) fail("record/replay requires an input map");
+    if (m_desc.replayInput) {
+        m_playback=InputRecording::load(*m_desc.replayInput);
+        m_desc.deterministic=true;
+        if (!m_desc.maxFrames) m_desc.maxFrames=m_playback->ticks.size();
+        if (m_desc.maxFrames>m_playback->ticks.size()) fail("requested frames exceed recording length");
+    }
+    m_random=Random(m_desc.seed.value_or(0));
+    if (m_desc.inputMap) m_input.setMap(InputMap::load(*m_desc.inputMap));
     if (m_desc.headless) {
         if (m_desc.maxFrames == 0) fail("Application: headless mode requires maxFrames > 0");
         // Must be set before SDL_Init (Platform). Overrides SDL_VIDEO_DRIVER from the environment.
@@ -102,6 +112,14 @@ Application::Application(ApplicationDesc desc)
 Application::~Application() {
     // Derived members are gone; make sure nothing is in flight before engine teardown.
     if (m_renderer) m_renderer->waitIdle();
+    for (auto* pad : m_gamepads) SDL_CloseGamepad(pad);
+}
+
+std::string Application::simulationFingerprint() const {
+    std::string bytes=inputState();
+    bytes+="|rng:"+std::to_string(m_random.seed());
+    for(const auto& [name,value]:m_random.states()) bytes+="|"+std::to_string(name.size())+":"+name+":"+std::to_string(value);
+    return inputHash(bytes);
 }
 
 void Application::requestCapture(std::filesystem::path path) {
@@ -113,6 +131,14 @@ int Application::run() {
     int exitCode = 0;
     try {
         onStart();
+        if(m_desc.recordInput || m_playback) m_recording.header={m_desc.identifier,m_input.map().hash(),inputLevelHash(),m_desc.seed.value_or(0),m_timestep.fixedDt()};
+        if(m_playback) {
+            m_playback->checkCompatible(m_recording.header,m_desc.replayLenient);
+            for(const auto& t:m_playback->ticks) {
+                if(t.actions.size()!=m_input.snapshot().size()) fail("recording action set differs from map");
+                for(const auto& [name,v]:t.actions) { (void)v; if(!m_input.snapshot().contains(name)) fail("unknown replay action"); }
+            }
+        }
         loop();
     } catch (const std::exception& e) {
         ZODAR_LOG_ERROR("Fatal: {}", e.what());
@@ -127,6 +153,18 @@ int Application::run() {
     }
     if (exitCode == 0) exitCode = verifyOutputs();
     if (m_desc.reportPath && !writeReport(exitCode) && exitCode == 0) exitCode = 1;
+    // Preserve the previous recording if simulation, shutdown, capture validation or
+    // reporting failed. Atomic replacement is the final successful-run operation.
+    if (exitCode == 0 && m_desc.recordInput) {
+        try {
+            createParentDirectory(*m_desc.recordInput);
+            m_recording.save(*m_desc.recordInput);
+        } catch (const std::exception& e) {
+            ZODAR_LOG_ERROR("Cannot save input recording: {}", e.what());
+            exitCode = 1;
+            if (m_desc.reportPath) (void)writeReport(exitCode);
+        }
+    }
     return exitCode;
 }
 
@@ -196,6 +234,10 @@ bool Application::writeReport(int exitCode) {
     r.memory = queryMemoryStats(ctx);
     r.peakDeviceLocalUsage = std::max(r.peakDeviceLocalUsage, r.memory.deviceLocalUsage);
     r.screenshots = m_captures;
+    r.inputMode=m_playback?"replay":m_desc.recordInput?"record":"live";
+    r.inputMapHash=m_input.map().hash();
+    r.inputTicks=m_inputTick;
+    r.inputStateHash=m_inputStateHash;
 
     createParentDirectory(*m_desc.reportPath);
     if (writeRunReport(*m_desc.reportPath, r)) {
@@ -214,12 +256,31 @@ void Application::loop() {
     if (m_desc.screenshot) createParentDirectory(*m_desc.screenshot);
     if (!m_desc.captureFrames.empty()) createParentDirectory(m_desc.captureDir / "frame");
 
+    if (m_desc.inputMap) {
+        if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) fail(std::string("gamepad initialization failed: ")+SDL_GetError());
+        int count=0;
+        auto* ids=SDL_GetGamepads(&count);
+        for(int i=0;i<count;++i) if(auto* pad=SDL_OpenGamepad(ids[i])) m_gamepads.push_back(pad);
+        SDL_free(ids);
+    }
     while (!m_quit && !m_window->shouldClose()) {
         m_cpuProfiler.beginFrame();
         m_window->pollEvents([&](const SDL_Event& e) {
-            if (m_overlay->processEvent(e)) return;
+            if (m_desc.inputMap && e.type==SDL_EVENT_GAMEPAD_ADDED) {
+                const bool opened=std::any_of(m_gamepads.begin(),m_gamepads.end(),[&](auto* p){return SDL_GetGamepadID(p)==e.gdevice.which;});
+                if(!opened) if(auto* pad=SDL_OpenGamepad(e.gdevice.which)) m_gamepads.push_back(pad);
+            }
+            if(e.type==SDL_EVENT_GAMEPAD_REMOVED) {
+                std::erase_if(m_gamepads,[&](auto* p){if(SDL_GetGamepadID(p)!=e.gdevice.which)return false; SDL_CloseGamepad(p);return true;});
+            }
+            const bool consumed = m_overlay->processEvent(e);
+            // UI-owned presses/motion must not trigger gameplay. Releases still reach
+            // input so a key/button held before UI capture cannot remain stuck.
+            const bool release = e.type == SDL_EVENT_KEY_UP || e.type == SDL_EVENT_MOUSE_BUTTON_UP;
+            if (!m_playback && (!consumed || release)) m_input.processEvent(e);
+            if (consumed) return;
             if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) requestQuit();
-            onEvent(e);
+            if (!m_playback) onEvent(e);
         });
 
         const auto now = Clock::now();
@@ -227,24 +288,45 @@ void Application::loop() {
         time.realTime = std::chrono::duration<double>(now - start).count();
         last = now;
         // One clock for both: the clamped frame dt also feeds the fixed-step accumulator.
-        time.dt = m_desc.deterministic ? m_timestep.fixedDt()
+        const bool replayComplete = m_playback && m_inputTick >= m_desc.maxFrames;
+        time.dt = replayComplete ? 0.0 : m_desc.deterministic ? m_timestep.fixedDt()
                                        : std::min(time.realDt, static_cast<double>(m_desc.maxFrameDt));
         time.fixedSteps = m_timestep.advance(time.dt);
         for (uint32_t i = 0; i < time.fixedSteps; ++i) {
             ZODAR_CPU_SCOPE(m_cpuProfiler, "Fixed update");
+            if(m_playback) {
+                if(m_inputTick>=m_playback->ticks.size()) fail("replay exhausted");
+                m_input.resetControls();
+                for(const auto& [name,value]:m_playback->ticks[m_inputTick].actions) m_input.inject(name,value);
+            }
+            m_input.beginStep();
             onFixedUpdate(m_timestep.fixedDt());
+            if (m_desc.inputMap) m_inputStateHash=simulationFingerprint();
+            if(m_playback) {
+                const auto& expected=m_playback->ticks[m_inputTick].state;
+                if(!expected.empty() && expected!=m_inputStateHash) fail("replay state mismatch at tick "+std::to_string(m_inputTick+1));
+            }
+            if(m_desc.recordInput) m_recording.ticks.push_back({m_input.snapshot(),m_inputStateHash});
+            ++m_inputTick;
+            if (m_desc.inputMap && !m_desc.headless) SDL_SetWindowRelativeMouseMode(m_window->native(), m_input.relativeMouse());
         }
+        // Retrying the final replay frame must preserve visual simulation time too.
+        if (m_playback) time.time = static_cast<double>(m_inputTick ? m_inputTick - 1 : 0) * m_timestep.fixedDt();
         time.alpha = m_timestep.alpha();
         {
             ZODAR_CPU_SCOPE(m_cpuProfiler, "Update");
             onUpdate(time);
         }
 
-        const bool lastFrame = m_desc.maxFrames > 0 && m_renderer->frameNumber() + 1 >= m_desc.maxFrames;
+        // Replay limits are ticks, independent of minimized/out-of-date render attempts.
+        // Once complete, freeze simulation and retry the final capture until rendered.
+        const bool lastFrame = m_playback ? m_inputTick >= m_desc.maxFrames :
+            m_desc.maxFrames > 0 && m_renderer->frameNumber() + 1 >= m_desc.maxFrames;
+        const auto renderedBefore = m_renderer->frameNumber();
         renderFrame(time, lastFrame);
         time.time += time.dt;
         ++time.frame;
-        if (lastFrame && m_renderer->frameNumber() >= m_desc.maxFrames) break;
+        if (lastFrame && m_renderer->frameNumber() > renderedBefore) break;
     }
     m_loopSeconds = std::chrono::duration<double>(Clock::now() - start).count();
     ZODAR_LOG_INFO("Rendered {} frames, {} fixed steps ({:.2f} s simulated)", m_renderer->frameNumber(),

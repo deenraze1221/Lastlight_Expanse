@@ -1,0 +1,5 @@
+add_library(ZodarInput STATIC Input/Input.cpp Input/SDLInput.cpp Input/Recording.cpp)
+add_library(Zodar::Input ALIAS ZodarInput)
+target_include_directories(ZodarInput PUBLIC ${ZODAR_ENGINE_DIR}/input)
+target_link_libraries(ZodarInput PUBLIC Zodar::Core Zodar::SceneFile PRIVATE nlohmann_json::nlohmann_json SDL3::SDL3)
+zodar_set_warnings(ZodarInput)

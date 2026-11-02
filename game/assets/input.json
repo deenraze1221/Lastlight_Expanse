@@ -1,0 +1,244 @@
+{
+  "schema": "zodar.input_map",
+  "version": 1,
+  "contexts": [
+    {
+      "name": "game",
+      "priority": 0,
+      "actions": {
+        "move": {
+          "type": "axis2",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "W",
+              "scale": [
+                0,
+                1
+              ]
+            },
+            {
+              "source": "key",
+              "code": "S",
+              "scale": [
+                0,
+                -1
+              ]
+            },
+            {
+              "source": "key",
+              "code": "D",
+              "scale": [
+                1,
+                0
+              ]
+            },
+            {
+              "source": "key",
+              "code": "A",
+              "scale": [
+                -1,
+                0
+              ]
+            }
+          ]
+        },
+        "vertical": {
+          "type": "axis1",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "Space",
+              "scale": [
+                1,
+                0
+              ]
+            },
+            {
+              "source": "key",
+              "code": "Left Ctrl",
+              "scale": [
+                -1,
+                0
+              ]
+            }
+          ]
+        },
+        "sprint": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "Left Shift",
+              "scale": [
+                1,
+                0
+              ]
+            },
+            {
+              "source": "key",
+              "code": "Right Shift",
+              "scale": [
+                1,
+                0
+              ]
+            }
+          ]
+        },
+        "jump": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "Space",
+              "scale": [
+                1,
+                0
+              ]
+            }
+          ]
+        },
+        "look": {
+          "type": "axis2",
+          "bindings": [
+            {
+              "source": "mouseDelta",
+              "code": "x",
+              "scale": [
+                1,
+                0
+              ]
+            },
+            {
+              "source": "mouseDelta",
+              "code": "y",
+              "scale": [
+                0,
+                1
+              ]
+            }
+          ]
+        },
+        "look_hold": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "mouseButton",
+              "code": "right"
+            }
+          ]
+        },
+        "dig": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "mouseButton",
+              "code": "left"
+            }
+          ]
+        },
+        "place": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "F",
+              "scale": [
+                1,
+                0
+              ]
+            }
+          ]
+        },
+        "capture_toggle": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "Tab",
+              "scale": [
+                1,
+                0
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "explore",
+      "priority": 1,
+      "actions": {
+        "move": {
+          "type": "axis2",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "W",
+              "scale": [
+                0,
+                1
+              ]
+            },
+            {
+              "source": "key",
+              "code": "S",
+              "scale": [
+                0,
+                -1
+              ]
+            },
+            {
+              "source": "key",
+              "code": "D",
+              "scale": [
+                1,
+                0
+              ]
+            },
+            {
+              "source": "key",
+              "code": "A",
+              "scale": [
+                -1,
+                0
+              ]
+            },
+            {
+              "source": "key",
+              "code": "Up",
+              "scale": [
+                0,
+                1
+              ]
+            },
+            {
+              "source": "key",
+              "code": "Down",
+              "scale": [
+                0,
+                -1
+              ]
+            },
+            {
+              "source": "key",
+              "code": "Right",
+              "scale": [
+                1,
+                0
+              ]
+            },
+            {
+              "source": "key",
+              "code": "Left",
+              "scale": [
+                -1,
+                0
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

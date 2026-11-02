@@ -31,6 +31,7 @@ add_subdirectory(rendering/WorldRender)
 add_subdirectory(rendering/SceneFile)
 add_subdirectory(rendering/AssetManager)
 add_subdirectory(tools/Debug)
+add_subdirectory(input)
 add_subdirectory(runtime)
 add_subdirectory(ui/UI)
 

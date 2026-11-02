@@ -1,6 +1,8 @@
 #include "Scene/Voxel/Region.h"
 #include "Core/Error.h"
 #include <doctest/doctest.h>
+#include <future>
+#include <atomic>
 using namespace zodar::voxel;
 TEST_CASE("region: metric layout and negative boundaries") {
     RegionLayout half(0.5f);
@@ -293,4 +295,53 @@ TEST_CASE("region regression: exclusive temporary files preserve aliases and pre
     CHECK(std::filesystem::exists(blocked/"previous"));
     CHECK(std::distance(std::filesystem::directory_iterator(root),std::filesystem::directory_iterator{})==before);
     std::filesystem::remove_all(root);
+}
+
+// One worker and a FIFO marker ensure the first failure is published before
+// update submits the blocked second job. No sleeps select the completion order.
+TEST_CASE("region: partial worker failure drains before propagation") {
+    using namespace std::chrono_literals;
+    struct Broken final : IVoxelGenerator {
+        zodar::JobSystem& jobs;
+        mutable std::atomic<unsigned> admitted{0};
+        mutable std::promise<void> entered;
+        std::shared_future<void> release;
+        Broken(zodar::JobSystem& j, std::shared_future<void> r) : jobs(j), release(std::move(r)) {}
+        bool ready(const ChunkCoord&) const override {
+            if (++admitted == 2) {
+                auto marker = std::make_shared<std::promise<void>>();
+                auto done = marker->get_future();
+                jobs.submit([marker] { marker->set_value(); });
+                done.wait(); // first result is now in VoxelWorld's result queue
+            }
+            return true;
+        }
+        mutable unsigned generated = 0; // accessed only by the single worker
+        void generate(const ChunkCoord&, VoxelChunk&) const override {
+            if (++generated == 1) throw std::runtime_error("first failure");
+            entered.set_value();
+            release.wait();
+            throw std::runtime_error("second failure");
+        }
+    };
+    zodar::JobSystem jobs(1);
+    std::promise<void> release;
+    auto generator = std::make_shared<Broken>(jobs, release.get_future().share());
+    auto entered = generator->entered.get_future();
+    StreamingSettings s; s.viewRadius=0; s.minChunkY=0; s.maxChunkY=0; s.maxJobsPerUpdate=2;
+    VoxelWorld world(generator, {}, s, &jobs);
+    auto update = std::async(std::launch::async, [&] {
+        try { world.update({0,0,0}); } catch (const zodar::Error&) { return true; }
+        return false;
+    });
+    const auto started = entered.wait_for(5s);
+    CHECK(started == std::future_status::ready);
+    if (started == std::future_status::ready) CHECK(update.wait_for(50ms) == std::future_status::timeout);
+    release.set_value(); // always release, including assertion failures
+    CHECK(update.get());
+    CHECK(jobs.pendingJobs() == 0);
+    CHECK(world.stats().generateInFlight == 0);
+    CHECK(world.stats().meshInFlight == 0);
+    CHECK(world.stats().generated == 2);
+    CHECK_THROWS_AS(world.update({0,0,0}), zodar::Error);
 }

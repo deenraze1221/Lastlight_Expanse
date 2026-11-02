@@ -89,3 +89,10 @@ if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS)
         set_tests_properties(gpu.zodar_shot_game PROPERTIES TIMEOUT 300)
     endif()
 endif()
+
+if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS AND Python3_Interpreter_FOUND)
+    add_test(NAME gpu.lastlight_input_replay
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/engine/tests/Runtime/ReplaySmoke.py
+                $<TARGET_FILE:LastlightExpanse> ${CMAKE_BINARY_DIR}/input_replay)
+    set_tests_properties(gpu.lastlight_input_replay PROPERTIES TIMEOUT 300 ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
+endif()

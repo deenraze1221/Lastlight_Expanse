@@ -30,6 +30,9 @@
 // Captures (--capture-frames) and the run report (--report) are handled by the runtime.
 
 #include "Core/JobSystem.h"
+#include "Input/Input.h"
+#include "Input/Recording.h"
+#include "Core/Random.h"
 #include "Core/Profiler.h"
 #include "Renderer/FrameInfo.h"
 #include "Renderer/Renderer.h"
@@ -48,6 +51,7 @@
 #include <vector>
 
 union SDL_Event;
+struct SDL_Gamepad;
 
 namespace zodar {
 
@@ -107,6 +111,9 @@ struct ApplicationDesc {
     // App-defined meaning; reported in the run report. Empty: the app's default seed.
     std::optional<uint64_t> seed;
     std::optional<CameraOverride> camera;
+    std::optional<std::filesystem::path> inputMap;
+    std::optional<std::filesystem::path> recordInput, replayInput;
+    bool replayLenient = false;
 };
 
 // Per-frame timing passed to onUpdate.
@@ -158,6 +165,9 @@ public:
     gfx::SceneRenderer& scene() { return *m_scene; }
     gfx::RenderGraphResources& graphResources() { return *m_graphResources; }
     debug::DebugOverlay& overlay() { return *m_overlay; }
+    Random& random() { return m_random; }
+    Input& input() { return m_input; }
+    const Input& input() const { return m_input; }
     JobSystem& jobs() { return *m_jobs; }
     // Frame CPU profiler (scopes appear in the overlay and the run report).
     CpuProfiler& cpuProfiler() { return m_cpuProfiler; }
@@ -167,6 +177,9 @@ public:
     const std::filesystem::path& shaderDirectory() const { return m_shaderDirectory; }
 
 protected:
+    // App-owned identity and deterministic state; no renderer time or global state here.
+    virtual std::string inputLevelHash() const { return {}; }
+    virtual std::string inputState() const { return {}; }
     virtual void onStart() {}
     // Every OS event not consumed by the overlay (Escape already requests quit).
     virtual void onEvent(const SDL_Event& event) { (void)event; }
@@ -184,7 +197,15 @@ private:
     void renderFrame(const FrameTime& time, bool lastFrame);
     int verifyOutputs() const;
     bool writeReport(int exitCode);
+    std::string simulationFingerprint() const;
 
+    std::vector<SDL_Gamepad*> m_gamepads;
+    Input m_input;
+    Random m_random;
+    InputRecording m_recording;
+    std::optional<InputRecording> m_playback;
+    uint64_t m_inputTick = 0;
+    std::string m_inputStateHash;
     ApplicationDesc m_desc;
     std::filesystem::path m_shaderDirectory;
     std::unique_ptr<Platform> m_platform;

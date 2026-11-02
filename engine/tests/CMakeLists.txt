@@ -39,6 +39,8 @@ add_executable(ZodarTests
     SceneFile/SceneFileTests.cpp
     SceneFile/MaterialTextureTests.cpp
     SceneFile/ModelReferenceTests.cpp
+    Runtime/ReplayTests.cpp
+    Runtime/InputTests.cpp
     Runtime/FixedTimestepTests.cpp
     Runtime/CommandLineTests.cpp
     Runtime/RunReportTests.cpp
@@ -55,7 +57,7 @@ add_executable(ZodarTests
     UI/ProgressBarTests.cpp
     UI/SvgFilterTests.cpp
     UI/LoadingScreenTests.cpp)
-target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::World Zodar::WorldRender Zodar::SceneFile Zodar::AssetManager Zodar::UI Zodar::stb doctest::doctest)
+target_link_libraries(ZodarTests PRIVATE Zodar::Runtime Zodar::Renderer Zodar::AssetPipeline Zodar::Scene Zodar::World Zodar::WorldRender Zodar::SceneFile Zodar::AssetManager Zodar::UI Zodar::stb SDL3::SDL3 nlohmann_json::nlohmann_json doctest::doctest)
 # UI tests read the committed resources directly (fonts, original logos, manifest).
 target_compile_definitions(ZodarTests PRIVATE ZODAR_TEST_UI_DIR="${ZODAR_ENGINE_DIR}/ui/Resources/UI"
     ZODAR_EXAMPLES_DIR="${ZODAR_ENGINE_DIR}/../examples" ZODAR_TEST_DATA_DIR="${ZODAR_ENGINE_DIR}/tests/data")
@@ -232,4 +234,12 @@ if(ZODAR_GPU_TESTS AND TARGET ZodarBench AND Python3_Interpreter_FOUND)
     add_test(NAME gpu.region_bench
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/RegionBenchTests.py $<TARGET_FILE:ZodarBench>)
     set_tests_properties(gpu.region_bench PROPERTIES TIMEOUT 300 ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
+endif()
+
+if(ZODAR_GPU_TESTS)
+    add_executable(ZodarInputRuntimeSmoke Runtime/InputRuntimeSmoke.cpp)
+    target_link_libraries(ZodarInputRuntimeSmoke PRIVATE Zodar::Runtime Zodar::imgui SDL3::SDL3)
+    zodar_set_warnings(ZodarInputRuntimeSmoke)
+    add_test(NAME gpu.input_runtime_regression COMMAND ZodarInputRuntimeSmoke ${CMAKE_BINARY_DIR}/input_runtime)
+    set_tests_properties(gpu.input_runtime_regression PROPERTIES TIMEOUT 120)
 endif()
