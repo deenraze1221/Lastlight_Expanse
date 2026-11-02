@@ -443,11 +443,23 @@ def b(lo, hi, texture, faces=ALL):
 
 
 # --- Modules -----------------------------------------------------------------------------
-# Planning grid 4 m; clear height 3.6 m; walls 0.3 m (centred on grid lines); pilasters 0.5 m.
+# Planning grid 4 m; ceiling 4 m; walls snap to one 0.5 m cell.
 CELL = 4.0
 H = 4.0
 WALL = 0.25  # half wall thickness
 BAND = 1.0   # painted lower band
+VOXEL_SIZE = 0.5
+DOOR_HEIGHT = math.ceil(2.7 / VOXEL_SIZE) * VOXEL_SIZE
+
+
+def snap(value):
+    return math.floor(value / VOXEL_SIZE + 0.5) * VOXEL_SIZE
+
+
+def mounting_face(line):
+    # The positive face of a wall after the same snapping used by bunker_structure.
+    return snap(line - WALL) + VOXEL_SIZE + 0.01
+
 
 
 def wall_column(x0, x1, z0=-WALL, z1=WALL, top=H, faces_low=("+x", "-x", "+z", "-z", "-y"),
@@ -459,13 +471,17 @@ def wall_column(x0, x1, z0=-WALL, z1=WALL, top=H, faces_low=("+x", "-x", "+z", "
 
 def opening(width, height, trim=0.08):
     """4 m wall with an opening (width x height), concrete header and steel frame trims."""
-    half = width / 2
+    # Share lattice dimensions between structural jambs/lintel and imported trims.
+    # Round headroom up so snapping cannot lower the authored doorway ceiling.
+    half = snap(width / 2)
+    height = math.ceil(height / VOXEL_SIZE) * VOXEL_SIZE
     out = wall_column(-2, -half) + wall_column(half, 2)
     out.append(b((-half, height, -WALL), (half, H, WALL), "concrete", ("+z", "-z", "-y")))
-    depth = WALL + 0.03
-    out += [b((-half - trim, 0, -depth), (-half, height + trim, depth), "metal", ("+x", "-x", "+z", "-z", "+y")),
-            b((half, 0, -depth), (half + trim, height + trim, depth), "metal", ("+x", "-x", "+z", "-z", "+y")),
-            b((-half, height, -depth), (half, height + trim, depth), "metal", ("+z", "-z", "-y"))]
+    z0 = snap(-WALL) - 0.03
+    z1 = snap(WALL) + 0.03
+    out += [b((-half - trim, 0, z0), (-half, height + trim, z1), "metal", ("+x", "-x", "+z", "-z", "+y")),
+            b((half, 0, z0), (half + trim, height + trim, z1), "metal", ("+x", "-x", "+z", "-z", "+y")),
+            b((-half, height, z0), (half, height + trim, z1), "metal", ("+z", "-z", "-y"))]
     return out
 
 
@@ -492,7 +508,7 @@ MODULES = {
                     [b((-2, 0, z - 0.05), (2, 0.004, z + 0.05), "marking", ("+y",)) for z in (-1.55, 1.55)],
     "ceiling": [b((-2, H, -2), (2, H + 0.1, 2), "ceiling", ("-y",))],
     "wall": wall_column(-2, 2),
-    "doorway": opening(2.0, 2.7),
+    "doorway": opening(2.0, DOOR_HEIGHT),
     "opening_wide": opening(2.8, 2.9),
     "corner": wall_column(-0.25, 0.25, -0.25, 0.25),
     "pillar": [b((-0.3, 0, -0.3), (0.3, 0.1, 0.3), "hazard", ("+x", "-x", "+z", "-z")),
@@ -658,6 +674,8 @@ def level(authoring=False):
         if model in VOXEL_ARCHITECTURE and not authoring:
             if model in ("doorway", "opening_wide"):
                 model = "door_frame" if model == "doorway" else "wide_frame"
+                if yaw == 0 and pos[2] == -2:
+                    pos = (pos[0], pos[1], pos[2] - VOXEL_SIZE)
             else:
                 return
         n = next_id(room, model)
@@ -746,7 +764,7 @@ def level(authoring=False):
         wall_light("corridor", CELL * i + 2, -2 + WALL, 0)
     for x in (13.0, 25.0, 37.0, 49.0):
         add("corridor", "exit_sign", (x, 2.75, -2 + WALL), name="Exit sign (to airlock)")
-    add("corridor", "exit_sign", (WALL, 2.8, 0.0), 90, name="Exit sign (airlock door)")
+    add("corridor", "exit_sign", (mounting_face(0), DOOR_HEIGHT + 0.1, 0.0), 90, name="Exit sign (airlock door)")
     for x in (10.0, 30.0, 46.0):
         add("corridor", "emergency_light", (x, 0, 2 - WALL), 180)
     add("corridor", "electrical_panel", (22.0, 0, 2 - WALL), 180)
@@ -774,7 +792,7 @@ def level(authoring=False):
     add("dormitory", "bench", (6.0, 0, 5.5))
     add("dormitory", "bench", (6.0, 0, 6.9))
     add("dormitory", "door_leaf", (7.1, 0, 2 + WALL + 0.04), name="Sliding door")
-    add("dormitory", "vent", (0.0 + WALL, 0, 6.0), 90)
+    add("dormitory", "vent", (mounting_face(0), 0, 6.0), 90)
     lamp("dormitory", 3.0, 6.0, 10.0, 6.0)
     lamp("dormitory", 9.0, 6.0, 10.0, 6.0)
 
@@ -846,7 +864,7 @@ def level(authoring=False):
     add("airlock", "bench", (-4.0, 0, 3.5))
     add("airlock", "bench", (-4.0, 0, -3.5))
     add("airlock", "crate", (-1.2, 0, -5.2))
-    add("airlock", "emergency_light", (-4.0, 0, -6 + WALL))
+    add("airlock", "emergency_light", (-4.0, 0, mounting_face(-6)))
     add("airlock", "exit_sign", (-8 + 0.4, 3.3, 0.0), 90, name="Exit sign (blast door)")
     add("airlock", "door_leaf", (WALL + 0.04, 0, 1.1), -90, name="Sliding door")
     lamp("airlock", -4.0, -3.0, 10.0, 6.0)
@@ -947,6 +965,7 @@ def bunker_structure():
     def put(x, y, z, name):
         cells[(x, y, z)] = name
 
+    stair_count = 0
     for e in level(authoring=True)["entities"]:
         model = e.get("modelRenderer", {}).get("model")
         if model not in VOXEL_ARCHITECTURE:
@@ -954,6 +973,10 @@ def bunker_structure():
         p = e["transform"]["position"]
         yaw = round(e["transform"].get("rotationDegrees", [0, 0, 0])[1] / 90) % 4
         if model == "stairs":
+            # This stamp is intentionally fixed; fail instead of silently leaving stairs
+            # behind when the authored exit layout moves or rotates.
+            assert p == [-14.0, 0.0, 0.0] and yaw == 3, "exit stair placement changed"
+            stair_count += 1
             # Four half-metre rises, each split into the built-in 0.25 m risers.
             for i in range(8):
                 x = -25 - i
@@ -992,6 +1015,7 @@ def bunker_structure():
                         if model in ("wall", "doorway", "opening_wide") and yaw == 0 and p[2] == -2:
                             wz -= 1
                         put(wx, y + round(p[1] * 2), wz, texture)
+    assert stair_count == 1, "bunker requires one exit stair stamp"
     lower = tuple(min(p[k] for p in cells) for k in range(3))
     size = tuple(max(p[k] for p in cells) - lower[k] + 1 for k in range(3))
     names = sorted({""} | set(cells.values()))

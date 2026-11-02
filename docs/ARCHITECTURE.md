@@ -722,3 +722,12 @@ The moving CLI smoke is a temporary V5 test driver, not D3/D4/D7 input or replay
 The delivery gate exposed a pre-existing V4 test race: asynchronous failure may surface in
 update's final result integration or finishPendingWork. Its exception assertion now covers
 both calls; drained-work and terminal-failure assertions remain. Engine runtime is unchanged.
+
+
+V5 audit geometry fixes: frame models and voxel opening boxes now derive from the same
+snapped aperture dimensions (2/3 m width, 3 m headroom). Model trim depth and south corridor
+frame offsets follow the actual voxel wall faces. The three audited fixtures mount beyond
+those faces, with a 1 cm gap; the exit sign sits above the lintel. CPU tests check solid
+intersections and an unobstructed front-to-wall ray using the committed glTF bounds.
+The game rejects structures outside its fixed mesh preload and generation rejects changes
+to the fixed exit stair placement. This adds guards, not a new streaming or gameplay system.

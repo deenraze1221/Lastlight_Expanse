@@ -871,3 +871,22 @@
 - Delivery gate: enable tools/hooks/pre-push and run the complete Debug/Release gate on the
   clean fifth commit before the V5-only push. Expected Highlands hash is the local baseline
   above. Final delivery outcome is reported with the pushed commit; no merge authorized.
+
+
+## V5 audit fixes (base 4bb079e)
+- P2: airlock exit sign, dormitory vent and airlock emergency light mount on final snapped
+  positive wall faces with a 1 cm separation. Exit sign sits above the snapped door lintel.
+- P3: imported trims and voxel apertures share snapped widths and 3 m headroom. Trims span
+  the actual 0..0.5 m local wall depth; south corridor frames follow the wall's outward offset.
+- Bounds: BunkerVoxels rejects a structure outside the fixed preloaded vertical extent or
+  meshed radius before streaming. The generator rejects moved/missing exit stair stamps;
+  stair cells and all authored cells are checked against the real loaded world.
+- New CPU regressions use committed glTF bounds, scene transforms, voxel collision/rays and
+  collider-defined apertures. Both fixture/aperture cases fail on original 4bb079e assets,
+  then pass on regenerated assets. No engine/runtime input/interaction changes; no D7/V6.
+- Focused verification: 15 game cases / 388 assertions; all five asset/freshness/bunker GPU
+  ctests passed; strict assets 36/36, no warnings or off-palette texels. Four new geometry
+  cases / 256 assertions pass; moved/missing stair negative probes reject as intended.
+- Delivery: full tools/gate.sh is required on the clean commit by tools/hooks/pre-push,
+  including Debug/Release, all goldens and the unchanged local Highlands 5ddd23b4...045776
+  baseline. The final push/gate outcome is reported with the delivery commit.

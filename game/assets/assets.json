@@ -75,7 +75,7 @@
       "id": "bunker",
       "type": "scene",
       "source": "levels/bunker.scene.json",
-      "hash": "fnv1a64:dbd580360cf94a12",
+      "hash": "fnv1a64:c943ba751546e47c",
       "dependencies": [
         "materials/sign_airlock.material.json",
         "materials/sign_common.material.json",
@@ -154,7 +154,7 @@
       "compile": false,
       "class": "prop",
       "textureClass": "environment",
-      "hash": "fnv1a64:58d08129733c74ab",
+      "hash": "fnv1a64:286e7ccf625e6654",
       "dependencies": []
     },
     {
@@ -441,7 +441,7 @@
       "compile": false,
       "class": "prop",
       "textureClass": "environment",
-      "hash": "fnv1a64:4cb5985754068ac5",
+      "hash": "fnv1a64:b353f74701740076",
       "dependencies": []
     }
   ]

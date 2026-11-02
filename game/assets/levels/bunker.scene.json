@@ -125,7 +125,7 @@
         "position": [
           6.0,
           0.0,
-          -2.0
+          -2.5
         ]
       },
       "modelRenderer": {
@@ -170,7 +170,7 @@
         "position": [
           18.0,
           0.0,
-          -2.0
+          -2.5
         ]
       },
       "modelRenderer": {
@@ -200,7 +200,7 @@
         "position": [
           30.0,
           0.0,
-          -2.0
+          -2.5
         ]
       },
       "modelRenderer": {
@@ -230,7 +230,7 @@
         "position": [
           42.0,
           0.0,
-          -2.0
+          -2.5
         ]
       },
       "modelRenderer": {
@@ -260,7 +260,7 @@
         "position": [
           54.0,
           0.0,
-          -2.0
+          -2.5
         ]
       },
       "modelRenderer": {
@@ -791,8 +791,8 @@
       "parent": "corridor",
       "transform": {
         "position": [
-          0.25,
-          2.8,
+          0.51,
+          3.1,
           0.0
         ],
         "rotationDegrees": [
@@ -1411,7 +1411,7 @@
       "parent": "dormitory",
       "transform": {
         "position": [
-          0.25,
+          0.51,
           0.0,
           6.0
         ],
@@ -3389,7 +3389,7 @@
         "position": [
           -4.0,
           0.0,
-          -5.75
+          -5.49
         ]
       },
       "modelRenderer": {

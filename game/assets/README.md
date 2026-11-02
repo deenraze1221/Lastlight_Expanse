@@ -37,6 +37,8 @@ surface. Palette: GDD §3 muted colours, clean surfaces, subtle wear only.
 `structures/bunker.zstruct` is deterministic V4 named-palette/RLE data on the 0.5 m grid.
 Walls, floors, ceilings, pillars, beams, stairs and openings are voxels. Door trims and the
 blast-door frame remain imported models, alongside all furniture and service props.
+Door frames and voxel apertures share 2/3 m widths and 3 m headroom. Audited wall fixtures
+mount on snapped faces; bounds and fixed exit stair placement are asserted.
 All environment/model/sign textures are 64x64 with nearest filtering; voxel UVs use 64 texels/m.
 Palette swatches are lookup data, not environment textures. The registry declares A1 classes.
 
