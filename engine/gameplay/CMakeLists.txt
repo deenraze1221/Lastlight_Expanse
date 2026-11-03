@@ -1,0 +1,5 @@
+add_library(ZodarGameplay STATIC Gameplay/SystemScheduler.cpp Gameplay/Timers.cpp Gameplay/Gameplay.cpp)
+add_library(Zodar::Gameplay ALIAS ZodarGameplay)
+target_include_directories(ZodarGameplay PUBLIC ${ZODAR_ENGINE_DIR}/gameplay)
+target_link_libraries(ZodarGameplay PUBLIC Zodar::Core)
+zodar_set_warnings(ZodarGameplay)

@@ -58,6 +58,13 @@ protected:
     }
     void onStart() override {
         input().setContext("explore", m_explore);
+        gameplay().systems().add({"Bunker.Controls", GameplayPhase::FixedSimulation,
+            [this](const SystemContext& c) { updateControls(c.dt); }});
+        gameplay().systems().add({"Bunker.CameraSync", GameplayPhase::RenderSync,
+            [this](const SystemContext&) {
+                m_view.camera.setYawPitch(m_yaw, m_pitch);
+                if (m_explore) m_view.camera.position = m_walker.eye();
+            }});
         AssetManagerDesc desc;
         desc.root = m_assetDir;
         desc.defaultSampler = SamplerDesc::pixelArt(); // GDD 3: nearest-neighbour pixel art
@@ -109,7 +116,7 @@ protected:
         tryLoadLevel();
     }
 
-    void onFixedUpdate(double dt) override {
+    void updateControls(double dt) {
         if (!m_level) return;
         if (m_explore && input().action("capture_toggle").pressed) setMouseCaptured(!m_captured);
         if (input().action("dig").pressed && m_explore && !m_captured) setMouseCaptured(true);
@@ -161,12 +168,6 @@ protected:
             rebuildColliders(); // the level was hot-reloaded: new geometry, same walker position
         }
 
-        m_view.camera.setYawPitch(m_yaw, m_pitch);
-        if (m_explore) {
-            m_view.camera.position = m_walker.eye();
-            finishFrame(time);
-            return;
-        }
         finishFrame(time);
     }
 

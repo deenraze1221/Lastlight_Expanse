@@ -131,6 +131,7 @@ int Application::run() {
     int exitCode = 0;
     try {
         onStart();
+        m_gameplay.systems().validate();
         if(m_desc.recordInput || m_playback) m_recording.header={m_desc.identifier,m_input.map().hash(),inputLevelHash(),m_desc.seed.value_or(0),m_timestep.fixedDt()};
         if(m_playback) {
             m_playback->checkCompatible(m_recording.header,m_desc.replayLenient);
@@ -300,14 +301,15 @@ void Application::loop() {
                 for(const auto& [name,value]:m_playback->ticks[m_inputTick].actions) m_input.inject(name,value);
             }
             m_input.beginStep();
-            onFixedUpdate(m_timestep.fixedDt());
+            m_gameplay.step(m_timestep.fixedDt(), [this] { onFixedUpdate(m_timestep.fixedDt()); }, &m_cpuProfiler);
+            ++m_inputTick;
+            onCheckpoint(m_gameplay.completedTicks());
             if (m_desc.inputMap) m_inputStateHash=simulationFingerprint();
             if(m_playback) {
-                const auto& expected=m_playback->ticks[m_inputTick].state;
-                if(!expected.empty() && expected!=m_inputStateHash) fail("replay state mismatch at tick "+std::to_string(m_inputTick+1));
+                const auto& expected=m_playback->ticks[m_inputTick - 1].state;
+                if(!expected.empty() && expected!=m_inputStateHash) fail("replay state mismatch at tick "+std::to_string(m_inputTick));
             }
             if(m_desc.recordInput) m_recording.ticks.push_back({m_input.snapshot(),m_inputStateHash});
-            ++m_inputTick;
             if (m_desc.inputMap && !m_desc.headless) SDL_SetWindowRelativeMouseMode(m_window->native(), m_input.relativeMouse());
         }
         // Retrying the final replay frame must preserve visual simulation time too.
@@ -315,7 +317,10 @@ void Application::loop() {
         time.alpha = m_timestep.alpha();
         {
             ZODAR_CPU_SCOPE(m_cpuProfiler, "Update");
+            const SystemContext context{time.dt, m_gameplay.completedTicks(), time.alpha};
+            m_gameplay.systems().run(GameplayPhase::LateUpdate, context, &m_cpuProfiler);
             onUpdate(time);
+            m_gameplay.systems().run(GameplayPhase::RenderSync, context, &m_cpuProfiler);
         }
 
         // Replay limits are ticks, independent of minimized/out-of-date render attempts.
@@ -352,6 +357,9 @@ void Application::renderFrame(const FrameTime& time, bool lastFrame) {
     if (!frame) {
         // Minimized or swapchain out of date: skip rendering this iteration.
         m_cpuProfiler.endFrame();
+        if (m_collectReport) {
+            for (const auto& scope : m_cpuProfiler.lastFrame()) m_report.cpuScopes.add(scope.name, scope.ms);
+        }
         SDL_Delay(5);
         return;
     }

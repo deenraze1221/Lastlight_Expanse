@@ -181,3 +181,12 @@ Game controls are configured in `game/assets/input.json` (`--input-map FILE` ove
 Keep the recorded level/mode/seed/fixed-dt/camera options. Full schema, semantics and limits:
 [INPUT.md](INPUT.md). The old waypoint walkthrough remains a geometry regression, distinct
 from action replay. The runtime still provides hooks; D5 systems and D6 saves are pending.
+
+## D5 gameplay systems
+
+Camera/movement/edit controls now run as named gameplay systems; controls and replay CLI are
+unchanged. Run reports include `System/Highlands.Camera`, `System/Highlands.Terrain`,
+`System/Highlands.Interaction`, `System/Bunker.Controls` and `System/Bunker.CameraSync`.
+CPU scopes retain calls on skipped render attempts. Focused CPU checks:
+`ZodarTests --test-case='gameplay:*'`; runtime ordering/multi-tick/skipped-frame checks remain
+in `gpu.input_runtime_regression`. APIs and checkpoint semantics: [GAMEPLAY.md](GAMEPLAY.md).
