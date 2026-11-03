@@ -39,6 +39,7 @@ add_executable(ZodarTests
     SceneFile/SceneFileTests.cpp
     SceneFile/MaterialTextureTests.cpp
     SceneFile/ModelReferenceTests.cpp
+    Gameplay/GameplayTests.cpp
     Runtime/ReplayTests.cpp
     Runtime/InputTests.cpp
     Runtime/FixedTimestepTests.cpp
@@ -238,7 +239,7 @@ endif()
 
 if(ZODAR_GPU_TESTS)
     add_executable(ZodarInputRuntimeSmoke Runtime/InputRuntimeSmoke.cpp)
-    target_link_libraries(ZodarInputRuntimeSmoke PRIVATE Zodar::Runtime Zodar::imgui SDL3::SDL3)
+    target_link_libraries(ZodarInputRuntimeSmoke PRIVATE Zodar::Runtime Zodar::imgui SDL3::SDL3 nlohmann_json::nlohmann_json)
     zodar_set_warnings(ZodarInputRuntimeSmoke)
     add_test(NAME gpu.input_runtime_regression COMMAND ZodarInputRuntimeSmoke ${CMAKE_BINARY_DIR}/input_runtime)
     set_tests_properties(gpu.input_runtime_regression PROPERTIES TIMEOUT 120)

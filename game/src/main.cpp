@@ -127,7 +127,9 @@ protected:
         return lastlight::playerFingerprint(m_view.camera.position,m_yaw,m_pitch)+m_editState;
     }
     void onStart() override;
-    void onFixedUpdate(double dt) override;
+    void updateCamera(double dt);
+    void updateTerrain();
+    void updateInteraction();
     std::string m_editState;
     void onUpdate(const FrameTime& time) override;
     void onRender(RenderContext& rc) override;
@@ -156,6 +158,12 @@ private:
 
 void LastlightApp::onStart() {
     input().setContext("explore", false);
+    gameplay().systems().add({"Highlands.Camera", GameplayPhase::FixedSimulation,
+        [this](const SystemContext& c) { updateCamera(c.dt); }});
+    gameplay().systems().add({"Highlands.Terrain", GameplayPhase::FixedSimulation,
+        [this](const SystemContext&) { updateTerrain(); }, {}, {"Highlands.Camera"}});
+    gameplay().systems().add({"Highlands.Interaction", GameplayPhase::FixedSimulation,
+        [this](const SystemContext&) { updateInteraction(); }, {}, {"Highlands.Terrain"}});
     // --- World ------------------------------------------------------------------------
     m_terrain = std::make_shared<lastlight::LastlightTerrain>(m_seed);
     m_streaming.viewRadius = m_options.viewRadius;
@@ -255,7 +263,7 @@ void LastlightApp::onStart() {
                    s.chunksWithData, s.generated, s.meshed);
 }
 
-void LastlightApp::onFixedUpdate(double step) {
+void LastlightApp::updateCamera(double step) {
     const float dt = static_cast<float>(step);
     if (input().action("look_hold").held || input().action("look_hold").pressed) {
         m_yaw -= input().action("look").x * 0.0035f;
@@ -269,12 +277,18 @@ void LastlightApp::onFixedUpdate(double step) {
         const float speed = input().action("sprint").held ? 60.0f : 15.0f;
         m_view.camera.position += glm::normalize(move) * speed * dt;
     }
+}
+
+void LastlightApp::updateTerrain() {
     // Recording/playback must sample the same terrain at each tick, even when
     // several ticks share one render frame. Normal interactive streaming stays async.
     if (desc().deterministic || desc().recordInput) {
         m_world->update(m_view.camera.position);
         m_world->finishPendingWork();
     }
+}
+
+void LastlightApp::updateInteraction() {
     const bool dig = input().action("dig").pressed;
     const bool place = input().action("place").pressed;
     if (dig || place) {

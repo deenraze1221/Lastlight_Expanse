@@ -1002,3 +1002,69 @@
 - Final diff/whitespace checks passed. Changes are committed to the feature branch for PR review;
   main remains unchanged and merging is not authorized. GitHub API network access must be
   available to create the PR (the api.github.com domain addition was saved in environment settings).
+
+
+## D5 — Deterministic gameplay execution (dedicated feature branch)
+
+- Base main: 09f2e34a0f0d69ef4505abd0d336abada995cf6c (D0/D3/D4 merged via PR #2).
+  Branch: `codex/d5-deterministic-gameplay`; D6/D7 are not started and merging is not authorized.
+- Added CPU-only `Zodar::Gameplay`: stable topological scheduler with startup-only registration,
+  explicit phase/dependency validation and per-system CPU scopes; typed double-buffered events;
+  integer-tick timers with stable deadlines/IDs, cancellation and repeat support. No dependencies
+  beyond existing Core, no players or game rules, no parallel execution or global registries.
+- Runtime fixed order: sampled/replayed input → Input/FixedSimulation/Animation systems → legacy
+  fixed hook → due timers → event flip → completed-tick checkpoint observer → replay verification.
+  Timer-generated events are delivered next tick. LateUpdate/update/RenderSync remain per frame.
+- The completed-tick checkpoint is independent of batched FixedTimestep.totalSteps and skipped
+  rendering. No snapshot/restore/serialization/save APIs were added (D6 work).
+- Migrated Highlands Camera → Terrain → Interaction to ordered fixed systems and Bunker Controls
+  plus derived RenderSync CameraSync. Old control hooks no longer execute game logic, preventing
+  double movement/edits. CPU report scopes retain calls even on skipped render attempts.
+- Focused CPU tests: 9 gameplay cases / 69 assertions passed. Existing runtime/replay CTests:
+  4/4 passed, including new phase, checkpoint, catch-up-frame, frozen-frame and profiler-count
+  probes inside gpu.input_runtime_regression. Existing empty-scheduler behavior remains checked.
+- Independent compatibility checks replayed pre-D5 Release recordings using the D5 Debug game:
+  bunker/Highlands state checks passed and screenshots matched byte-for-byte; pre-D5 variable-
+  render-cadence recording also passed all state fingerprints.
+- Public API/clock/error/lifetime contracts: docs/guide/GAMEPLAY.md; updated INPUT, RUNNING,
+  ARCHITECTURE and PHASE_D_PLAN. Full Debug/Release gate results follow after validation.
+- Known limits: sequential application-thread callbacks only; frozen system graph; no callback
+  serialization, failed-tick rollback or resume. Event payloads and meaningful new system state
+  need app-owned fingerprint/serialization policy; cross-platform float identity remains unproven.
+
+- Final validation: tools/gate.sh passed Debug 41/41 (171.08 s) and Release 41/41 (69.71 s),
+  both with warnings as errors. Highlands matched the unchanged reference in both builds:
+  5ddd23b4cf86dfd551dfad44e349fcefb2594f31a2c37b72f6d9c00f68045776.
+- Each build executed 312 CPU cases / 83,618 assertions (2 existing timing cases skipped),
+  76 GPU subsystem cases (1 existing timing case skipped), and 15 game cases / 388 assertions.
+  All 19 inspected validation reports per build contain zero Vulkan warnings/errors.
+- Runtime profiler probe includes 4 calls per fixed system and 5 per presentation system across
+  a skipped final render, proving scopes and checkpoints are neither lost nor duplicated.
+  Pre-D5 moving bunker/Highlands replay screenshots also matched byte-for-byte.
+- Final diff review and whitespace checks passed. D5 is implemented and validated on its
+  dedicated branch for review; no merge or D6/D7 implementation is part of this delivery.
+
+
+## D5 review — mutable repeating callback state
+
+- Reviewed 87b76dc against main 09f2e34 and PHASE_D_PLAN: stable dependency ordering/cycles,
+  event buffering, timer deadlines/cancellation, runtime phases, replay and checkpoint ordering.
+- Confirmed a timer correctness defect: dispatch copied std::function before every invocation,
+  so mutable capture state reset on every repeat and capture-driven self-cancellation never ran.
+  A deterministic regression failed on the original code (expected 1,2,3; got repeated 1s).
+- Minimal fix: move the callable into safe dispatch ownership and restore its mutated state if
+  the timer remains registered, on both success and exception. Cancellation and timer ordering
+  are unchanged; self-cancelled callable lifetime extends through the end of the invocation.
+- Added regression coverage and clarified the public callback lifetime contract. Focused
+  gameplay/input/replay tests pass (20 cases / 225 assertions). No other confirmed correctness
+  issue found; no scheduler/event/checkpoint APIs changed and no D6/D7 work started.
+- Final full Debug/Release validation and publication outcomes follow below.
+
+- Review validation: focused 20/20 cases (225 assertions); full Debug 41/41 (172.28 s) and
+  Release 41/41 (60.80 s), warnings as errors. Highlands hash unchanged in both configurations:
+  5ddd23b4cf86dfd551dfad44e349fcefb2594f31a2c37b72f6d9c00f68045776.
+  All 19 inspected validation reports per configuration have zero Vulkan warnings/errors.
+- The regression failed before the fix and passes afterward. No unresolved confirmed issue
+  remains in the reviewed scope. The fix is delivered on the existing D5 feature branch for
+  PR review, without merging or beginning D6/D7. GitHub API access remains an external
+  prerequisite for PR creation; api.github.com is present in the saved network draft.

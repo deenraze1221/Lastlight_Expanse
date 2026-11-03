@@ -40,6 +40,11 @@ for level in ['bunker', 'highlands']:
         run(level + f'-replay{repeat}', base + ['--replay-input', str(recording), '--screenshot', str(png), '--report', str(report)])
         data = json.loads(report.read_text())
         assert data['input']['ticks'] == 12 and data['input']['mode'] == 'replay'
+        fixed = ['Bunker.Controls'] if level == 'bunker' else ['Highlands.Camera', 'Highlands.Terrain', 'Highlands.Interaction']
+        for name in fixed:
+            assert data['cpuScopes']['System/' + name]['count'] == 12, 'system missing or executed twice'
+        if level == 'bunker':
+            assert data['cpuScopes']['System/Bunker.CameraSync']['count'] == 12
         assert data['validation'] == {'errors': 0, 'warnings': 0}
         assert png.read_bytes() == live_png.read_bytes(), 'record/replay pixels differ'
     rows = [json.loads(line) for line in recording.read_text().splitlines()][:-1]

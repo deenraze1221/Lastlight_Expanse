@@ -21,6 +21,7 @@ Engine code never includes game headers or links game targets.
 | `engine/rendering/AssetManager` | `Zodar::AssetManager` | Runtime asset manager (C): cached GPU textures (PNG/JPEG/TGA/BMP), glTF models, material files with textures, scene materials; release via the deletion queue; async loads (C2); `AssetRegistry` (`assets.json`, import, hashes, checks; CPU only, C3) |
 | `engine/physics`, `engine/audio` | — | Planned (Jolt, miniaudio); see their README files |
 | `engine/input/Input` | `Zodar::Input` | JSON actions, priority contexts, SDL adapter, fixed-tick injection and checked action recordings (D3–D4) |
+| `engine/gameplay/Gameplay` | `Zodar::Gameplay` | Deterministic sequential systems, typed next-tick events, fixed-tick timers and completed-tick checkpoint boundary (D5; Core dependency only) |
 | `engine/runtime/Runtime` | `Zodar::Runtime` | `zodar::Application` (window or headless, standard frame loop, exit codes), `FixedTimestep`, standard command line + `runMain`, captures, run report JSON. Used by the game, ModelViewer and ZodarBench |
 | `engine/tools` | `Zodar::Debug` + executables | ImGui profiler overlay, ZodarBench, ZodarAssetCompiler, ZodarAssetTool (asset registry CLI, C3), ZodarUISandbox |
 | `engine/ui` | `Zodar::UI` | Engine/tooling UI, UI resources |
@@ -764,3 +765,24 @@ Review hardening: replay termination is tick-based even when rendering is skippe
 render retries with frozen simulation/visual time. Recording publication follows successful
 shutdown/output/report validation. UI-consumed presses/motion do not reach gameplay, while
 releases still clear held actions. Recorded Highlands streaming/query work is tick-driven.
+
+## D5 gameplay execution
+
+`Zodar::Gameplay` owns `SystemScheduler`, `EventBus`, `Timers` and a completed-tick counter.
+No player, World, SDL or GPU ownership is introduced. Systems register during `onStart` and
+freeze when the runtime validates the complete graph. Topological ties use registration order;
+reverse-phase dependencies, unknown names, duplicate names and cycles fail before execution.
+
+The runtime samples/injects input, runs Input → FixedSimulation → Animation systems, calls the
+legacy fixed hook, dispatches due timers, flips event buffers, then establishes a checkpoint.
+Timers precede the flip so their events, like system/hook events, are read next tick.
+`onCheckpoint(completedTicks)` observes that boundary before replay fingerprint verification.
+This orders future D6 saves; it does not implement persistence or restoration. Frame phases are
+LateUpdate → legacy update hook → RenderSync → render attempt. Fixed state advances per executed
+tick, never per render attempt. Checkpoints and timers do not advance while a final replay render
+is retried. CPU scopes include systems executed during skipped render attempts.
+
+Camera/movement/edit logic now runs only through registered game systems. Highlands has ordered
+Camera → Terrain → Interaction fixed systems; Bunker has fixed Controls and presentation-only
+CameraSync. Existing hooks remain valid for other apps; no systems preserves their behavior.
+Public contracts and limitations: `docs/guide/GAMEPLAY.md`.

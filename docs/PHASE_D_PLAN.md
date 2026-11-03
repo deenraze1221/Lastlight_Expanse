@@ -1,7 +1,8 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **approved; D1, D2, D3 and D4 implemented (uncommitted review); Phase V inserted (V0, V1, V2 and V3 done 2026-11-01).**
-Current main includes V4, V5 and V6. D0 reliability and D3/D4 input/replay changes are awaiting review; D5–D8 remain pending. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
+Status: **D0 and D1–D4 are on main. D5 is implemented on `codex/d5-deterministic-gameplay`
+validated and awaiting review; D6–D8 remain pending.** Current main also includes V4–V6.
+Next implementation order: D5 → D6 → D7 → D8; V6 already landed ahead of the original order. Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`. Area-by-area production after
 D8 (completion levels, checklist, tracks): `docs/WORLD_PRODUCTION_ROADMAP.md`.
@@ -57,15 +58,13 @@ part of the binding plan.
 
 ## Findings that shape the plan
 
-- `game/` has no `game/assets/`; input is hard-coded SDL in `game/src/main.cpp` (fly camera,
-  dig/place).
-- The engine has no input, scheduler, events, timers, RNG service or save system;
-  `Application` only has hooks.
-- Scene files reject unknown fields, so the game cannot add components (doors, colliders) yet:
-  the engine needs an extension point.
-- `ModelRenderer` draws only through the CPU draw path; sufficient for bunker scale.
-- Physics is Phase E (Jolt); the bunker uses decision 2.
-- Point lights cast no shadows (S5 is sun only); light ranges must stay inside rooms.
+- D0/D3/D4 are merged: action input and named RNG/replay exist. The voxel/model bunker and
+  temporary exploration walker are present; the original pre-D findings are historical.
+- D5 adds sequential scheduling, events, timers and a fixed-tick checkpoint boundary. D6 must
+  add scene-component extensions and transactional save/load; those are not implemented here.
+- Scene files still reject unknown fields and cannot yet carry the planned game components.
+- `ModelRenderer` CPU draws are sufficient for bunker scale. Collision remains behind the
+  game-side `CollisionWorld` adapter until Phase E; point-light ranges remain room-bounded.
 
 ## Asset workflow: one pipeline, two tools
 
@@ -240,6 +239,12 @@ atomic final write; cross-platform float determinism is not promised. See `docs/
 - Acceptance: a hand-written recording replays headless with identical results on repeat runs.
 
 ### D5 — System scheduling, events, timers (engine)
+
+Implemented on the dedicated D5 branch; see `docs/guide/GAMEPLAY.md`. Timer callbacks run before
+the end-tick event flip, guaranteeing N+1 delivery for timer-generated events. The checkpoint
+hook follows both, with a completed-tick counter independent of the render loop. Scheduler
+registration freezes after startup validation; no parallel execution or dynamic graph edits.
+No D6 state restoration, serializers or save/load APIs are added.
 - Read: `Application.h/.cpp`, `engine/world/World/World.h`, `FixedTimestep.h`.
 - `SystemScheduler`: phases `Input`, `FixedSimulation`, `Animation` (empty until Phase E),
   `LateUpdate`, `RenderSync`; systems with name and optional `before`/`after`; deterministic

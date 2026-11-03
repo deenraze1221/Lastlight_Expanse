@@ -45,7 +45,7 @@ explicit edges preserve short taps). Replays inject a complete snapshot every ti
 The game retains fly-camera controls, Highlands left-click dig/F place, and bunker
 `--explore` walking, sprint, jump, look and Tab capture. Arrow-key movement is exploration-only.
 Movement/look/edit simulation now runs in fixed updates. This adds up to one tick of input
-latency; it removes render-frame dependence. No scheduler, doors or power logic was added.
+latency; it removes render-frame dependence. D5 registers these controls as systems; doors and power remain D7 work.
 
 ## Record and replay
 
@@ -77,7 +77,8 @@ remain strict. Lenient mode does not disable state verification. Run reports inc
 `input.mode`, `mapHash`, `ticks` and final `stateHash`.
 
 Applications override `inputLevelHash()` and `inputState()` for content identity and simulation
-verification. The runtime combines game state with named RNG states and checks after every tick.
+verification. The runtime combines game state with named RNG states and checks after every completed tick,
+after D5 timer callbacks, event publication and the checkpoint observer.
 Bunker identity hashes runtime asset bytes (excluding source-project/cache directories); state
 covers walker position/velocity, orientation, grounding, mouse capture and waypoint progress.
 Highlands identity includes generator version, seed and radius; state covers camera and an edit
@@ -103,7 +104,7 @@ Focused doctest cases are `input:*`, `replay:*`, and
 `region: partial worker failure drains before propagation`. `gpu.lastlight_input_replay` checks
 both levels: record/replay pixel equality, two moving hand-authored replays, state divergence
 rejection, strict/lenient compatibility, and variable-frame recording. Existing game, asset,
-UI and Vulkan checks remain enabled. D5 scheduling/events/timers and D6 save/load are separate tasks.
+UI and Vulkan checks remain enabled. D5 scheduling/events/timers are documented in GAMEPLAY.md; D6 save/load remains separate.
 
 Review regressions: `gpu.input_runtime_regression` injects a minimized final frame, shutdown
 failure, unwritable screenshot and UI capture. It verifies exact replay tick counts/time,

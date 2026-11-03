@@ -19,8 +19,9 @@
 //   };
 //   int main() { return MyApp().run(); }
 //
-// Frame order: events -> fixed steps (onFixedUpdate x N) -> onUpdate -> [beginFrame ->
-// onRender -> debug overlay -> graph execute -> endFrame -> onFrameEnd]. The subsystems exist from the
+// Frame order: events -> fixed ticks (sample input, Input/FixedSimulation/Animation systems,
+// onFixedUpdate, timers, event flip, onCheckpoint) -> LateUpdate systems -> onUpdate ->
+// RenderSync systems -> [beginFrame -> onRender -> overlay -> graph -> endFrame -> onFrameEnd]. The subsystems exist from the
 // constructor on; hooks run only inside run(). Members of the derived class are destroyed
 // before the engine subsystems; run() waits for the GPU before returning. A derived class that
 // creates GPU objects without calling run() must call renderer().waitIdle() in its destructor.
@@ -31,6 +32,7 @@
 
 #include "Core/JobSystem.h"
 #include "Input/Input.h"
+#include "Gameplay/Gameplay.h"
 #include "Input/Recording.h"
 #include "Core/Random.h"
 #include "Core/Profiler.h"
@@ -165,6 +167,8 @@ public:
     gfx::SceneRenderer& scene() { return *m_scene; }
     gfx::RenderGraphResources& graphResources() { return *m_graphResources; }
     debug::DebugOverlay& overlay() { return *m_overlay; }
+    Gameplay& gameplay() { return m_gameplay; }
+    const Gameplay& gameplay() const { return m_gameplay; }
     Random& random() { return m_random; }
     Input& input() { return m_input; }
     const Input& input() const { return m_input; }
@@ -184,6 +188,9 @@ protected:
     // Every OS event not consumed by the overlay (Escape already requests quit).
     virtual void onEvent(const SDL_Event& event) { (void)event; }
     virtual void onFixedUpdate(double dt) { (void)dt; }
+    // Once after fixed systems/hook, timer callbacks and event publication. Observe only;
+    // completedTicks identifies the next input cursor for a future D6 checkpoint.
+    virtual void onCheckpoint(uint64_t completedTicks) { (void)completedTicks; }
     virtual void onUpdate(const FrameTime& time) { (void)time; }
     virtual void onRender(RenderContext& context) { (void)context; }
     // After a frame was submitted and presented (not called for skipped frames). The frame's
@@ -200,6 +207,7 @@ private:
     std::string simulationFingerprint() const;
 
     std::vector<SDL_Gamepad*> m_gamepads;
+    Gameplay m_gameplay;
     Input m_input;
     Random m_random;
     InputRecording m_recording;
