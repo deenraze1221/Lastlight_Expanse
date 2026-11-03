@@ -1,5 +1,56 @@
 # Progress
 
+## D6 correctness review (2026-11-03)
+
+Reviewed `d6/scene-extensions-transactional-saves` against latest main
+`25c39940c688d0dbd6876d88c8dcd3f5a338ce76` and PHASE_D_PLAN D6. Confirmed issues fixed:
+
+- Backup rotation could modify older files before a later failure. Core now prepares all
+  replacement/original files before publishing, restores prior contents on ordinary failure,
+  and retains/reports original copies if rollback itself fails. Fault injection covers both
+  publication and rollback failures. A corrupt or runtime/game-invalid recovered primary no
+  longer displaces the usable fallback backup on the next save.
+- A divergent replay could autosave before the runtime rejected its tick. Checkpoint capture
+  now validates before publication. Loading recomputes the fingerprint from staged game/RNG
+  state instead of trusting the stored hash; otherwise valid positive RNG/game mutations are
+  rejected before commit. SaveCommit handlers supply the staged inputState() value.
+- Restoring an already completed replay ending tick left the exit cache empty and Highlands
+  camera/geometry unready. Loads now seed the exit cache, restore camera orientation, and stage
+  terrain uploads before commit. The non-replay frame clock now starts at the restored tick;
+  startup and mid-checkpoint clock behavior are explicitly tested.
+- Material source files were reread instead of preserving captured values, and relative models
+  were resolved next to the slot. Save material definitions are now inline snapshots, texture
+  paths are rebased, and sceneDirectory resolves relative assets independently of slot storage.
+- Component C++ type aliases could overwrite built-ins or registered values during instantiation.
+  Type identity is now unique, including built-ins; the template supplies it automatically.
+- Exit-save failures left a success exitCode in the run report. The report now reflects failure.
+- Release validation exposed allocation-dependent opaque draw ordering (five differing bunker
+  pixels). A GPU regression first reproduced the bug by exchanging two meshes' address order.
+  Pipeline/material/mesh groups now use first-seen ordinals, retaining batching without sorting
+  by process-specific pointers. The regression and unchanged record/replay checks then passed.
+
+Final verification (GCC 14.2, Linux, Mesa lavapipe 25.0.7, validation layers 1.4.309):
+
+- Debug full CTest: **42/42**, 389.93 seconds; Release full CTest: **42/42**, 231.49 seconds.
+  Warnings as errors enabled in both; no compiler warnings. Each suite used a separate TMPDIR.
+- Engine unit: 322 passed, 2 existing optional skips; GPU: 77 passed, 1 existing optional skip;
+  game: 15 passed. No CTest targets were skipped or disabled.
+- Focused D6 CPU: 9 cases / 69 assertions; allocation-order GPU regression: 1 case / 4 assertions.
+  Runtime probes compare complete world/game/input/RNG/clock/event/timer state before and after
+  rejected loads, restore named timers and both event batches, and match uninterrupted state.
+- Replay continuation, final-tick render/save, divergent autosave rejection, runtime-invalid
+  fallback preservation, live-clock restoration and exit-save report failures passed in both
+  full suites. Existing parser/prefab/reference and mesher golden tests remain green.
+- Both Highlands images remain byte-identical to unchanged main:
+  `b1646c18528e93fe4f4b933145b61f6b6156406bad7c0d5a1467b1a461e9c500`.
+  All 21 generated application run reports per configuration record zero Vulkan messages.
+
+Limits remain documented in SAVES.md: named callbacks/event codecs are required for pending
+work; application handlers define their logical fingerprint; filesystem transactions do not
+promise power-loss durability, concurrent mutation or metadata preservation. Failed rollback
+requires manual recovery using retained originals. Save destinations must be regular files
+or absent. Windows and hardware GPUs were not tested. No dependencies, D7 work or merge added.
+
 ## D6 handoff — Scene Extensions & Transactional Saves (2026-11-03)
 
 Branch: `d6/scene-extensions-transactional-saves`, based on main `25c3994`. Implemented,

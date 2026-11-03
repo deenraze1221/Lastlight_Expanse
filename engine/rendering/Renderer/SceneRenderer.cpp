@@ -18,6 +18,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <array>
+#include <unordered_map>
 
 namespace zodar::gfx {
 namespace {
@@ -84,6 +86,7 @@ struct DrawEntry {
     const MeshDraw* draw;
     bool blend;
     float viewDepth; // Distance along the view direction (blend sorting).
+    std::array<uint32_t,3> groupOrder;
 };
 
 } // namespace
@@ -267,6 +270,12 @@ SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkEx
     const glm::vec3 forward = view.camera.forward();
     std::vector<DrawEntry> entries;
     entries.reserve(view.draws.size());
+    std::unordered_map<const GraphicsPipeline*,uint32_t> pipelineOrder;
+    std::unordered_map<MaterialHandle,uint32_t> materialOrder;
+    std::unordered_map<const GpuMesh*,uint32_t> meshOrder;
+    const auto ordinal=[](auto& order,auto key) {
+        return order.try_emplace(key,static_cast<uint32_t>(order.size())).first->second;
+    };
     for (const MeshDraw& draw : view.draws) {
         ++stats.submitted;
         ZODAR_ENSURE(draw.mesh != nullptr && draw.submesh < draw.mesh->submeshes().size(), "invalid MeshDraw");
@@ -278,17 +287,19 @@ SceneRenderer::PreparedScene SceneRenderer::prepare(const FrameInfo& frame, VkEx
         const MaterialDesc& material = m_materials->material(draw.material);
         const bool blend = material.alphaMode == AlphaMode::Blend;
         const glm::vec3 centre = world.isEmpty() ? glm::vec3(draw.transform[3]) : world.center();
-        entries.push_back({&m_materials->pipeline(draw.material), &draw, blend,
-                           glm::dot(centre - view.camera.position, forward)});
+        const auto* pipeline=&m_materials->pipeline(draw.material);
+        entries.push_back({pipeline, &draw, blend,
+                           glm::dot(centre - view.camera.position, forward),
+                           {ordinal(pipelineOrder,pipeline),ordinal(materialOrder,draw.material),ordinal(meshOrder,draw.mesh)}});
     }
     // Opaque/masked: group by pipeline, material and mesh (enables instancing).
     // Blended: back to front.
     std::stable_sort(entries.begin(), entries.end(), [](const DrawEntry& a, const DrawEntry& b) {
         if (a.blend != b.blend) return !a.blend;
         if (a.blend) return a.viewDepth > b.viewDepth;
-        if (a.pipeline != b.pipeline) return a.pipeline < b.pipeline;
-        if (a.draw->material != b.draw->material) return a.draw->material < b.draw->material;
-        if (a.draw->mesh != b.draw->mesh) return a.draw->mesh < b.draw->mesh;
+        // Allocation addresses vary between recording, replay and save restoration.
+        // Keep batching, but order groups by their first appearance in the input scene.
+        if (a.groupOrder != b.groupOrder) return a.groupOrder < b.groupOrder;
         return a.draw->submesh < b.draw->submesh;
     });
 

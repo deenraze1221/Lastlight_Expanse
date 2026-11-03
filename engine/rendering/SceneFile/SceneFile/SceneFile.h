@@ -11,6 +11,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <typeindex>
 #include "World/Reflection.h"
 #include <filesystem>
 #include <optional>
@@ -42,6 +43,7 @@ struct SceneComponentRegistration {
     std::function<std::shared_ptr<void>()> create;
     std::function<void(World&, Entity, const void*)> add;
     std::function<const void*(const World&, Entity)> get;
+    std::type_index type = typeid(void);
 };
 void registerSceneComponent(SceneComponentRegistration registration);
 template<class T>
@@ -49,7 +51,7 @@ void registerSceneComponent(std::string name, std::span<const FieldInfo> fields)
     registerSceneComponent({std::move(name), {fields.begin(), fields.end()},
         [] { return std::make_shared<T>(); },
         [](World& w, Entity e, const void* value) { w.add<T>(e, *static_cast<const T*>(value)); },
-        [](const World& w, Entity e) -> const void* { return w.tryGet<T>(e); }});
+        [](const World& w, Entity e) -> const void* { return w.tryGet<T>(e); }, typeid(T)});
 }
 struct SceneId { std::string value; }; // Stable authored ID; never a backend entity handle.
 

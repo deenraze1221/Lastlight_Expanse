@@ -57,12 +57,11 @@ protected:
                                  m_explore?m_walker.velocity():glm::vec3(0),m_explore&&m_walker.grounded())+
                ":"+std::to_string(m_waypoint)+":"+std::to_string(m_captured);
     }
-    SaveGameDesc saveGameDesc() const override { auto settings=Application::saveGameDesc(); settings.scenePath=kLevel; return settings; }
+    SaveGameDesc saveGameDesc() const override { auto settings=Application::saveGameDesc(); settings.scenePath=kLevel; settings.sceneDirectory=std::filesystem::absolute(m_assetDir/std::filesystem::path(kLevel).parent_path()); return settings; }
     SaveGameData captureGameSave() const override {
         if (!m_level) fail("cannot save before bunker is ready");
         SaveGameData data;
         data.world=captureScene(m_world,invertBindings(m_level->document(),m_level->bindings()));
-        for (auto& material:data.world.materials) material.source.clear();
         data.game["bunker"]=nlohmann::json{{"position",{m_view.camera.position.x,m_view.camera.position.y,m_view.camera.position.z}},
             {"yaw",m_yaw},{"pitch",m_pitch},{"walker",nlohmann::json::parse(m_walker.capture())},
             {"waypoint",m_waypoint},{"captured",m_captured}}.dump();
@@ -85,6 +84,9 @@ protected:
         const auto waypoint=j.at("waypoint").get<size_t>();
         if (waypoint>m_route.size()) fail("invalid saved route cursor");
         const bool captured=j.at("captured").get<bool>();
+        const auto state=playerFingerprint(m_explore?walker.feet():position,yaw,pitch,
+            m_explore?walker.velocity():glm::vec3(0),m_explore&&walker.grounded())+
+            ":"+std::to_string(waypoint)+":"+std::to_string(captured);
         struct Stage { World world; SceneDocument document; SceneInstance instance; CollisionWorld collision; };
         auto staged=std::make_shared<Stage>(); staged->document=data.world;
         staged->instance=instantiateScene(data.world,staged->world,m_level->bindings());
@@ -102,7 +104,7 @@ protected:
             m_waypoint=waypoint; m_captured=captured;
             if (m_explore) m_collision=std::move(staged->collision);
             m_colliderGeneration=m_level->generation();
-        });
+        },state);
     }
     void onStart() override {
         input().setContext("explore", m_explore);

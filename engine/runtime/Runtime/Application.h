@@ -147,17 +147,18 @@ struct RenderContext {
 };
 
 struct SaveCommit {
+    std::string fingerprintState; // Candidate Application::inputState(), computed during staging.
     virtual ~SaveCommit() = default;
     virtual void commit() noexcept = 0;
 };
-template<class F> std::unique_ptr<SaveCommit> makeSaveCommit(F fn) {
+template<class F> std::unique_ptr<SaveCommit> makeSaveCommit(F fn, std::string fingerprintState = {}) {
     static_assert(std::is_nothrow_invocable_v<F&>, "save commit must not throw");
     struct Commit final : SaveCommit {
         F fn;
-        explicit Commit(F f) : fn(std::move(f)) {}
+        Commit(F f, std::string state) : fn(std::move(f)) { this->fingerprintState=std::move(state); }
         void commit() noexcept override { fn(); }
     };
-    return std::make_unique<Commit>(std::move(fn));
+    return std::make_unique<Commit>(std::move(fn),std::move(fingerprintState));
 }
 class Application {
 public:
@@ -225,11 +226,13 @@ protected:
 
 private:
     SaveGameData captureCheckpoint() const;
+    void writeCheckpointFile(const std::filesystem::path& path, const SaveGameData& data);
     void loop();
     void renderFrame(const FrameTime& time, bool lastFrame);
     int verifyOutputs() const;
     bool writeReport(int exitCode);
     std::string simulationFingerprint() const;
+    static std::string simulationFingerprint(std::string bytes, const Random& random);
 
     std::vector<SDL_Gamepad*> m_gamepads;
     Gameplay m_gameplay;
@@ -257,6 +260,7 @@ private:
     bool m_quit = false;
     bool m_checkpoint = false, m_starting = false, m_restored = false;
     std::optional<SaveGameData> m_exitSave;
+    std::optional<std::filesystem::path> m_recoveredPrimary;
     // Captures attempted (--screenshot, --capture-frames) and run-report samples.
     std::vector<RunReport::Capture> m_captures;
     std::vector<std::filesystem::path> m_pendingCaptures; // requestCapture(), next frame

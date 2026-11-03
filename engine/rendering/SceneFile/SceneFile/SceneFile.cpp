@@ -519,6 +519,16 @@ SceneDocument parseSceneImpl(std::string_view json, const std::string& file, con
 } // namespace
 
 void registerSceneComponent(SceneComponentRegistration registration) {
+    bool duplicateType=registration.type==typeid(void) || registration.type==typeid(Name) ||
+        registration.type==typeid(Transform) || registration.type==typeid(MeshRenderer) ||
+        registration.type==typeid(ModelRenderer) || registration.type==typeid(SceneId);
+    forEachReflected([&](auto member) {
+        if (registration.type==typeid(ComponentOf<decltype(member)>)) duplicateType=true;
+    });
+    for (const auto& [name,entry]:registrations()) {
+        (void)name; if (entry.type==registration.type) duplicateType=true;
+    }
+    if (duplicateType) throw std::invalid_argument("scene component C++ type is already registered or invalid");
     const auto keys = componentKeys({"id", "parent", "name", "transform", "meshRenderer", "modelRenderer", "prefab", "overrides"});
     if (registration.name.empty() || std::ranges::find(keys, registration.name) != keys.end() ||
         !registration.create || !registration.add || !registration.get)

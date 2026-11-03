@@ -3,6 +3,7 @@
 #include "Runtime/Application.h"
 #include "Platform/Window.h"
 #include "Core/Error.h"
+#include "Core/AtomicFile.h"
 #include "Core/Log.h"
 #include <SDL3/SDL.h>
 #include "Debug/DebugOverlay.h"
@@ -104,6 +105,125 @@ private:
     Mode m_mode;
     unsigned m_stage=0,m_frameStage=0,m_timerCalls=0,m_previousFrameSteps=0;
 };
+// Exercises the real Application transaction, including failures after world staging.
+class SaveProbe final : public zodar::Application {
+public:
+    SaveProbe(zodar::ApplicationDesc desc, std::filesystem::path root, bool rollback)
+        : Application(std::move(desc)), m_root(std::move(root)), m_rollback(rollback) {}
+    bool checked=false, restored=false, midTickRejected=false;
+    double firstUpdateTime=-1, restoredTime=-1;
+    std::string fingerprint() {
+        auto s=gameplay().capture();
+        nlohmann::json timers=nlohmann::json::array(),events=nlohmann::json::array();
+        for (const auto& t:s.timers.entries) timers.push_back({t.id,t.due,t.repeat,t.name,t.payload});
+        for (const auto& e:s.events) events.push_back({e.name,e.current,e.pending});
+        return nlohmann::json{{"game",nlohmann::json::parse(captureGameSave().game.at("probe"))},
+            {"world",zodar::serializeScene(zodar::captureScene(m_world,{}))},
+            {"input",input().capture()},{"rng",random().states()},{"seed",random().seed()},
+            {"tick",s.tick},{"clock",timestep().totalSteps()},{"nextTimer",s.timers.next},
+            {"timers",timers},{"events",events}}.dump();
+    }
+protected:
+    struct Pulse { uint64_t value; };
+    zodar::SaveGameDesc saveGameDesc() const override {
+        auto d=Application::saveGameDesc(); d.backups=m_badDesc?101:0; return d;
+    }
+    std::string inputState() const override { return std::to_string(m_value)+":"+std::to_string(m_steps)+":"+std::to_string(m_timerCalls); }
+    void onStart() override {
+        std::filesystem::create_directories(m_root);
+        m_entity=m_world.create(); m_world.add<zodar::SceneId>(m_entity,zodar::SceneId{"probe"});
+        m_world.add<zodar::Transform>(m_entity);
+        gameplay().events().registerType<Pulse>("pulse",[](const Pulse& p){return std::to_string(p.value);},
+            [](std::string_view s) { size_t end=0; const auto n=std::stoull(std::string(s),&end);
+                if (end!=s.size()) throw std::runtime_error("invalid pulse");
+                return Pulse{n}; });
+        gameplay().timers().registerCallback("pulse",[this](std::string_view) {
+            ++m_timerCalls; m_value+=3; gameplay().events().emit(Pulse{gameplay().timers().tick()});
+        });
+        gameplay().timers().afterNamed(2,"pulse",{},2);
+        std::filesystem::remove(m_root/"mid-tick");
+    }
+    void onFixedUpdate(double) override {
+        ++m_steps; m_value+=random().next("probe")%100;
+        m_world.get<zodar::Transform>(m_entity).position.x=static_cast<float>(m_steps);
+        gameplay().events().emit(Pulse{m_steps});
+        try { saveCheckpoint(m_root/"mid-tick"); }
+        catch (const std::exception&) { midTickRejected=true; }
+        if (!midTickRejected || std::filesystem::exists(m_root/"mid-tick")) zodar::fail("mid-tick save was published");
+    }
+    zodar::SaveGameData captureGameSave() const override {
+        zodar::SaveGameData d; d.world=zodar::captureScene(m_world,{});
+        d.game["probe"]=nlohmann::json{{"steps",m_steps},{"value",m_value},{"timerCalls",m_timerCalls}}.dump();
+        return d;
+    }
+    std::unique_ptr<zodar::SaveCommit> prepareGameSave(const zodar::SaveGameData& d) override {
+        auto world=std::make_shared<zodar::World>();
+        auto instance=zodar::instantiateScene(d.world,*world,{});
+        const auto entity=instance.byId.at("probe");
+        const auto j=nlohmann::json::parse(d.game.at("probe"));
+        if (j.size()!=3 || !j.at("steps").is_number_unsigned() || !j.at("value").is_number_unsigned() ||
+            !j.at("timerCalls").is_number_unsigned()) zodar::fail("invalid staged probe game");
+        const auto steps=j.at("steps").get<uint64_t>(),value=j.at("value").get<uint64_t>(),calls=j.at("timerCalls").get<uint64_t>();
+        return zodar::makeSaveCommit([this,world,entity,steps,value,calls]() noexcept {
+            m_world=std::move(*world); m_entity=entity; m_steps=steps; m_value=value; m_timerCalls=calls;
+        },std::to_string(value)+":"+std::to_string(steps)+":"+std::to_string(calls));
+    }
+    void onUpdate(const zodar::FrameTime& time) override {
+        if (firstUpdateTime<0) firstUpdateTime=time.time;
+        if (restored && restoredTime<0) restoredTime=time.time;
+    }
+    void onCheckpoint(uint64_t tick) override {
+        if (tick==2 && !m_saved) {
+            gameplay().events().emit(Pulse{100}); // Persist the pending batch as well as current events.
+            saveCheckpoint(m_root/"good"); m_savedState=fingerprint(); m_saved=true;
+        }
+        if (m_rollback && tick==3 && !checked) {
+            std::ifstream in(m_root/"good"); const auto good=nlohmann::json::parse(in);
+            const auto before=fingerprint();
+            for (unsigned variant=0;variant<10;++variant) {
+                auto bad=good;
+                if (variant==0) bad["version"]=2;
+                if (variant==1) bad["rng"]["probe"]=-1;
+                if (variant==2) bad["runtime"]["cursor"]=-1;
+                if (variant==3) bad["runtime"]["timers"][0]["name"]="unknown";
+                if (variant==4) bad["runtime"]["events"][0]["name"]="unknown";
+                if (variant==5) bad["runtime"]["input"]["state"] = nlohmann::json::object();
+                if (variant==6) bad["game"]["probe"]="invalid after world staging";
+                if (variant==7) bad["rng"]["probe"]=good.at("rng").at("probe").get<uint64_t>()^uint64_t{1};
+                if (variant==8) {
+                    auto game=nlohmann::json::parse(bad["game"]["probe"].dump());
+                    game["value"]=game.at("value").get<uint64_t>()+1;
+                    bad["game"]["probe"]=game;
+                }
+                if (variant==9) bad["runtime"]["stateHash"]="wrong hash";
+                zodar::writeFileAtomically(m_root/"bad",bad.dump());
+                bool failed=false;
+                try { loadCheckpoint(m_root/"bad"); } catch (const std::exception&) { failed=true; }
+                if (!failed || fingerprint()!=before) zodar::fail("failed load changed live simulation state");
+            }
+            m_badDesc=true; bool rejected=false;
+            try { loadCheckpoint(m_root/"good"); } catch (const std::exception&) { rejected=true; }
+            m_badDesc=false;
+            if (!rejected || fingerprint()!=before) zodar::fail("invalid save descriptor changed state");
+            checked=true;
+        }
+        if (m_rollback && tick==4 && !restored) {
+            loadCheckpoint(m_root/"good"); restored=true;
+            if (fingerprint()!=m_savedState) zodar::fail("checkpoint did not restore world/input/RNG/queues/clocks");
+        } else if (tick==6) requestQuit();
+    }
+    void onRender(zodar::RenderContext& rc) override {
+        zodar::gfx::SceneView view;
+        scene().addToGraph(rc.graph,rc.info,rc.extent,view,rc.output,rc.format,&rc.stats);
+    }
+private:
+    std::filesystem::path m_root;
+    zodar::World m_world;
+    zodar::Entity m_entity;
+    bool m_rollback=false,m_saved=false,m_badDesc=false;
+    uint64_t m_steps=0,m_value=0,m_timerCalls=0;
+    std::string m_savedState;
+};
 std::string read(const std::filesystem::path& p) {
     std::ifstream in(p,std::ios::binary); return std::string(std::istreambuf_iterator<char>(in),{});
 }
@@ -165,6 +285,33 @@ int main(int argc,char** argv) {
         {
             Smoke app(d,Smoke::Mode::UICapture);
             require(app.run()==0,"overlay input regression failed");
+        }
+        auto saveDesc=d; saveDesc.maxFrames=8; saveDesc.deterministic=true;
+        std::string baseline;
+        {
+            SaveProbe app(saveDesc,root/"save-baseline",false);
+            require(app.run()==0 && app.midTickRejected,"save baseline failed"); baseline=app.fingerprint();
+        }
+        {
+            SaveProbe app(saveDesc,root/"save-rollback",true);
+            require(app.run()==0 && app.checked && app.restored,"transactional rollback checks failed");
+            require(app.fingerprint()==baseline,"restored events/timers/input/RNG/game/world diverged from baseline");
+            require(app.restoredTime==saveDesc.timestep.fixedDt,"mid-checkpoint load lost visual simulation time");
+        }
+        {
+            auto loaded=saveDesc; loaded.loadSave=root/"save-baseline/good";
+            SaveProbe app(loaded,root/"save-startup",false);
+            require(app.run()==0,"startup checkpoint load failed");
+            require(app.firstUpdateTime==2*loaded.timestep.fixedDt,"startup load reset the live frame clock");
+            require(app.fingerprint()==baseline,"startup continuation differs from uninterrupted simulation");
+        }
+        saveDesc.saveAtExit=root/"blocked-save"; std::filesystem::create_directories(*saveDesc.saveAtExit);
+        saveDesc.reportPath=root/"save-failure-report.json";
+        {
+            SaveProbe app(saveDesc,root/"save-write-failure",false);
+            require(app.run()==1,"failed exit save was not reported");
+            const auto report=nlohmann::json::parse(read(*saveDesc.reportPath));
+            require(report.at("exitCode")==1,"run report claims success after exit-save failure");
         }
         std::cout<<"Skipped-frame replay and failed-run recording preservation passed\n";
         return 0;

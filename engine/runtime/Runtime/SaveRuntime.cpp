@@ -17,6 +17,11 @@ SaveGameData Application::captureCheckpoint() const {
     auto data=captureGameSave();
     const auto gameplay=m_gameplay.capture();
     if (gameplay.tick!=m_inputTick) fail("inconsistent checkpoint cursor");
+    const auto stateHash=simulationFingerprint();
+    if (m_playback) {
+        const auto& expected=m_playback->ticks.at(m_inputTick-1).state;
+        if (!expected.empty() && expected!=stateHash) fail("cannot save divergent replay checkpoint");
+    }
     Json timers=Json::array(), events=Json::array();
     for (const auto& t:gameplay.timers.entries)
         timers.push_back({{"id",t.id},{"due",t.due},{"repeat",t.repeat},{"name",t.name},{"payload",t.payload}});
@@ -24,16 +29,22 @@ SaveGameData Application::captureCheckpoint() const {
         events.push_back({{"name",b.name},{"current",b.current},{"pending",b.pending}});
     data.tick=m_inputTick; data.seed=m_random.seed(); data.rng=m_random.states();
     data.runtime=Json{{"fixedDt",m_timestep.fixedDt()},{"input",Json::parse(m_input.capture())},
-        {"cursor",m_inputTick},{"stateHash",simulationFingerprint()},{"nextTimer",gameplay.timers.next},{"timers",timers},{"events",events},
+        {"cursor",m_inputTick},{"stateHash",stateHash},{"nextTimer",gameplay.timers.next},{"timers",timers},{"events",events},
         {"replayHash",m_playback ? inputHash(m_playback->serialize()) : std::string{}}}.dump();
     return data;
 }
 void Application::saveCheckpoint(const std::filesystem::path& path) {
-    writeSaveGame(path,saveGameDesc(),captureCheckpoint());
+    writeCheckpointFile(path,captureCheckpoint());
+}
+void Application::writeCheckpointFile(const std::filesystem::path& path, const SaveGameData& data) {
+    const bool recovered=m_recoveredPrimary && std::filesystem::weakly_canonical(path)==*m_recoveredPrimary;
+    writeSaveGame(path,saveGameDesc(),data,!recovered);
+    if (recovered) m_recoveredPrimary.reset();
 }
 void Application::loadCheckpoint(const std::filesystem::path& path) {
     if ((!m_checkpoint && !m_starting) || m_desc.recordInput) fail("load requires startup/checkpoint and cannot replace an active recording");
     const auto settings=saveGameDesc();
+    validateSaveGameDesc(settings);
     std::string errors;
     for (uint32_t i=0;i<=settings.backups;++i) {
         const std::filesystem::path candidate=i?std::filesystem::path(path.string()+".bak"+std::to_string(i)):path;
@@ -61,14 +72,25 @@ void Application::loadCheckpoint(const std::filesystem::path& path) {
             }
             auto gameplay=m_gameplay.stage(snapshot);
             Random random; random.restore(data.seed,data.rng);
+            if (m_playback) {
+                const auto& expected=m_playback->ticks.at(data.tick-1).state;
+                if (!expected.empty() && expected!=stateHash) fail("saved checkpoint differs from replay state");
+            }
+            std::optional<std::filesystem::path> recoveredPrimary;
+            if (i) recoveredPrimary=std::filesystem::weakly_canonical(path);
+            auto exitSave=m_desc.saveAtExit ? std::optional<SaveGameData>(data) : std::nullopt;
             auto game=prepareGameSave(data);
             if (!game) fail("missing staged game state");
+            if (simulationFingerprint(game->fingerprintState,random)!=stateHash)
+                fail("saved checkpoint fingerprint does not match staged game/RNG state");
             m_renderer->waitIdle();
             if (i) ZODAR_LOG_WARN("Recovered save from {}",candidate.string());
+            static_assert(std::is_nothrow_swappable_v<std::optional<SaveGameData>>);
             // Every fallible operation is above this point.
             game->commit(); m_input.commit(std::move(input)); m_gameplay.commit(std::move(gameplay));
             m_random=std::move(random); m_inputTick=data.tick; m_timestep.restoreCheckpoint(data.tick);
-            m_inputStateHash.swap(stateHash); m_loopSeconds=static_cast<double>(data.tick-(m_starting?0:1))*m_timestep.fixedDt(); m_restored=true;
+            m_exitSave.swap(exitSave); m_recoveredPrimary.swap(recoveredPrimary);
+            m_inputStateHash.swap(stateHash); m_restored=true;
             return;
         } catch (const std::exception& e) { errors+=candidate.string()+": "+e.what()+"\n"; }
     }

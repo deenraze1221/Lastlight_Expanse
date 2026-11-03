@@ -4,6 +4,10 @@
 #include <cstdio>
 #include <system_error>
 #include <vector>
+#include <fstream>
+#include <functional>
+#include <memory>
+#include <set>
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -17,7 +21,8 @@
 #endif
 
 namespace zodar {
-void writeFileAtomically(const std::filesystem::path& destination, std::string_view bytes) {
+namespace {
+std::filesystem::path prepareFile(const std::filesystem::path& destination, std::string_view bytes) {
 #ifdef _WIN32
     std::filesystem::path temporary;
     HANDLE handle=INVALID_HANDLE_VALUE;
@@ -41,8 +46,7 @@ void writeFileAtomically(const std::filesystem::path& destination, std::string_v
         }
         const auto closing=handle; handle=INVALID_HANDLE_VALUE;
         if(!CloseHandle(closing)) throw std::system_error(static_cast<int>(GetLastError()),std::system_category(),"close temporary file");
-        if(!MoveFileExW(temporary.c_str(),destination.c_str(),MOVEFILE_REPLACE_EXISTING))
-            throw std::system_error(static_cast<int>(GetLastError()),std::system_category(),"replace destination");
+        return temporary;
     } catch(...) {
         if(handle!=INVALID_HANDLE_VALUE) CloseHandle(handle);
         DeleteFileW(temporary.c_str()); throw;
@@ -62,11 +66,98 @@ void writeFileAtomically(const std::filesystem::path& destination, std::string_v
         }
         const int closing=fd; fd=-1;
         if(::close(closing)<0) throw std::system_error(errno,std::generic_category(),"close temporary file");
-        if(::rename(name.data(),destination.c_str())<0) throw std::system_error(errno,std::generic_category(),"replace destination");
+        return std::filesystem::path(name.data());
     } catch(...) {
         if(fd>=0) ::close(fd);
         ::unlink(name.data()); throw;
     }
 #endif
 }
+
+void replaceFile(const std::filesystem::path& temporary, const std::filesystem::path& destination) {
+#ifdef _WIN32
+    if (!MoveFileExW(temporary.c_str(),destination.c_str(),MOVEFILE_REPLACE_EXISTING))
+        throw std::system_error(static_cast<int>(GetLastError()),std::system_category(),"replace destination");
+#else
+    if (::rename(temporary.c_str(),destination.c_str())<0)
+        throw std::system_error(errno,std::generic_category(),"replace destination");
+#endif
+}
+struct Temporary {
+    std::filesystem::path path;
+    Temporary(const std::filesystem::path& destination, std::string_view bytes) : path(prepareFile(destination,bytes)) {}
+    ~Temporary() { if (!path.empty()) { std::error_code ignored; std::filesystem::remove(path,ignored); } }
+    void publish(const std::filesystem::path& destination) { replaceFile(path,destination); path.clear(); }
+};
+}
+void writeFileAtomically(const std::filesystem::path& destination, std::string_view bytes) {
+    Temporary temporary(destination,bytes);
+    temporary.publish(destination);
+}
+namespace detail {
+// Internal fault-injection seam: tests throw at a specific publication boundary. The
+// public API has no hook; rollback always uses the real filesystem operation.
+void writeFilesAtomically(std::span<const AtomicFileWrite> writes,
+                          const std::function<void(size_t)>& beforeReplace) {
+    struct Change {
+        std::filesystem::path destination;
+        std::unique_ptr<Temporary> replacement, original;
+        std::filesystem::path recovery;
+        bool rollbackFailed=false;
+    };
+    std::vector<Change> changes;
+    changes.reserve(writes.size());
+    std::set<std::filesystem::path> destinations;
+    for (const auto& write:writes) {
+        if (!destinations.insert(std::filesystem::weakly_canonical(write.destination)).second)
+            throw std::invalid_argument("duplicate atomic transaction destination");
+        Change change{write.destination,{},{},{},false};
+        const auto status=std::filesystem::symlink_status(write.destination);
+        if (std::filesystem::exists(status)) {
+            if (!std::filesystem::is_regular_file(status))
+                throw std::invalid_argument("save destination must be a regular file: "+write.destination.string());
+            std::ifstream in(write.destination,std::ios::binary);
+            in.exceptions(std::ios::badbit);
+            if (!in) throw std::runtime_error("cannot read previous file: "+write.destination.string());
+            const std::string previous(std::istreambuf_iterator<char>(in),{});
+            change.original=std::make_unique<Temporary>(write.destination,previous);
+        }
+        change.replacement=std::make_unique<Temporary>(write.destination,write.bytes);
+        changes.push_back(std::move(change));
+    }
+    size_t published=0;
+    try {
+        for (;published<changes.size();++published) {
+            if (beforeReplace) beforeReplace(published);
+            changes[published].replacement->publish(changes[published].destination);
+        }
+    } catch (...) {
+        const auto failure=std::current_exception();
+        bool rollbackFailed=false;
+        while (published) {
+            auto& change=changes[--published];
+            try {
+                if (change.original) change.original->publish(change.destination);
+                else std::filesystem::remove(change.destination);
+            } catch (...) {
+                rollbackFailed=true; change.rollbackFailed=true;
+                // Detach ownership without allocation before constructing diagnostics.
+                // Even low-memory errors must not delete the only recovery copy.
+                if (change.original) change.recovery.swap(change.original->path);
+            }
+        }
+        if (rollbackFailed) {
+            std::string recovery;
+            for (const auto& change:changes) if (change.rollbackFailed) {
+                recovery+=change.destination.string();
+                if (!change.recovery.empty()) recovery+="; original retained at "+change.recovery.string();
+                recovery+="\n";
+            }
+            throw std::runtime_error("atomic transaction rollback failed:\n"+recovery);
+        }
+        std::rethrow_exception(failure);
+    }
+}
+}
+void writeFilesAtomically(std::span<const AtomicFileWrite> writes) { detail::writeFilesAtomically(writes,{}); }
 }

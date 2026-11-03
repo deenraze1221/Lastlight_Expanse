@@ -212,9 +212,17 @@ std::unique_ptr<SaveCommit> LastlightApp::prepareGameSave(const SaveGameData& da
     (*world)->restoreEdits(edits);
     do { (*world)->update(position); (*world)->finishPendingWork(); } while (!(*world)->isSettled());
     auto meshes=std::make_shared<std::unique_ptr<StreamedMeshSet>>(std::make_unique<StreamedMeshSet>(renderer().context(),upload()));
+    // A load may render immediately at the replay ending tick, without another update.
+    // Prepare GPU geometry too; publishing an empty upload queue would show a blank world.
+    for (const auto& e:(*world)->takeMeshEvents()) if (e.type==ChunkMeshEvent::Type::Upsert)
+        (*meshes)->upsert(chunkKey(e.coord),e.mesh,glm::translate(glm::mat4(1.0f),e.origin),m_terrainMaterial);
+    (*meshes)->update();
+    upload().queue().wait({upload().queue().stats().submitted});
+    (*meshes)->update();
+    const auto state=lastlight::playerFingerprint(position,yaw,pitch)+editState;
     return makeSaveCommit([this,world,meshes,position,yaw,pitch,editState=std::move(editState)]() mutable noexcept {
-        m_world.swap(*world); m_chunkMeshes.swap(*meshes); m_view.camera.position=position; m_yaw=yaw; m_pitch=pitch; m_editState.swap(editState);
-    });
+        m_world.swap(*world); m_chunkMeshes.swap(*meshes); m_view.camera.position=position; m_yaw=yaw; m_pitch=pitch; m_view.camera.setYawPitch(yaw,pitch); m_editState.swap(editState);
+    },state);
 }
 
 void LastlightApp::onStart() {

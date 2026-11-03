@@ -807,3 +807,24 @@ Public contracts and limitations: `docs/guide/GAMEPLAY.md`.
   and terrain edits. Collider replacement is staged; voxel edits restore only into a fresh
   staging world. Autosave interval defaults to five minutes when a CLI save slot is selected.
   Player controllers, doors, interaction, power and other D7 gameplay remain outside D6.
+
+
+### D6 review: failure boundaries
+
+Component registration also owns C++ type identity; a second JSON name cannot alias and
+silently overwrite a built-in or previously registered component. Save material definitions
+are snapshots; relative assets resolve against the runtime scene directory, not slot storage.
+Backup publication now stages all replacements/originals and rolls back ordinary failures;
+failed rollback retains original recovery files. A rejected primary does not evict the valid
+backup used for recovery, including application-level rejection of otherwise valid JSON.
+Replay validation precedes checkpoint publication. Load validation recomputes the candidate
+logical-state/RNG fingerprint supplied by the staged handler rather than trusting the saved hash. Loaded checkpoints seed the exit cache even
+when playback has no remaining tick, and Highlands stages its camera/GPU geometry before commit.
+A failed exit save rewrites the run report with the actual failure exit code. Crash durability,
+concurrent mutation and metadata-preserving filesystem transactions remain unsupported.
+
+Opaque CPU draw batches retain pipeline/material/mesh grouping, but group order is assigned by
+first appearance in the input scene rather than process-specific pointer addresses. This
+removes allocation-dependent winners for coplanar geometry during record/replay and restoration.
+Transparent back-to-front ordering is unchanged. A GPU regression exchanges two meshes'
+allocation-address order while keeping the same semantic draws and requires identical pixels.

@@ -9,7 +9,9 @@ struct SaveGameDesc {
     std::string scenePath, sceneHash;
     uint32_t backups = 3;
     double autosaveInterval = 0; // Fixed simulation seconds; zero disables autosave.
+    std::filesystem::path sceneDirectory{}; // Runtime asset root; defaults to scenePath.parent_path().
 };
+void validateSaveGameDesc(const SaveGameDesc& desc);
 // All strings in game/runtime are JSON values, validated before disk writes.
 struct SaveGameData {
     uint64_t seed = 0, tick = 0;
@@ -30,7 +32,8 @@ StagedSaveGame loadSaveGame(const std::filesystem::path& path, const SaveGameDes
                             const SceneBindings& bindings, bool recover = true);
 // Caller must supply a completed fixed-tick checkpoint. Runtime integration enforces this.
 // Temp files and backup preparation happen before atomic replacement; errors throw.
-void writeSaveGame(const std::filesystem::path& path, const SaveGameDesc& desc, const SaveGameData& data);
+void writeSaveGame(const std::filesystem::path& path, const SaveGameDesc& desc, const SaveGameData& data,
+                   bool rotatePrimary = true);
 std::string serializeSaveGame(const SaveGameDesc& desc, const SaveGameData& data);
 SaveGameData parseSaveGame(std::string_view text, const SaveGameDesc& desc,
                            const std::filesystem::path& file);

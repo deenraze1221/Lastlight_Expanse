@@ -1,6 +1,6 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **D0 and D1–D5 are on main (`25c3994`). D6 is implemented and validated on
+Status: **D0 and D1–D5 are on main (`25c3994`). D6 is implemented, reviewed and validated on
 `d6/scene-extensions-transactional-saves`, awaiting review. D7–D8 remain pending.** Current main
 also includes V4–V6. No merge or D7 implementation is part of the D6 session. Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
