@@ -27,13 +27,21 @@ void Timers::finishTick() {
             (void)deadline;
             const auto it = m_entries.find(id);
             if (it == m_entries.end()) continue; // an earlier callback cancelled it
-            auto callback = it->second.callback; // safe when callback cancels/reschedules timers
-            if (it->second.repeat) {
-                if (it->second.repeat > std::numeric_limits<uint64_t>::max() - it->second.due)
-                    fail("repeating timer deadline overflow");
-                it->second.due += it->second.repeat;
-            } else m_entries.erase(it);
-            callback();
+            const auto repeat = it->second.repeat;
+            if (repeat && repeat > std::numeric_limits<uint64_t>::max() - it->second.due)
+                fail("repeating timer deadline overflow");
+            // Move instead of copying: mutable capture state belongs to this timer.
+            // Local ownership also keeps the callable alive if it cancels itself.
+            auto callback = std::move(it->second.callback);
+            if (repeat) it->second.due += repeat;
+            else m_entries.erase(it);
+            const auto restore = [&] {
+                if (const auto pending = m_entries.find(id); pending != m_entries.end())
+                    pending->second.callback = std::move(callback);
+            };
+            try { callback(); }
+            catch (...) { restore(); throw; }
+            restore();
         }
     } catch (...) { m_active = false; throw; }
     m_active = false;

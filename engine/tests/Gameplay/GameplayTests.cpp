@@ -116,3 +116,17 @@ TEST_CASE("gameplay: profiling scopes close on exceptions and recursive executio
     CHECK_THROWS_AS(g.step(0.02), Error); CHECK(g.completedTicks() == 0);
     CHECK_THROWS_AS(g.step(0.02), Error);
 }
+
+TEST_CASE("gameplay: repeating timers retain mutable callback state through self-cancellation") {
+    Timers timers;
+    std::vector<unsigned> calls;
+    Timers::Id self = 0;
+    self = timers.after(1, [count = 0u, &timers, &calls, &self]() mutable {
+        ++count;
+        if (count == 3) CHECK(timers.cancel(self));
+        calls.push_back(count); // callable must remain alive after cancelling itself
+    }, 1);
+    for (int i = 0; i < 5; ++i) timers.advance();
+    CHECK(calls == std::vector<unsigned>{1, 2, 3});
+    CHECK(timers.pending() == 0);
+}

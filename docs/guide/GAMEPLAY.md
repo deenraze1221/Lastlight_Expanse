@@ -85,7 +85,9 @@ monotonic timer ID. Repeating deadlines advance by their interval, without rende
 IDs are not reused; zero/overflow deadlines and recursive clock advancement are errors.
 
 Callbacks may cancel themselves/others or schedule future timers; zero-delay recursion is
-forbidden. A repeating timer is rescheduled before its callback; a one-shot is removed first.
+forbidden. A repeating timer is rescheduled before its callback; a one-shot is removed first. Mutable
+capture state persists across repeat firings, and dispatch retains callable ownership through
+self-cancellation.
 `cancel` returns false for an unknown/already-fired ID. New timers cannot fire in the same
 boundary. Wall time discarded by FixedTimestep does not advance timers; every executed tick
 advances exactly once. `Timers::advance()` is for standalone CPU tools/tests, not app callbacks.

@@ -1043,3 +1043,28 @@
   Pre-D5 moving bunker/Highlands replay screenshots also matched byte-for-byte.
 - Final diff review and whitespace checks passed. D5 is implemented and validated on its
   dedicated branch for review; no merge or D6/D7 implementation is part of this delivery.
+
+
+## D5 review — mutable repeating callback state
+
+- Reviewed 87b76dc against main 09f2e34 and PHASE_D_PLAN: stable dependency ordering/cycles,
+  event buffering, timer deadlines/cancellation, runtime phases, replay and checkpoint ordering.
+- Confirmed a timer correctness defect: dispatch copied std::function before every invocation,
+  so mutable capture state reset on every repeat and capture-driven self-cancellation never ran.
+  A deterministic regression failed on the original code (expected 1,2,3; got repeated 1s).
+- Minimal fix: move the callable into safe dispatch ownership and restore its mutated state if
+  the timer remains registered, on both success and exception. Cancellation and timer ordering
+  are unchanged; self-cancelled callable lifetime extends through the end of the invocation.
+- Added regression coverage and clarified the public callback lifetime contract. Focused
+  gameplay/input/replay tests pass (20 cases / 225 assertions). No other confirmed correctness
+  issue found; no scheduler/event/checkpoint APIs changed and no D6/D7 work started.
+- Final full Debug/Release validation and publication outcomes follow below.
+
+- Review validation: focused 20/20 cases (225 assertions); full Debug 41/41 (172.28 s) and
+  Release 41/41 (60.80 s), warnings as errors. Highlands hash unchanged in both configurations:
+  5ddd23b4cf86dfd551dfad44e349fcefb2594f31a2c37b72f6d9c00f68045776.
+  All 19 inspected validation reports per configuration have zero Vulkan warnings/errors.
+- The regression failed before the fix and passes afterward. No unresolved confirmed issue
+  remains in the reviewed scope. The fix is delivered on the existing D5 feature branch for
+  PR review, without merging or beginning D6/D7. GitHub API access remains an external
+  prerequisite for PR creation; api.github.com is present in the saved network draft.
