@@ -1,5 +1,7 @@
 #include <nlohmann/json.hpp>
 #include "Bunker/BunkerApp.h"
+#include "Bunker/BunkerGameplay.h"
+#include <map>
 #include "GameInput.h"
 
 #include "Bunker/LevelColliders.h"
@@ -45,17 +47,17 @@ constexpr const char* kLevel = "levels/bunker.scene.json";
 
 class BunkerApp final : public Application {
 public:
-    BunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore, bool walkthrough)
-        : Application(desc), m_assetDir(std::move(assetDir)), m_explore(explore), m_walkthrough(walkthrough) {}
+    BunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore, bool walkthrough, bool legacySpawn)
+        : Application(desc), m_assetDir(std::move(assetDir)), m_explore(explore), m_legacySpawn(legacySpawn), m_walkthrough(walkthrough) {}
 
 protected:
     std::string inputLevelHash() const override {
-        return inputHash(bunkerContentHash(m_assetDir)+(m_explore?"explore":"fly")+(m_walkthrough?"walkthrough":"manual"));
+        return inputHash(m_contentHash+(m_explore?"explore":"fly")+(m_walkthrough?"walkthrough":"manual")+(m_legacySpawn?":entrance":":dormitory"));
     }
     std::string inputState() const override {
         return playerFingerprint(m_explore?m_walker.feet():m_view.camera.position,m_yaw,m_pitch,
                                  m_explore?m_walker.velocity():glm::vec3(0),m_explore&&m_walker.grounded())+
-               ":"+std::to_string(m_waypoint)+":"+std::to_string(m_captured);
+               ":"+std::to_string(m_waypoint)+":"+std::to_string(m_captured)+":"+m_walker.capture()+":"+gameplayFingerprint(m_world);
     }
     SaveGameDesc saveGameDesc() const override { auto settings=Application::saveGameDesc(); settings.scenePath=kLevel; settings.sceneDirectory=std::filesystem::absolute(m_assetDir/std::filesystem::path(kLevel).parent_path()); return settings; }
     SaveGameData captureGameSave() const override {
@@ -84,10 +86,10 @@ protected:
         const auto waypoint=j.at("waypoint").get<size_t>();
         if (waypoint>m_route.size()) fail("invalid saved route cursor");
         const bool captured=j.at("captured").get<bool>();
-        const auto state=playerFingerprint(m_explore?walker.feet():position,yaw,pitch,
+        auto state=playerFingerprint(m_explore?walker.feet():position,yaw,pitch,
             m_explore?walker.velocity():glm::vec3(0),m_explore&&walker.grounded())+
             ":"+std::to_string(waypoint)+":"+std::to_string(captured);
-        struct Stage { World world; SceneDocument document; SceneInstance instance; CollisionWorld collision; };
+        struct Stage { World world; SceneDocument document; SceneInstance instance; CollisionWorld collision, staticCollision; };
         auto staged=std::make_shared<Stage>(); staged->document=data.world;
         staged->instance=instantiateScene(data.world,staged->world,m_level->bindings());
         if (m_explore) {
@@ -98,15 +100,49 @@ protected:
                 return Aabb{it->second->bounds().min,it->second->bounds().max};
             },staged->collision);
         }
+        validateBunker(staged->world);
+        updatePower(staged->world);
+        staged->staticCollision=staged->collision;
+        addGameplayColliders(staged->world,staged->collision,true);
+        if (m_explore && staged->collision.overlaps(walker.box())) fail("saved player overlaps bunker geometry");
+        state+=":"+walker.capture()+":"+gameplayFingerprint(staged->world);
         return makeSaveCommit([this,staged,position,yaw,pitch,walker,waypoint,captured]() noexcept {
             m_level->commitSave(std::move(staged->world),std::move(staged->document),std::move(staged->instance));
             m_view.camera.position=position; m_yaw=yaw; m_pitch=pitch; m_walker=walker;
             m_waypoint=waypoint; m_captured=captured;
-            if (m_explore) m_collision=std::move(staged->collision);
+            if (m_explore) {
+                m_collision=std::move(staged->collision);
+                m_staticCollision=std::move(staged->staticCollision);
+            }
             m_colliderGeneration=m_level->generation();
         },state);
     }
     void onStart() override {
+        registerBunkerComponents();
+        m_contentHash=bunkerContentHash(m_assetDir);
+        gameplay().events().registerType<Used>("bunker.used",
+            [](const Used& event) { return event.id; },
+            [](std::string_view text) {
+                if (text.empty() || text.size()>256) fail("invalid saved interaction");
+                return Used{std::string(text)};
+            });
+        gameplay().systems().add({"Bunker.Interaction", GameplayPhase::FixedSimulation,
+            [this](const SystemContext&) {
+                if (!m_level || !m_explore) return;
+                for (const auto& event:gameplay().events().read<Used>()) useObject(m_world,event.id);
+                if (input().action("interact").pressed) {
+                    Camera camera=m_view.camera; camera.setYawPitch(m_yaw,m_pitch);
+                    const auto id=interactionTarget(m_world,m_collision,m_walker.eye(),camera.forward());
+                    if (!id.empty()) { gameplay().events().emit(Used{id}); ZODAR_LOG_INFO("Interact: {}",id); }
+                }
+                updatePower(m_world);
+            }, {}, {"Bunker.Controls"}});
+        gameplay().timers().registerCallback("bunker.doors",[this](std::string_view) {
+            if (!m_level) return;
+            advanceDoors(m_world,m_explore?m_walker.box():Aabb{},desc().timestep.fixedDt);
+            if (m_explore) rebuildColliders(false);
+        });
+        gameplay().timers().afterNamed(1,"bunker.doors",{},1);
         input().setContext("explore", m_explore);
         gameplay().systems().add({"Bunker.Controls", GameplayPhase::FixedSimulation,
             [this](const SystemContext& c) { updateControls(c.dt); }});
@@ -188,7 +224,8 @@ protected:
         input.forward = this->input().action("move").y;
         input.right = this->input().action("move").x;
         input.sprint = this->input().action("sprint").held;
-        input.jump = this->input().action("jump").held;
+        input.jump = this->input().action("jump").pressed;
+        input.crouch = this->input().action("crouch").held;
         if (m_walkthrough) {
             if (m_waypoint < m_route.size()) {
                 const glm::vec2 target = m_route[m_waypoint];
@@ -204,11 +241,39 @@ protected:
         m_walker.step(m_collision, input, static_cast<float>(dt));
     }
 
+    void onCheckpoint(uint64_t) override {
+        // External quick-slot history is not part of an action recording. Explicit replay
+        // continuation uses --load-save, whose cursor and fingerprints are checked by D6.
+        if (desc().recordInput || desc().replayInput) return;
+        const auto slot=desc().saveAtExit.value_or(std::filesystem::current_path()/"saves/bunker.save.json");
+        // Edges belong to the completed tick. Loading restores the input state too.
+        if (input().action("quick_load").pressed) {
+            try { loadCheckpoint(slot); setMouseCaptured(m_captured); }
+            catch (const std::exception& error) { ZODAR_LOG_WARN("Quick load failed: {}",error.what()); }
+        } else if (input().action("quick_save").pressed) {
+            try { saveCheckpoint(slot); }
+            catch (const std::exception& error) { ZODAR_LOG_WARN("Quick save failed: {}",error.what()); }
+        }
+    }
+
     void onUpdate(const FrameTime& time) override {
+        const auto reloads=m_assets->stats().reloads;
         m_assets->update();
         tryLoadLevel();
-        if (m_level && m_level->update()) {
+        const bool levelReloaded=m_level && m_level->update();
+        if (levelReloaded) {
+            canonicalizeLevel();
+            validateBunker(m_world);
+            updatePower(m_world);
             ZODAR_LOG_INFO("Level reloaded (generation {})", m_level->generation());
+        }
+        // Asset-only reloads do not advance LiveScene's generation. They still change
+        // save compatibility and may update source materials behind cached lamp copies.
+        if (levelReloaded || m_assets->stats().reloads!=reloads) {
+            m_contentHash=bunkerContentHash(m_assetDir);
+            renderer().waitIdle();
+            for (const auto& [key,handle]:m_lightMaterials) { (void)key; scene().materials().releaseMaterial(handle); }
+            m_lightMaterials.clear();
         }
         if (m_level && !m_level->error().empty() && m_level->error() != m_lastError) {
             ZODAR_LOG_WARN("Level reload failed, previous version kept: {}", m_level->error());
@@ -224,7 +289,33 @@ protected:
     void finishFrame(const FrameTime& time) {
         m_draws.clear();
         m_voxelMeshes->appendDraws(m_draws);
-        collectDraws(m_world, m_draws); // modelRenderer modules + meshRenderer signs (CPU path)
+        m_world.each<MeshRenderer>([&](Entity e,const MeshRenderer& r) {
+            if (r.visible && r.mesh) m_draws.push_back({r.mesh,r.submesh,r.material,m_world.worldMatrix(e)});
+        });
+        m_world.each<ModelRenderer>([&](Entity e,const ModelRenderer& r) {
+            if (!r.visible || !r.model) return;
+            const auto first=m_draws.size();
+            r.model->appendDraws(m_draws,m_world.worldMatrix(e));
+            std::optional<bool> enabled;
+            m_world.each<EmergencyLight>([&](Entity source,const EmergencyLight& light) {
+                if (m_world.parent(source)==e) enabled=lightEnabled(m_world,light);
+            });
+            if (!enabled) return;
+            auto& materials=scene().materials();
+            for (size_t i=first;i<m_draws.size();++i) {
+                const auto source=m_draws[i].material;
+                const auto key=std::make_pair(source,*enabled);
+                auto it=m_lightMaterials.find(key);
+                if (it==m_lightMaterials.end()) {
+                    auto material=materials.material(source);
+                    const auto handle=materials.createMaterial(material);
+                    if (!*enabled) material.emissive=glm::vec3(0);
+                    materials.updateMaterial(handle,material);
+                    it=m_lightMaterials.emplace(key,handle).first;
+                }
+                m_draws[i].material=it->second;
+            }
+        });
         collectLighting(m_world, m_view); // room lights, ambient, fog (re-read: hot reload)
         m_view.draws = m_draws;
         m_view.time = static_cast<float>(desc().deterministic ? time.time : time.realTime);
@@ -265,6 +356,8 @@ protected:
         m_warmMaterials = {};
         renderer().context().collectGarbage();
         m_signMesh.reset();
+        for (const auto& [key,handle]:m_lightMaterials) { (void)key; scene().materials().releaseMaterial(handle); }
+        m_lightMaterials.clear();
         m_assets.reset();
     }
 
@@ -284,6 +377,7 @@ private:
         if (!m_level->load()) {
             fail("cannot load " + std::string(kLevel) + ": " + m_level->error());
         }
+        canonicalizeLevel();
         m_warmModels = {}; // the LiveScene holds its own handles now
         m_warmMaterials = {};
 
@@ -302,19 +396,32 @@ private:
         }
         ZODAR_LOG_INFO("Bunker loaded: {} entities ({} watched files{})", m_world.entityCount(),
                        m_level->files().size(), m_level->watching() ? ", hot reload on" : "");
+        validateBunker(m_world);
+        updatePower(m_world);
         if (m_explore) {
             rebuildColliders();
             const WalkerSettings& w = m_walker.settings();
             m_walker.spawn(m_view.camera.position - glm::vec3(0.0f, w.eyeHeight, 0.0f));
+            if (!m_legacySpawn && !desc().camera) {
+                for (const auto e:m_world.entities()) if (const auto* spawn=m_world.tryGet<PlayerSpawn>(e)) {
+                    m_walker.spawn(spawn->feet); m_yaw=spawn->yaw; m_pitch=0;
+                    m_view.camera.position=m_walker.eye(); break;
+                }
+            }
             setMouseCaptured(true);
             ZODAR_LOG_INFO("Exploration mode: WASD move, mouse look, Shift sprint, Space jump, Tab frees the "
                            "mouse, Esc quits");
         }
     }
 
-    void rebuildColliders() {
-        m_collision.clear();
-        m_collision.setVoxelWorld(m_voxels->world.get());
+    void rebuildColliders(bool staticGeometry = true) {
+        if (!staticGeometry) {
+            m_collision=m_staticCollision;
+            addGameplayColliders(m_world,m_collision,true);
+            return;
+        }
+        m_staticCollision.clear();
+        m_staticCollision.setVoxelWorld(m_voxels->world.get());
         const SceneBindings& bindings = m_level->bindings();
         const LevelColliderStats stats = buildLevelColliders(
             m_level->document(), m_colliderTable,
@@ -323,10 +430,23 @@ private:
                 if (it == bindings.models.end() || !it->second || it->second->bounds().isEmpty()) return std::nullopt;
                 return Aabb{it->second->bounds().min, it->second->bounds().max};
             },
-            m_collision);
+            m_staticCollision);
+        m_collision=m_staticCollision;
+        addGameplayColliders(m_world,m_collision,true);
         m_colliderGeneration = m_level->generation();
+        if (m_loggedColliders) return;
+        m_loggedColliders=true;
         ZODAR_LOG_INFO("Colliders: {} boxes ({} entities from colliders.json, {} from model bounds, {} without)",
                        stats.boxes, stats.fromTable, stats.fromBounds, stats.skipped);
+    }
+
+    void canonicalizeLevel() {
+        // D6 capture is depth-first. Start with that order too, so restoring cannot change
+        // light accumulation, render tie order or scene-entity selection.
+        auto document=captureScene(m_world,invertBindings(m_level->document(),m_level->bindings()));
+        World ordered;
+        auto instance=instantiateScene(document,ordered,m_level->bindings());
+        m_level->commitSave(std::move(ordered),std::move(document),std::move(instance));
     }
 
     void setMouseCaptured(bool captured) {
@@ -348,7 +468,11 @@ private:
     std::vector<MeshDraw> m_draws;
     SceneView m_view;
     std::string m_lastError;
+    std::string m_contentHash; // compatibility identity is refreshed with the loaded asset generation
+    std::map<std::pair<MaterialHandle,bool>,MaterialHandle> m_lightMaterials;
+    bool m_loggedColliders=false;
     bool m_explore = false;
+    bool m_legacySpawn=false;
     bool m_walkthrough = false;
     size_t m_waypoint = 0;
     // Real fixed-step movement, including stairs, airlock, a room and full corridor.
@@ -356,6 +480,7 @@ private:
                                          {6, 3.5f}, {6, 0}, {38, 0}, {58, 0}}};
     ColliderTable m_colliderTable;
     CollisionWorld m_collision;
+    CollisionWorld m_staticCollision;
     ExplorationWalker m_walker;
     uint64_t m_colliderGeneration = 0;
     bool m_captured = false;
@@ -365,8 +490,8 @@ private:
 
 } // namespace
 
-std::unique_ptr<Application> makeBunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore, bool walkthrough) {
-    return std::make_unique<BunkerApp>(desc, std::move(assetDir), explore, walkthrough);
+std::unique_ptr<Application> makeBunkerApp(const ApplicationDesc& desc, std::filesystem::path assetDir, bool explore, bool walkthrough, bool legacySpawn) {
+    return std::make_unique<BunkerApp>(desc, std::move(assetDir), explore, walkthrough, legacySpawn);
 }
 
 } // namespace lastlight

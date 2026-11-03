@@ -42,10 +42,11 @@ No tick means no input is consumed. Focus loss/device removal clears held physic
 `inject(action,ActionState)` overrides an action for the next tick (button edges are derived;
 explicit edges preserve short taps). Replays inject a complete snapshot every tick.
 
-The game retains fly-camera controls, Highlands left-click dig/F place, and bunker
-`--explore` walking, sprint, jump, look and Tab capture. Arrow-key movement is exploration-only.
+The bunker defaults to walking, sprint, jump, crouch, look, E interaction and Tab capture.
+`--free-cam` retains flying; `--explore` selects the legacy entrance spawn and arrow-key
+movement. Highlands retains fly controls and left-click dig/F place.
 Movement/look/edit simulation now runs in fixed updates. This adds up to one tick of input
-latency; it removes render-frame dependence. D5 registers these controls as systems; doors and power remain D7 work.
+latency; it removes render-frame dependence. D5 registers these controls as systems. D7 bunker controls and persistence: [BUNKER_GAMEPLAY.md](BUNKER_GAMEPLAY.md).
 
 ## Record and replay
 

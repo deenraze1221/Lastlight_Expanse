@@ -162,6 +162,42 @@
               ]
             }
           ]
+        },
+        "crouch": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "Left Ctrl"
+            }
+          ]
+        },
+        "interact": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "E"
+            }
+          ]
+        },
+        "quick_save": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "F5"
+            }
+          ]
+        },
+        "quick_load": {
+          "type": "button",
+          "bindings": [
+            {
+              "source": "key",
+              "code": "F9"
+            }
+          ]
         }
       }
     },

@@ -75,7 +75,7 @@
       "id": "bunker",
       "type": "scene",
       "source": "levels/bunker.scene.json",
-      "hash": "fnv1a64:c943ba751546e47c",
+      "hash": "fnv1a64:942ea78f9c8af431",
       "dependencies": [
         "materials/sign_airlock.material.json",
         "materials/sign_common.material.json",
@@ -88,8 +88,21 @@
         "materials/sign_technician.material.json",
         "materials/sign_weapons.material.json",
         "prefabs/ceiling_lamp.prefab.json",
+        "prefabs/collision_airlock_arch.prefab.json",
+        "prefabs/collision_bench.prefab.json",
+        "prefabs/collision_bunk.prefab.json",
+        "prefabs/collision_crate.prefab.json",
+        "prefabs/collision_door_frame.prefab.json",
+        "prefabs/collision_electrical_panel.prefab.json",
+        "prefabs/collision_generator.prefab.json",
+        "prefabs/collision_locker.prefab.json",
+        "prefabs/collision_shelf.prefab.json",
+        "prefabs/collision_table.prefab.json",
+        "prefabs/collision_terminal.prefab.json",
+        "prefabs/collision_wide_frame.prefab.json",
         "prefabs/merchant_stall.prefab.json",
         "prefabs/room_sign.prefab.json",
+        "prefabs/sliding_door.prefab.json",
         "prefabs/wall_light_unit.prefab.json",
         "textures/signs/airlock.png",
         "textures/signs/common.png",
@@ -132,7 +145,98 @@
       "id": "ceiling_lamp",
       "type": "prefab",
       "source": "prefabs/ceiling_lamp.prefab.json",
-      "hash": "fnv1a64:595ac56b8c0d9133",
+      "hash": "fnv1a64:31ba1031cbd2c655",
+      "dependencies": []
+    },
+    {
+      "id": "collision_airlock_arch",
+      "type": "prefab",
+      "source": "prefabs/collision_airlock_arch.prefab.json",
+      "hash": "fnv1a64:b6091ca103883b4e",
+      "dependencies": []
+    },
+    {
+      "id": "collision_bench",
+      "type": "prefab",
+      "source": "prefabs/collision_bench.prefab.json",
+      "hash": "fnv1a64:e9e535c80595fc2d",
+      "dependencies": []
+    },
+    {
+      "id": "collision_bunk",
+      "type": "prefab",
+      "source": "prefabs/collision_bunk.prefab.json",
+      "hash": "fnv1a64:b7247ba6af15192d",
+      "dependencies": []
+    },
+    {
+      "id": "collision_crate",
+      "type": "prefab",
+      "source": "prefabs/collision_crate.prefab.json",
+      "hash": "fnv1a64:73f593be19c2c809",
+      "dependencies": []
+    },
+    {
+      "id": "collision_door_frame",
+      "type": "prefab",
+      "source": "prefabs/collision_door_frame.prefab.json",
+      "hash": "fnv1a64:39ba98cb12244fd3",
+      "dependencies": []
+    },
+    {
+      "id": "collision_electrical_panel",
+      "type": "prefab",
+      "source": "prefabs/collision_electrical_panel.prefab.json",
+      "hash": "fnv1a64:e025534744a0d3a3",
+      "dependencies": []
+    },
+    {
+      "id": "collision_generator",
+      "type": "prefab",
+      "source": "prefabs/collision_generator.prefab.json",
+      "hash": "fnv1a64:9de81ec6b34fe60a",
+      "dependencies": []
+    },
+    {
+      "id": "collision_locker",
+      "type": "prefab",
+      "source": "prefabs/collision_locker.prefab.json",
+      "hash": "fnv1a64:7409bac4cf8d61d0",
+      "dependencies": []
+    },
+    {
+      "id": "collision_merchant_counter",
+      "type": "prefab",
+      "source": "prefabs/collision_merchant_counter.prefab.json",
+      "hash": "fnv1a64:1fc8924eb198dca1",
+      "dependencies": []
+    },
+    {
+      "id": "collision_shelf",
+      "type": "prefab",
+      "source": "prefabs/collision_shelf.prefab.json",
+      "hash": "fnv1a64:c2c5aace7b48c677",
+      "dependencies": []
+    },
+    {
+      "id": "collision_table",
+      "type": "prefab",
+      "source": "prefabs/collision_table.prefab.json",
+      "hash": "fnv1a64:dcad1e8489c0a190",
+      "dependencies": []
+    },
+    {
+      "id": "collision_terminal",
+      "type": "prefab",
+      "source": "prefabs/collision_terminal.prefab.json",
+      "hash": "fnv1a64:9998a223c822455a",
+      "dependencies": []
+    },
+    {
+      "id": "collision_wide_frame",
+      "type": "prefab",
+      "source": "prefabs/collision_wide_frame.prefab.json",
+      "hash": "fnv1a64:24132a4468f15b8a",
       "dependencies": []
     },
     {
@@ -381,6 +485,13 @@
       ]
     },
     {
+      "id": "sliding_door",
+      "type": "prefab",
+      "source": "prefabs/sliding_door.prefab.json",
+      "hash": "fnv1a64:e5880f57720f2fe1",
+      "dependencies": []
+    },
+    {
       "id": "table",
       "type": "model",
       "source": "models/table.glb",
@@ -430,7 +541,7 @@
       "id": "wall_light_unit",
       "type": "prefab",
       "source": "prefabs/wall_light_unit.prefab.json",
-      "hash": "fnv1a64:46e1528acb43e844",
+      "hash": "fnv1a64:4ded5a8777bd4dc3",
       "dependencies": []
     },
     {

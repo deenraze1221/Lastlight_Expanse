@@ -6,7 +6,7 @@ namespace lastlight {
 
 Aabb ExplorationWalker::boxAt(const glm::vec3& feet) const {
     const float w = m_settings.halfWidth;
-    return {feet - glm::vec3(w, 0.0f, w), feet + glm::vec3(w, m_settings.height, w)};
+    return {feet - glm::vec3(w, 0.0f, w), feet + glm::vec3(w, m_crouched?m_settings.crouchHeight:m_settings.height, w)};
 }
 
 void ExplorationWalker::spawn(const glm::vec3& feet) {
@@ -15,18 +15,24 @@ void ExplorationWalker::spawn(const glm::vec3& feet) {
     m_velocity = glm::vec3(0.0f);
     m_eyeLag = 0.0f;
     m_grounded = false;
+    m_crouched = false;
 }
 
 void ExplorationWalker::step(const CollisionWorld& world, const WalkInput& input, float dt) {
     if (dt <= 0.0f) {
         return;
     }
+    if (input.crouch) m_crouched=true;
+    else if (m_crouched) {
+        m_crouched=false;
+        if (world.overlaps(boxAt(m_feet))) m_crouched=true;
+    }
     // Horizontal velocity: approach the input direction at walk or sprint speed.
     const glm::vec3 forward(-std::sin(input.yaw), 0.0f, -std::cos(input.yaw));
     const glm::vec3 right(std::cos(input.yaw), 0.0f, -std::sin(input.yaw));
     glm::vec3 wish = forward * input.forward + right * input.right;
     if (glm::length(wish) > 1.0f) wish = glm::normalize(wish);
-    const glm::vec3 target = wish * (input.sprint ? m_settings.sprintSpeed : m_settings.walkSpeed);
+    const glm::vec3 target = wish * (m_crouched?m_settings.crouchSpeed:(input.sprint ? m_settings.sprintSpeed : m_settings.walkSpeed));
     const float blend = 1.0f - std::exp(-m_settings.acceleration * dt);
     m_velocity.x += (target.x - m_velocity.x) * blend;
     m_velocity.z += (target.z - m_velocity.z) * blend;
@@ -61,7 +67,7 @@ void ExplorationWalker::step(const CollisionWorld& world, const WalkInput& input
             const glm::vec3 landed = across + down.moved;
             m_eyeLag -= landed.y - m_feet.y; // the camera follows the step smoothly
             next = landed;
-            m_grounded = true;
+            m_grounded = down.hitY;
         }
     }
     m_feet = next;
@@ -91,11 +97,11 @@ void ExplorationWalker::step(const CollisionWorld& world, const WalkInput& input
 namespace lastlight {
 std::string ExplorationWalker::capture() const {
     return nlohmann::json{{"spawn",{m_spawn.x,m_spawn.y,m_spawn.z}}, {"feet",{m_feet.x,m_feet.y,m_feet.z}},
-        {"velocity",{m_velocity.x,m_velocity.y,m_velocity.z}}, {"eyeLag",m_eyeLag},{"grounded",m_grounded}}.dump();
+        {"velocity",{m_velocity.x,m_velocity.y,m_velocity.z}}, {"eyeLag",m_eyeLag},{"grounded",m_grounded},{"crouched",m_crouched}}.dump();
 }
 ExplorationWalker ExplorationWalker::stage(std::string_view text) const {
     const auto j=nlohmann::json::parse(text);
-    if (!j.is_object() || j.size()!=5) throw std::invalid_argument("invalid saved walker");
+    if (!j.is_object() || j.size()!=6 || !j.at("crouched").is_boolean()) throw std::invalid_argument("invalid saved walker");
     auto out=*this;
     const auto vec=[&](const char* name) {
         const auto& v=j.at(name);
@@ -111,6 +117,7 @@ ExplorationWalker ExplorationWalker::stage(std::string_view text) const {
     if (!j.at("eyeLag").is_number() || !std::isfinite(j.at("eyeLag").get<float>()) || std::abs(j.at("eyeLag").get<float>())>1000000.0f || !j.at("grounded").is_boolean())
         throw std::invalid_argument("invalid walker state");
     out.m_eyeLag=j.at("eyeLag").get<float>(); out.m_grounded=j.at("grounded").get<bool>();
+    out.m_crouched=j.at("crouched").get<bool>();
     return out;
 }
 }

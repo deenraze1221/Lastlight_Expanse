@@ -11,7 +11,7 @@
 // --report, --seed, --camera, ...) come from the engine runtime: run with --help.
 // Default seed 1337, window 1600x900.
 //
-// --explore (bunker): temporary first-person walk with collision (WASD, mouse look, Shift sprint,
+// --explore (bunker): legacy entrance spawn with player collision (WASD, mouse look, Shift sprint,
 // Space jump, Tab frees the mouse) until the D7 player controller. Otherwise:
 // Controls: hold right mouse to look, WASD move, Space/Ctrl up/down, Shift fast, F1 profiler,
 // Esc quits; highlands: left click digs the targeted voxel, F places stone on it.
@@ -56,7 +56,7 @@ using namespace zodar::gfx;
 using namespace zodar::voxel;
 
 constexpr std::string_view kUsage =
-    "LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR] [--explore] [--bunker-walkthrough]\n"
+    "LastlightExpanse [standard options] [--level bunker|highlands] [--assets DIR] [--explore|--free-cam] [--bunker-walkthrough]\n"
     "                 highlands: [--view-radius CHUNKS] [--lighting-quality low|medium|high|ultra]\n"
     "                 [--untextured] [--no-fog] [--spawn-height H] [--pitch DEG]";
 
@@ -65,6 +65,7 @@ struct Options {
     std::string level = "bunker";                 // bunker | highlands
     std::filesystem::path assets = LASTLIGHT_ASSETS_DIR; // game/assets (bunker)
     bool walkthrough = false;
+    bool freeCam = false;
     bool explore = false;                         // bunker: first-person walk with collision
     int viewRadius = 10;
     LightingQuality quality = LightingQuality::High;
@@ -87,6 +88,7 @@ Options parseOptions(std::span<const std::string> args) {
             if (o.level != "bunker" && o.level != "highlands") fail("--level must be bunker or highlands");
         } else if (arg == "--assets") o.assets = next();
         else if (arg == "--bunker-walkthrough") { o.walkthrough = true; o.explore = true; }
+        else if (arg == "--free-cam") o.freeCam = true;
         else if (arg == "--explore") o.explore = true;
         else if (arg == "--view-radius") o.viewRadius = static_cast<int>(parseIntArgument(arg, next()));
         else if (arg == "--lighting-quality") o.quality = parseLightingQuality(next());
@@ -434,7 +436,10 @@ int main(int argc, char** argv) {
                               auto configured = desc;
                               if (!configured.inputMap) configured.inputMap = options.assets / "input.json";
                               if (options.level == "bunker") {
-                                  return lastlight::makeBunkerApp(configured, options.assets, options.explore, options.walkthrough);
+                                  if (options.freeCam && (options.explore || options.walkthrough)) fail("--free-cam cannot combine with walking options");
+                                  if (!configured.headless && !configured.recordInput && !configured.replayInput && !configured.saveAtExit)
+                                      configured.saveAtExit = std::filesystem::current_path()/"saves/bunker.save.json";
+                                  return lastlight::makeBunkerApp(configured, options.assets, !options.freeCam, options.walkthrough, options.explore || options.walkthrough);
                               }
                               if (options.explore) fail("--explore needs --level bunker");
                               return std::make_unique<LastlightApp>(configured, options);

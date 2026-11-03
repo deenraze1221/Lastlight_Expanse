@@ -8,16 +8,16 @@
 
 namespace lastlight {
 
-// TEMPORARY first-person walker for exploring the bunker (`--explore`), until the D7 player
-// controller (driven by D3 input actions) replaces it. Deliberately minimal: an upright box
-// moved through CollisionWorld with gravity, jumping, sprinting, stair step-up and camera
-// smoothing. No input handling of its own (the caller fills WalkInput), no gameplay state.
+// D7 player controller, retaining its existing name for callers. An upright box moves
+// through CollisionWorld with gravity, jumping, sprinting, crouching, stair step-up and
+// camera smoothing. The caller supplies fixed-tick action values through WalkInput.
 struct WalkInput {
     float forward = 0.0f; // -1..1
     float right = 0.0f;   // -1..1
     bool sprint = false;
-    bool jump = false;    // held; jumps when grounded
+    bool jump = false;    // press edge; jumps when grounded
     float yaw = 0.0f;     // radians, camera yaw (forward = (-sin, 0, -cos))
+    bool crouch = false;
 };
 
 struct WalkerSettings {
@@ -30,6 +30,9 @@ struct WalkerSettings {
     float jumpSpeed = 4.8f;    // ~0.75 m jump with the gravity below
     float gravity = 15.0f;
     float stepHeight = 0.35f;  // climbs stair steps and small ledges
+    float crouchHeight = 1.1f;
+    float crouchEyeHeight = 0.95f;
+    float crouchSpeed = 2.0f;
 };
 
 class ExplorationWalker {
@@ -44,7 +47,8 @@ public:
     void step(const CollisionWorld& world, const WalkInput& input, float dt);
 
     const glm::vec3& feet() const { return m_feet; }
-    glm::vec3 eye() const { return m_feet + glm::vec3(0.0f, m_settings.eyeHeight + m_eyeLag, 0.0f); }
+    glm::vec3 eye() const { return m_feet + glm::vec3(0.0f, (m_crouched?m_settings.crouchEyeHeight:m_settings.eyeHeight) + m_eyeLag, 0.0f); }
+    bool crouched() const { return m_crouched; }
     bool grounded() const { return m_grounded; }
     const glm::vec3& velocity() const { return m_velocity; }
     const WalkerSettings& settings() const { return m_settings; }
@@ -59,6 +63,7 @@ private:
     glm::vec3 m_velocity{0.0f};
     float m_eyeLag = 0.0f; // smooths the camera over step-ups
     bool m_grounded = false;
+    bool m_crouched = false;
 };
 
 } // namespace lastlight

@@ -287,6 +287,11 @@ No D6 state restoration, serializers or save/load APIs are added.
   and payloads; unsupported pending closures fail capture. No D7 gameplay added.
 
 ### D7 — Playable bunker (game)
+
+Implementation: `docs/guide/BUNKER_GAMEPLAY.md`. Game components, authored prefab colliders,
+controller, action/event interactions, named door timer, room power and D6 persistence are
+integrated on `feat/d7-bunker-gameplay` from main `98be775`. Verification is recorded in
+PROGRESS.md. D8 is not started.
 - Read: `docs/guide/INPUT.md` and `GAMEPLAY.md` (drafted in D3–D6), `game/src`,
   `game/assets/levels/bunker.scene.json`.
 - Read also: GDD §4 (electricity), §10, §11.
@@ -304,7 +309,7 @@ No D6 state restoration, serializers or save/load APIs are added.
   for player, doors, panels and power; game autosave every 5 minutes and on normal exit
   (D6 interval).
 - Recording `game/tests/bunker_walk.inputrec.jsonl`: dormitory → repair panel → start
-  generator → door → airlock.
+  generator → door → repair airlock panel → airlock endpoint.
 - Tests: AABB sweep (walls, corners, steps, no tunnelling at max speed), door, panel and power
   state machines (emergency lights on without power, main lights only with generator + repaired
   panel); GPU `gpu.lastlight_bunker_walk` (ends in the airlock within tolerance, main lights on,

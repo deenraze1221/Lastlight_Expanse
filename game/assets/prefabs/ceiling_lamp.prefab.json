@@ -26,6 +26,7 @@
           0.0
         ]
       },
+      "emergencyLight": {},
       "pointLight": {
         "color": [
           0.92,

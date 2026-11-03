@@ -254,7 +254,7 @@ int cmdCheck(const Args& a) {
 
 } // namespace
 
-int main(int argc, char** argv) {
+int zodarAssetToolMain(int argc, char** argv) {
     const Args a = parse(argc, argv);
     try {
         if (a.command == "import") return cmdImport(a);

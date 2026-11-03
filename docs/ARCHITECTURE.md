@@ -828,3 +828,15 @@ first appearance in the input scene rather than process-specific pointer address
 removes allocation-dependent winners for coplanar geometry during record/replay and restoration.
 Transparent back-to-front ordering is unchanged. A GPU regression exchanges two meshes'
 allocation-address order while keeping the same semantic draws and requires identical pixels.
+
+
+## D7 bunker gameplay
+
+Game-only registered components and fixed-step systems implement the bunker; engine modules
+retain no Lastlight types. Imported solids carry prefab Collider boxes; architecture still
+uses voxel queries through CollisionWorld. Static boxes are cached and moving door boxes
+follow current transforms. Typed stable-ID interactions and a named repeating door timer
+participate in D6 persistence. Player/controller and power/door state enter replay fingerprints.
+Rendering derives per-room emissive material overrides rather than modifying shared models.
+The game asset frontend registers these types before invoking the shared generic asset CLI.
+Contracts, controls, save-slot policy and tests: guide/BUNKER_GAMEPLAY.md.
