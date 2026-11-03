@@ -257,17 +257,23 @@ protected:
     }
 
     void onUpdate(const FrameTime& time) override {
+        const auto reloads=m_assets->stats().reloads;
         m_assets->update();
         tryLoadLevel();
-        if (m_level && m_level->update()) {
+        const bool levelReloaded=m_level && m_level->update();
+        if (levelReloaded) {
             canonicalizeLevel();
+            validateBunker(m_world);
+            updatePower(m_world);
+            ZODAR_LOG_INFO("Level reloaded (generation {})", m_level->generation());
+        }
+        // Asset-only reloads do not advance LiveScene's generation. They still change
+        // save compatibility and may update source materials behind cached lamp copies.
+        if (levelReloaded || m_assets->stats().reloads!=reloads) {
             m_contentHash=bunkerContentHash(m_assetDir);
             renderer().waitIdle();
             for (const auto& [key,handle]:m_lightMaterials) { (void)key; scene().materials().releaseMaterial(handle); }
             m_lightMaterials.clear();
-            validateBunker(m_world);
-            updatePower(m_world);
-            ZODAR_LOG_INFO("Level reloaded (generation {})", m_level->generation());
         }
         if (m_level && !m_level->error().empty() && m_level->error() != m_lastError) {
             ZODAR_LOG_WARN("Level reload failed, previous version kept: {}", m_level->error());

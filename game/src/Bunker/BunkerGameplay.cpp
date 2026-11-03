@@ -58,19 +58,26 @@ std::string interactionTarget(const World& world, const CollisionWorld& collisio
                               const glm::vec3& eye, const glm::vec3& direction) {
     float nearest=std::numeric_limits<float>::max();
     std::string target;
+    if (glm::length(direction)<=0) return target;
     for (const auto e:world.entities()) {
         const auto* use=world.tryGet<Interactable>(e);
         const auto* id=world.tryGet<SceneId>(e);
         if (!use || !id) continue;
         CollisionWorld bounds;
-        bounds.addStatic(worldBox(world,e,use->min,use->max));
+        const auto box=worldBox(world,e,use->min,use->max);
+        bounds.addStatic(box);
         const auto hit=bounds.raycast(eye,direction,use->range);
-        if (!hit || hit->distance>nearest || (hit->distance==nearest && id->value>=target)) continue;
+        // An interaction volume can extend into walkable space. Starting within it is
+        // a zero-distance target, even though collision rays ignore enclosing solids.
+        const bool inside=glm::all(glm::greaterThanEqual(eye,box.min)) && glm::all(glm::lessThanEqual(eye,box.max));
+        if (!inside && !hit) continue;
+        const float distance=inside?0.0f:hit->distance;
+        if (distance>nearest || (distance==nearest && id->value>=target)) continue;
         // The target's collider may coincide with its interaction surface. An earlier
         // wall, prop or closed door blocks it; geometry behind the surface does not.
-        const auto obstruction=collision.raycast(eye,direction,hit->distance);
-        if (obstruction && obstruction->distance+0.002f<hit->distance) continue;
-        nearest=hit->distance; target=id->value;
+        const auto obstruction=collision.raycast(eye,direction,distance);
+        if (obstruction && obstruction->distance+0.002f<distance) continue;
+        nearest=distance; target=id->value;
     }
     return target;
 }

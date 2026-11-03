@@ -30,6 +30,19 @@ TEST_CASE("D7: interactions respect range, occlusion and nearest target") {
     CHECK(world.get<ElectricalPanel>(panel).repaired);
 }
 
+TEST_CASE("D7: interaction volumes containing the eye remain usable") {
+    World world;
+    const auto panel=world.create();
+    world.add<SceneId>(panel,SceneId{"panel"});
+    world.add<Transform>(panel);
+    world.add<Interactable>(panel,Interactable{{-1,0,-1},{1,2,1},2.5f});
+    CollisionWorld collision;
+    CHECK(interactionTarget(world,collision,{0,1.6f,0},{0,0,-1})=="panel");
+    CHECK(interactionTarget(world,collision,{0,1.6f,1},{0,0,-1})=="panel");
+    CHECK(interactionTarget(world,collision,{0,1.6f,1},{0,0,1})=="panel");
+    CHECK(interactionTarget(world,collision,{0,1.6f,0},{0,0,0}).empty());
+}
+
 TEST_CASE("D7: sliding doors sweep their full travel and reopen on obstruction") {
     World world;
     const auto e=world.create();

@@ -1,5 +1,49 @@
 # Progress
 
+## D7 independent correctness review (2026-11-03)
+
+Reviewed `feat/d7-bunker-gameplay` at `d384eb7` against latest main
+`98be77503cdb97c7f7c179e85524e497f1d554fc`, PHASE_D_PLAN D7, and GDD electricity,
+bunker and saving requirements. No merge or D8 work.
+
+- Confirmed an enclosing interaction volume could not be selected because collision rays
+  deliberately ignore boxes containing their origin. Interaction selection now treats an
+  enclosing or touching target as zero distance, retaining range/occlusion checks for other
+  targets and rejecting zero-length rays. The regression failed three assertions before
+  the fix; focused collision/controller/D7 checks then passed 11 cases / 64 assertions.
+- Confirmed a successful model-only hot reload left the cached content identity unchanged.
+  A subsequent exit save failed to load in a fresh process with "incompatible save header".
+  Successful asset reloads now refresh that identity and retire derived lamp material copies,
+  as scene reloads already did. The Debug GPU regression changes only a copied model,
+  verifies an asset reload without scene replacement, saves, and restarts successfully with
+  zero Vulkan validation messages. Repository assets remain untouched by the test.
+- Reviewed fixed-action movement/crouch/steps, axis sweeps, full-travel door obstruction,
+  nearest/ranged/occluded interactions, per-room power transitions, staged load/commit,
+  fixed-clock autosave, pending stable-ID events and named door timers. No further confirmed
+  bugs were found in these paths. Existing moving-door replay continuation remains required.
+- Acceptance limitation: the authored replay powers dormitory and corridor, then ends in the
+  airlock without repairing its panel. Its emergency lights correctly remain on under the
+  per-room power rule. This does not demonstrate a fully powered airlock; no extra gameplay
+  or route changes were added to reinterpret the acceptance wording.
+
+Final validation (Ubuntu 24.04 container, GCC 13.3, Mesa llvmpipe 25.2.8):
+
+- Full `tools/gate.sh`, warnings as errors: Debug **44/44** (307.87 seconds), Release
+  **43/43** (71.54 seconds). The extra Debug target checks hot reload, which is compiled out
+  in Release. No CTest target failed or was skipped; no compiler warnings or errors.
+- Both configurations: 322 engine cases passed (2 existing optional skips), 77 GPU cases
+  passed (1 existing optional skip), 22 game cases passed (426 assertions).
+- Both explicit Highlands PNGs match unchanged latest main, captured on this environment:
+  `61ab33fa0fc3305645a12a7dcd222ba2a9d54a136616b27bdb5031a1f3b9753d`.
+  Existing engine/game voxel golden hashes also pass.
+- All 27 Debug and 25 Release application run reports record zero Vulkan warnings/errors.
+  Validation runs use Vulkan 1.3 with the installed distro layer. Reproduction failures
+  before fixes and passing focused/full logs remain outside the checkout.
+
+Same-platform software Vulkan only; interactive devices, Windows and hardware GPUs are not
+validated. No hardware performance claim and no architecture change.
+Next: review these D7 fixes; do not merge or start D8 without a separate instruction.
+
 ## D7 — Bunker gameplay (2026-11-03)
 
 - Base: latest main `98be77503cdb97c7f7c179e85524e497f1d554fc`. Dedicated branch:

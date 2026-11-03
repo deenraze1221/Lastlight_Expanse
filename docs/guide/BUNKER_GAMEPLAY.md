@@ -47,8 +47,9 @@ The existing walker now implements the D7 controller, retaining its public name 
 It owns velocity, gravity, step/snap behavior, crouch state and camera step smoothing.
 Game fingerprints sort stable scene IDs and include complete controller state, doors, panels
 and generator state. Initial and reloaded scenes use D6 capture order, keeping light and draw
-accumulation order identical after restoration. Asset compatibility hashes refresh with scene
-generations rather than rereading every asset at each checkpoint.
+accumulation order identical after restoration. Asset compatibility hashes and derived lamp
+materials refresh after scene replacement or a successful asset-only hot reload, rather than
+rereading every asset at each checkpoint.
 There are no raw persistent entity handles, mutable timer closures or global game state.
 
 ## Save slots
@@ -89,5 +90,7 @@ occlusion. Header hashes bind the recording to the input map and current assets.
 `gpu.lastlight_bunker_walk` replays that file, inspects saved player/panel/generator/lighting
 state, then compares a moving-door checkpoint continuation with uninterrupted pixels and
 state. Unit tests cover interaction range/occlusion/nearest target, full-travel obstruction,
-power combinations, crouch clearance and the five-minute autosave boundary. Existing collision,
+power combinations, enclosing interaction volumes, crouch clearance and the five-minute autosave boundary.
+Debug `gpu.lastlight_bunker_asset_reload` changes a copied model without reloading the scene,
+saves, and starts a new process to verify that the save remains compatible. Existing collision,
 stairs, bunker walkthrough, replay/save and Highlands golden checks remain enabled.

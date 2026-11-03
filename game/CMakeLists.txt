@@ -97,6 +97,13 @@ if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS)
 endif()
 
 if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS AND Python3_Interpreter_FOUND)
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND ZODAR_HOT_RELOAD)
+        add_test(NAME gpu.lastlight_bunker_asset_reload
+            COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/tests/BunkerAssetReloadSmoke.py
+                    $<TARGET_FILE:LastlightExpanse> ${CMAKE_CURRENT_SOURCE_DIR}/assets
+                    ${CMAKE_BINARY_DIR}/bunker_asset_reload)
+        set_tests_properties(gpu.lastlight_bunker_asset_reload PROPERTIES TIMEOUT 300)
+    endif()
     add_test(NAME gpu.lastlight_bunker_walk
         COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/tests/BunkerGameplaySmoke.py
                 $<TARGET_FILE:LastlightExpanse> ${CMAKE_CURRENT_SOURCE_DIR}/tests/bunker_walk.inputrec.jsonl
