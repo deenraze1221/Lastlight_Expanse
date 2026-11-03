@@ -14,8 +14,10 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Game controls: hold right mouse to look, WASD/Space/Ctrl to fly, Shift fast, left click digs,
-F places stone, F1 profiler, Esc quits. Options: `--seed`, `--view-radius`, `--threads`.
+Bunker controls: WASD walk, mouse look, Shift sprint, Space jump, Ctrl crouch, E interact,
+F5/F9 quick save/load, Tab release mouse, Esc quit. `--free-cam` keeps the fly camera.
+`--level highlands` keeps fly controls, left-click digging and F placement. F1 opens the profiler.
+See [bunker gameplay](docs/guide/BUNKER_GAMEPLAY.md) for power, doors and save-slot behavior.
 
 ## Layout
 

@@ -6,6 +6,7 @@
 
 #include <fstream>
 #include <limits>
+#include <unordered_set>
 
 namespace lastlight {
 
@@ -48,6 +49,9 @@ Aabb transformed(const Aabb& box, const glm::mat4& m) {
 LevelColliderStats buildLevelColliders(const zodar::SceneDocument& document, const ColliderTable& table,
                                        const ModelBoundsFn& fallback, CollisionWorld& out) {
     LevelColliderStats stats;
+    std::unordered_set<std::string> authoredParents;
+    for (const auto& e:document.entities)
+        if (e.components.contains("collider") && !e.parent.empty()) authoredParents.insert(e.parent);
     std::unordered_map<std::string, size_t> byId;
     for (size_t i = 0; i < document.entities.size(); ++i) {
         if (!document.entities[i].id.empty()) byId.emplace(document.entities[i].id, i);
@@ -66,6 +70,21 @@ LevelColliderStats buildLevelColliders(const zodar::SceneDocument& document, con
     };
     for (size_t i = 0; i < document.entities.size(); ++i) {
         const zodar::SceneEntity& e = document.entities[i];
+        if (const auto c=e.components.find("collider"); c!=e.components.end()) {
+            // Moving doors use live transforms; static authored boxes use the scene document.
+            if (!e.components.contains("door")) {
+                const auto box=nlohmann::json::parse(c->second);
+                if (box.at("enabled").get<bool>()) {
+                    const auto vector=[&](const char* key) {
+                        const auto& v=box.at(key); return glm::vec3(v[0].get<float>(),v[1].get<float>(),v[2].get<float>());
+                    };
+                    out.addStatic(transformed({vector("min"),vector("max")},worldOf(i,0)));
+                    ++stats.boxes;
+                }
+            }
+            continue;
+        }
+        if (authoredParents.contains(e.id)) continue;
         if (!e.modelRenderer || !e.modelRenderer->visible) continue;
         const std::string& model = e.modelRenderer->model;
         const glm::mat4 m = worldOf(i, 0);

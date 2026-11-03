@@ -15,7 +15,8 @@ namespace lastlight {
 
 // Collision boxes per model (model-local space), from game/assets/colliders.json (written by
 // game/tools/make_greybox_kit.py from the module geometry). An empty list = no collision
-// (lights, signs, trays). Temporary until scene files carry Collider components (D6/D7).
+// (lights, signs, trays). D7 prefabs carry authored Collider boxes; this table is the
+// fallback for older/external models without those components.
 struct ColliderTable {
     std::unordered_map<std::string, std::vector<Aabb>> models;
 };

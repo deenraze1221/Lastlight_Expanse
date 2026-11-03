@@ -791,7 +791,7 @@ def level(authoring=False):
     add("dormitory", "table", (6.0, 0, 6.2))
     add("dormitory", "bench", (6.0, 0, 5.5))
     add("dormitory", "bench", (6.0, 0, 6.9))
-    add("dormitory", "door_leaf", (7.1, 0, 2 + WALL + 0.04), name="Sliding door")
+    add("dormitory", "door_leaf", (7.1, 0, 2 + VOXEL_SIZE + 0.04), name="Sliding door")
     add("dormitory", "vent", (mounting_face(0), 0, 6.0), 90)
     lamp("dormitory", 3.0, 6.0, 10.0, 6.0)
     lamp("dormitory", 9.0, 6.0, 10.0, 6.0)
@@ -803,7 +803,7 @@ def level(authoring=False):
         add("locker_room", "locker", (19.5, 0, 3.3 + k * 0.6), -90)
     add("locker_room", "bench", (15.0, 0, 7.6))
     add("locker_room", "bench", (15.0, 0, 5.0))
-    add("locker_room", "door_leaf", (15.1, 0, 2 + WALL + 0.04), name="Sliding door")
+    add("locker_room", "door_leaf", (15.1, 0, 2 + VOXEL_SIZE + 0.04), name="Sliding door")
     lamp("locker_room", 16.0, 6.0, 10.0, 6.0)
 
     # Common area (24 x 12 m): dining tables, structural columns, supply shelves, notice terminal.
@@ -831,7 +831,7 @@ def level(authoring=False):
         add("generator_room", "electrical_panel", (60 - WALL, 0, z), -90, name="Distribution panel")
     add("generator_room", "terminal", (45.0, 0, 8.0), 90, name="Power monitor")
     add("generator_room", "crate", (45.0, 0, 3.2))
-    add("generator_room", "door_leaf", (51.1, 0, 2 + WALL + 0.04), name="Sliding door")
+    add("generator_room", "door_leaf", (51.1, 0, 2 + VOXEL_SIZE + 0.04), name="Sliding door")
     add("generator_room", "vent", (52.0, 0, 10 - WALL), 180)
     lamp("generator_room", 48.0, 6.0, 10.0, 6.0)
     lamp("generator_room", 56.0, 4.5, 10.0, 6.0)
@@ -866,7 +866,7 @@ def level(authoring=False):
     add("airlock", "crate", (-1.2, 0, -5.2))
     add("airlock", "emergency_light", (-4.0, 0, mounting_face(-6)))
     add("airlock", "exit_sign", (-8 + 0.4, 3.3, 0.0), 90, name="Exit sign (blast door)")
-    add("airlock", "door_leaf", (WALL + 0.04, 0, 1.1), -90, name="Sliding door")
+    add("airlock", "door_leaf", (VOXEL_SIZE + 0.04, 0, 1.1), -90, name="Sliding door")
     lamp("airlock", -4.0, -3.0, 10.0, 6.0)
     lamp("airlock", -4.0, 3.0, 10.0, 6.0)
     lamp("exit_passage", -10.0, 0.0, 6.0, 4.5)
@@ -882,6 +882,52 @@ def level(authoring=False):
                      "fog": {"color": [0.08, 0.08, 0.085], "density": 0.012, "startDistance": 6.0,
                              "maxOpacity": 0.4}})
     materials = {"sign_" + name: "../materials/sign_%s.material.json" % name for name in SIGNS}
+    if not authoring:
+        # D7: gameplay remains authored data; the engine has no bunker component types.
+        boxes = colliders()["models"]
+        for e in list(entities):
+            room = e.get("parent", "corridor")
+            model = e.get("modelRenderer", {}).get("model")
+            if model == "door_leaf":
+                del e["modelRenderer"]
+                e["prefab"] = "../prefabs/sliding_door.prefab.json"
+            elif model in ("generator", "electrical_panel"):
+                key = "powerSwitch" if model == "generator" else "electricalPanel"
+                e[key] = {} if model == "generator" else {"room": room}
+                b = boxes[model][1 if model == "generator" else 0]
+                e["interactable"] = {"min": b[:3], "max": b[3:]}
+            elif model == "emergency_light":
+                # Keep the fixture origin intact; the source sits inside the visible lamp.
+                entities.append({"id": e["id"] + "/source", "parent": e["id"],
+                                 "transform": {"position": [0, 3, 0.15]},
+                                 "pointLight": {"color": [1, 0.18, 0.04], "range": 4},
+                                 "emergencyLight": {"room": room, "intensity": 3, "emergency": True}})
+            if e.get("prefab", "").endswith(("ceiling_lamp.prefab.json", "wall_light_unit.prefab.json")):
+                light = e.setdefault("overrides", {}).setdefault("light", {})
+                intensity = light.get("pointLight", {}).get("intensity", 12 if "/lamp_" in e["id"] else 2)
+                light["emergencyLight"] = {"room": room, "intensity": intensity}
+        # Every room has a local distribution panel and emergency source.
+        for room, _, (i0, _), (j0, _) in ROOMS:
+            if room == "exit_passage":
+                continue
+            x, z = CELL*i0, CELL*j0 - 2 + WALL + 0.05
+            if room == "dormitory":
+                x, z = 4, 2.55
+            entities.append({"id": room + "/power_panel", "parent": room,
+                             "transform": {"position": [x, 0, z]},
+                             "modelRenderer": {"model": "electrical_panel"},
+                             "electricalPanel": {"room": room},
+                             "interactable": {"min": [-0.35, 0.9, 0], "max": [0.35, 1.9, 0.22]}})
+            entities.append({"id": room + "/backup_light", "parent": room,
+                             "transform": {"position": [x, 3, z+0.3]},
+                             "pointLight": {"color": [1, 0.18, 0.04], "range": 5},
+                             "emergencyLight": {"room": room, "intensity": 3, "emergency": True}})
+        # Imported solids carry their own authored boxes; the table remains an export fallback.
+        for e in entities:
+            model = e.get("modelRenderer", {}).get("model")
+            if model in boxes and boxes[model]:
+                e["prefab"] = "../prefabs/collision_%s.prefab.json" % model
+        entities.append({"id": "game_spawn", "parent": "dormitory", "playerSpawn": {"feet": [6, 0, 4], "yaw": 0}})
     return {"version": 1, "materials": materials, "entities": entities}
 
 
@@ -916,14 +962,14 @@ def ceiling_lamp_prefab():
         {"id": "lamp", "name": "Overhead light", "transform": {"position": [0.0, H, 0.0]},
          "modelRenderer": {"model": "lamp"}},
         {"id": "light", "name": "Overhead light source", "parent": "lamp", "transform": {"position": [0.0, -0.3, 0.0]},
-         "pointLight": {"color": NEUTRAL, "intensity": 12.0, "range": 7.0}}]}
+         "emergencyLight": {}, "pointLight": {"color": NEUTRAL, "intensity": 12.0, "range": 7.0}}]}
 
 
 def wall_light_prefab():
     return {"version": 1, "entities": [
         {"id": "fixture", "name": "Wall light", "modelRenderer": {"model": "wall_light"}},
         {"id": "light", "name": "Wall light source", "parent": "fixture", "transform": {"position": [0.0, 2.15, 0.3]},
-         "pointLight": {"color": WARM, "intensity": 2.0, "range": 3.5}}]}
+         "emergencyLight": {}, "pointLight": {"color": WARM, "intensity": 2.0, "range": 3.5}}]}
 
 
 def room_sign_prefab():
@@ -1059,6 +1105,16 @@ def outputs():
     files["prefabs/wall_light_unit.prefab.json"] = text(wall_light_prefab())
     files["prefabs/room_sign.prefab.json"] = text(room_sign_prefab())
     files["prefabs/merchant_stall.prefab.json"] = text(merchant_stall_prefab())
+    for model, boxes in colliders()["models"].items():
+        if boxes and model != "door_leaf":
+            files["prefabs/collision_%s.prefab.json" % model] = text({"version": 1, "entities": [
+                {"id": "box_%d" % i, "collider": {"min": box[:3], "max": box[3:]}}
+                for i, box in enumerate(boxes)]})
+    files["prefabs/sliding_door.prefab.json"] = text({"version": 1, "entities": [
+        {"id": "leaf", "transform": {}, "modelRenderer": {"model": "door_leaf"},
+         "collider": {"min": [0, 0, -0.03], "max": [2.1, 2.75, 0.06]},
+         "interactable": {"min": [0, 0, -0.04], "max": [2.1, 2.75, 0.07]},
+         "door": {"closed": [-2.1, 0, 0], "slide": [2.1, 0, 0]}}]})
     files["levels/bunker.scene.json"] = text(level())
     files["colliders.json"] = (json.dumps(colliders(), separators=(", ", ": ")) + "\n").encode()
     return files

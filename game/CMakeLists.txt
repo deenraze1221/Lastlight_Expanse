@@ -4,9 +4,9 @@
 add_library(LastlightGameCore STATIC
     src/Physics/CollisionWorld.cpp
     src/Player/ExplorationWalker.cpp
-    src/Bunker/LevelColliders.cpp src/Bunker/BunkerVoxels.cpp)
+    src/Bunker/LevelColliders.cpp src/Bunker/BunkerVoxels.cpp src/Bunker/BunkerGameplay.cpp)
 target_include_directories(LastlightGameCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(LastlightGameCore PUBLIC Zodar::Scene Zodar::SceneFile Zodar::World PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(LastlightGameCore PUBLIC Zodar::Scene Zodar::SceneFile Zodar::World Zodar::Gameplay Zodar::WorldRender PRIVATE nlohmann_json::nlohmann_json)
 zodar_set_warnings(LastlightGameCore)
 
 add_executable(LastlightExpanse
@@ -23,10 +23,16 @@ zodar_set_warnings(LastlightExpanse)
 # Game shaders compile next to the engine's (bin/shaders) and use the engine shader library.
 zodar_compile_shaders(LastlightExpanse SOURCES shaders/voxel.frag)
 
+if(TARGET ZodarAssetCommands)
+    add_executable(LastlightAssetTool src/AssetTool.cpp)
+    target_link_libraries(LastlightAssetTool PRIVATE LastlightGameCore ZodarAssetCommands)
+    zodar_set_warnings(LastlightAssetTool)
+endif()
+
 if(ZODAR_BUILD_TESTS)
     add_executable(LastlightGameTests tests/main.cpp tests/CollisionTests.cpp tests/BunkerWalkTests.cpp
-        tests/HighlandsMeshTests.cpp tests/BunkerVoxelTests.cpp tests/BunkerGeometryTests.cpp src/World/LastlightTerrain.cpp src/Rendering/BlockTextures.cpp)
-    target_link_libraries(LastlightGameTests PRIVATE LastlightGameCore Zodar::Scene doctest::doctest)
+        tests/BunkerGameplayTests.cpp tests/BunkerRoute.cpp tests/HighlandsMeshTests.cpp tests/BunkerVoxelTests.cpp tests/BunkerGeometryTests.cpp src/World/LastlightTerrain.cpp src/Rendering/BlockTextures.cpp)
+    target_link_libraries(LastlightGameTests PRIVATE LastlightGameCore Zodar::Scene Zodar::Input doctest::doctest)
     target_compile_definitions(LastlightGameTests PRIVATE LASTLIGHT_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
     zodar_set_warnings(LastlightGameTests)
     add_test(NAME game.unit COMMAND LastlightGameTests)
@@ -46,7 +52,7 @@ if(ZODAR_BUILD_TESTS)
         # Every game asset passes the strict check (sizes, palette, texel density, budgets,
         # bounds, importer warnings, stale hashes) for both tool paths.
         add_test(NAME tools.game_assets_check
-            COMMAND ZodarAssetTool check --strict --registry ${CMAKE_CURRENT_SOURCE_DIR}/assets/assets.json
+            COMMAND LastlightAssetTool check --strict --registry ${CMAKE_CURRENT_SOURCE_DIR}/assets/assets.json
                     --report ${CMAKE_BINARY_DIR}/game_assets_check.json)
     endif()
 endif()
@@ -91,6 +97,11 @@ if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS)
 endif()
 
 if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS AND Python3_Interpreter_FOUND)
+    add_test(NAME gpu.lastlight_bunker_walk
+        COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/tests/BunkerGameplaySmoke.py
+                $<TARGET_FILE:LastlightExpanse> ${CMAKE_CURRENT_SOURCE_DIR}/tests/bunker_walk.inputrec.jsonl
+                ${CMAKE_BINARY_DIR}/bunker_gameplay)
+    set_tests_properties(gpu.lastlight_bunker_walk PROPERTIES TIMEOUT 900)
     add_test(NAME gpu.lastlight_input_replay
         COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/engine/tests/Runtime/ReplaySmoke.py
                 $<TARGET_FILE:LastlightExpanse> ${CMAKE_BINARY_DIR}/input_replay)

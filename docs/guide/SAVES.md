@@ -120,7 +120,7 @@ accepted after a compatibility or validation failure.
 uses integer tick boundaries after converting the interval with `ceil(interval / fixedDt)`.
 Application integration enables writes when `--save-at-exit FILE` selects a slot. Lastlight's
 interval defaults to 300 seconds; `--autosave-interval 0` disables periodic writes. The generic
-Application default is off. There are no new player, door, power or D7 gameplay systems.
+Application default is off. D7 player, door and power integration is documented in [BUNKER_GAMEPLAY.md](BUNKER_GAMEPLAY.md).
 
 ```sh
 LastlightExpanse --load-save slot.json --save-at-exit slot.json

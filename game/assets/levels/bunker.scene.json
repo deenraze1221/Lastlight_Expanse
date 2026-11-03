@@ -95,7 +95,8 @@
       },
       "modelRenderer": {
         "model": "airlock_arch"
-      }
+      },
+      "prefab": "../prefabs/collision_airlock_arch.prefab.json"
     },
     {
       "id": "airlock/door_frame_1",
@@ -115,7 +116,8 @@
       },
       "modelRenderer": {
         "model": "door_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_door_frame.prefab.json"
     },
     {
       "id": "weapon_dealer/wide_frame_1",
@@ -130,7 +132,8 @@
       },
       "modelRenderer": {
         "model": "wide_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_wide_frame.prefab.json"
     },
     {
       "id": "corridor/door_frame_1",
@@ -145,7 +148,8 @@
       },
       "modelRenderer": {
         "model": "door_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_door_frame.prefab.json"
     },
     {
       "id": "corridor/door_frame_2",
@@ -160,7 +164,8 @@
       },
       "modelRenderer": {
         "model": "door_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_door_frame.prefab.json"
     },
     {
       "id": "medic/wide_frame_1",
@@ -175,7 +180,8 @@
       },
       "modelRenderer": {
         "model": "wide_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_wide_frame.prefab.json"
     },
     {
       "id": "corridor/wide_frame_1",
@@ -190,7 +196,8 @@
       },
       "modelRenderer": {
         "model": "wide_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_wide_frame.prefab.json"
     },
     {
       "id": "resource_trader/wide_frame_1",
@@ -205,7 +212,8 @@
       },
       "modelRenderer": {
         "model": "wide_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_wide_frame.prefab.json"
     },
     {
       "id": "corridor/wide_frame_2",
@@ -220,7 +228,8 @@
       },
       "modelRenderer": {
         "model": "wide_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_wide_frame.prefab.json"
     },
     {
       "id": "technician/wide_frame_1",
@@ -235,7 +244,8 @@
       },
       "modelRenderer": {
         "model": "wide_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_wide_frame.prefab.json"
     },
     {
       "id": "corridor/door_frame_3",
@@ -250,7 +260,8 @@
       },
       "modelRenderer": {
         "model": "door_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_door_frame.prefab.json"
     },
     {
       "id": "scout/wide_frame_1",
@@ -265,7 +276,8 @@
       },
       "modelRenderer": {
         "model": "wide_frame"
-      }
+      },
+      "prefab": "../prefabs/collision_wide_frame.prefab.json"
     },
     {
       "id": "corridor/cable_tray_1",
@@ -509,6 +521,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 10.0
           }
         }
       }
@@ -530,6 +546,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 10.0
           }
         }
       }
@@ -551,6 +571,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 10.0
           }
         }
       }
@@ -572,6 +596,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 10.0
           }
         }
       }
@@ -593,6 +621,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 10.0
           }
         }
       }
@@ -614,6 +646,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 10.0
           }
         }
       }
@@ -635,6 +671,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 10.0
           }
         }
       }
@@ -656,6 +696,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 10.0
           }
         }
       }
@@ -671,6 +715,14 @@
           0.0,
           -1.75
         ]
+      },
+      "overrides": {
+        "light": {
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 2
+          }
+        }
       }
     },
     {
@@ -684,6 +736,14 @@
           0.0,
           -1.75
         ]
+      },
+      "overrides": {
+        "light": {
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 2
+          }
+        }
       }
     },
     {
@@ -697,6 +757,14 @@
           0.0,
           -1.75
         ]
+      },
+      "overrides": {
+        "light": {
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 2
+          }
+        }
       }
     },
     {
@@ -710,6 +778,14 @@
           0.0,
           -1.75
         ]
+      },
+      "overrides": {
+        "light": {
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 2
+          }
+        }
       }
     },
     {
@@ -723,6 +799,14 @@
           0.0,
           -1.75
         ]
+      },
+      "overrides": {
+        "light": {
+          "emergencyLight": {
+            "room": "corridor",
+            "intensity": 2
+          }
+        }
       }
     },
     {
@@ -883,7 +967,23 @@
       },
       "modelRenderer": {
         "model": "electrical_panel"
-      }
+      },
+      "electricalPanel": {
+        "room": "corridor"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0.0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
     },
     {
       "id": "corridor/electrical_panel_2",
@@ -898,7 +998,23 @@
       },
       "modelRenderer": {
         "model": "electrical_panel"
-      }
+      },
+      "electricalPanel": {
+        "room": "corridor"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0.0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
     },
     {
       "id": "corridor/sign_1",
@@ -1163,7 +1279,8 @@
       },
       "modelRenderer": {
         "model": "bunk"
-      }
+      },
+      "prefab": "../prefabs/collision_bunk.prefab.json"
     },
     {
       "id": "dormitory/bunk_2",
@@ -1178,7 +1295,8 @@
       },
       "modelRenderer": {
         "model": "bunk"
-      }
+      },
+      "prefab": "../prefabs/collision_bunk.prefab.json"
     },
     {
       "id": "dormitory/bunk_3",
@@ -1193,7 +1311,8 @@
       },
       "modelRenderer": {
         "model": "bunk"
-      }
+      },
+      "prefab": "../prefabs/collision_bunk.prefab.json"
     },
     {
       "id": "dormitory/bunk_4",
@@ -1208,7 +1327,8 @@
       },
       "modelRenderer": {
         "model": "bunk"
-      }
+      },
+      "prefab": "../prefabs/collision_bunk.prefab.json"
     },
     {
       "id": "dormitory/bunk_5",
@@ -1223,7 +1343,8 @@
       },
       "modelRenderer": {
         "model": "bunk"
-      }
+      },
+      "prefab": "../prefabs/collision_bunk.prefab.json"
     },
     {
       "id": "dormitory/bunk_6",
@@ -1243,7 +1364,8 @@
       },
       "modelRenderer": {
         "model": "bunk"
-      }
+      },
+      "prefab": "../prefabs/collision_bunk.prefab.json"
     },
     {
       "id": "dormitory/bunk_7",
@@ -1263,7 +1385,8 @@
       },
       "modelRenderer": {
         "model": "bunk"
-      }
+      },
+      "prefab": "../prefabs/collision_bunk.prefab.json"
     },
     {
       "id": "dormitory/locker_1",
@@ -1283,7 +1406,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "dormitory/locker_2",
@@ -1303,7 +1427,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "dormitory/locker_3",
@@ -1323,7 +1448,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "dormitory/locker_4",
@@ -1343,7 +1469,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "dormitory/table_1",
@@ -1358,7 +1485,8 @@
       },
       "modelRenderer": {
         "model": "table"
-      }
+      },
+      "prefab": "../prefabs/collision_table.prefab.json"
     },
     {
       "id": "dormitory/bench_1",
@@ -1373,7 +1501,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "dormitory/bench_2",
@@ -1388,7 +1517,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "dormitory/door_leaf_1",
@@ -1398,12 +1528,10 @@
         "position": [
           7.1,
           0.0,
-          2.29
+          2.54
         ]
       },
-      "modelRenderer": {
-        "model": "door_leaf"
-      }
+      "prefab": "../prefabs/sliding_door.prefab.json"
     },
     {
       "id": "dormitory/vent_1",
@@ -1442,6 +1570,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "dormitory",
+            "intensity": 10.0
           }
         }
       }
@@ -1463,6 +1595,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "dormitory",
+            "intensity": 10.0
           }
         }
       }
@@ -1485,7 +1621,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_2",
@@ -1505,7 +1642,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_3",
@@ -1525,7 +1663,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_4",
@@ -1545,7 +1684,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_5",
@@ -1565,7 +1705,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_6",
@@ -1585,7 +1726,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_7",
@@ -1605,7 +1747,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_8",
@@ -1625,7 +1768,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_9",
@@ -1645,7 +1789,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_10",
@@ -1665,7 +1810,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_11",
@@ -1685,7 +1831,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_12",
@@ -1705,7 +1852,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_13",
@@ -1725,7 +1873,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_14",
@@ -1745,7 +1894,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_15",
@@ -1765,7 +1915,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_16",
@@ -1785,7 +1936,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_17",
@@ -1805,7 +1957,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_18",
@@ -1825,7 +1978,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_19",
@@ -1845,7 +1999,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/locker_20",
@@ -1865,7 +2020,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "locker_room/bench_1",
@@ -1880,7 +2036,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "locker_room/bench_2",
@@ -1895,7 +2052,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "locker_room/door_leaf_1",
@@ -1905,12 +2063,10 @@
         "position": [
           15.1,
           0.0,
-          2.29
+          2.54
         ]
       },
-      "modelRenderer": {
-        "model": "door_leaf"
-      }
+      "prefab": "../prefabs/sliding_door.prefab.json"
     },
     {
       "id": "locker_room/lamp_1",
@@ -1929,6 +2085,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "locker_room",
+            "intensity": 10.0
           }
         }
       }
@@ -1946,7 +2106,8 @@
       },
       "modelRenderer": {
         "model": "table"
-      }
+      },
+      "prefab": "../prefabs/collision_table.prefab.json"
     },
     {
       "id": "common_area/bench_1",
@@ -1961,7 +2122,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/bench_2",
@@ -1976,7 +2138,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/table_2",
@@ -1991,7 +2154,8 @@
       },
       "modelRenderer": {
         "model": "table"
-      }
+      },
+      "prefab": "../prefabs/collision_table.prefab.json"
     },
     {
       "id": "common_area/bench_3",
@@ -2006,7 +2170,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/bench_4",
@@ -2021,7 +2186,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/table_3",
@@ -2036,7 +2202,8 @@
       },
       "modelRenderer": {
         "model": "table"
-      }
+      },
+      "prefab": "../prefabs/collision_table.prefab.json"
     },
     {
       "id": "common_area/bench_5",
@@ -2051,7 +2218,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/bench_6",
@@ -2066,7 +2234,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/table_4",
@@ -2081,7 +2250,8 @@
       },
       "modelRenderer": {
         "model": "table"
-      }
+      },
+      "prefab": "../prefabs/collision_table.prefab.json"
     },
     {
       "id": "common_area/bench_7",
@@ -2096,7 +2266,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/bench_8",
@@ -2111,7 +2282,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/table_5",
@@ -2126,7 +2298,8 @@
       },
       "modelRenderer": {
         "model": "table"
-      }
+      },
+      "prefab": "../prefabs/collision_table.prefab.json"
     },
     {
       "id": "common_area/bench_9",
@@ -2141,7 +2314,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/bench_10",
@@ -2156,7 +2330,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/table_6",
@@ -2171,7 +2346,8 @@
       },
       "modelRenderer": {
         "model": "table"
-      }
+      },
+      "prefab": "../prefabs/collision_table.prefab.json"
     },
     {
       "id": "common_area/bench_11",
@@ -2186,7 +2362,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/bench_12",
@@ -2201,7 +2378,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "common_area/shelf_1",
@@ -2216,7 +2394,8 @@
       },
       "modelRenderer": {
         "model": "shelf"
-      }
+      },
+      "prefab": "../prefabs/collision_shelf.prefab.json"
     },
     {
       "id": "common_area/shelf_2",
@@ -2231,7 +2410,8 @@
       },
       "modelRenderer": {
         "model": "shelf"
-      }
+      },
+      "prefab": "../prefabs/collision_shelf.prefab.json"
     },
     {
       "id": "common_area/shelf_3",
@@ -2246,7 +2426,8 @@
       },
       "modelRenderer": {
         "model": "shelf"
-      }
+      },
+      "prefab": "../prefabs/collision_shelf.prefab.json"
     },
     {
       "id": "common_area/shelf_4",
@@ -2261,7 +2442,8 @@
       },
       "modelRenderer": {
         "model": "shelf"
-      }
+      },
+      "prefab": "../prefabs/collision_shelf.prefab.json"
     },
     {
       "id": "common_area/crate_1",
@@ -2276,7 +2458,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "common_area/crate_2",
@@ -2291,7 +2474,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "common_area/terminal_1",
@@ -2311,7 +2495,8 @@
       },
       "modelRenderer": {
         "model": "terminal"
-      }
+      },
+      "prefab": "../prefabs/collision_terminal.prefab.json"
     },
     {
       "id": "common_area/vent_1",
@@ -2350,6 +2535,10 @@
           "pointLight": {
             "intensity": 12.0,
             "range": 7.0
+          },
+          "emergencyLight": {
+            "room": "common_area",
+            "intensity": 12.0
           }
         }
       }
@@ -2371,6 +2560,10 @@
           "pointLight": {
             "intensity": 12.0,
             "range": 7.0
+          },
+          "emergencyLight": {
+            "room": "common_area",
+            "intensity": 12.0
           }
         }
       }
@@ -2392,6 +2585,10 @@
           "pointLight": {
             "intensity": 12.0,
             "range": 7.0
+          },
+          "emergencyLight": {
+            "room": "common_area",
+            "intensity": 12.0
           }
         }
       }
@@ -2413,6 +2610,10 @@
           "pointLight": {
             "intensity": 12.0,
             "range": 7.0
+          },
+          "emergencyLight": {
+            "room": "common_area",
+            "intensity": 12.0
           }
         }
       }
@@ -2434,6 +2635,10 @@
           "pointLight": {
             "intensity": 12.0,
             "range": 7.0
+          },
+          "emergencyLight": {
+            "room": "common_area",
+            "intensity": 12.0
           }
         }
       }
@@ -2455,6 +2660,10 @@
           "pointLight": {
             "intensity": 12.0,
             "range": 7.0
+          },
+          "emergencyLight": {
+            "room": "common_area",
+            "intensity": 12.0
           }
         }
       }
@@ -2472,7 +2681,21 @@
       },
       "modelRenderer": {
         "model": "generator"
-      }
+      },
+      "powerSwitch": {},
+      "interactable": {
+        "min": [
+          -1.2,
+          0.08,
+          -0.8
+        ],
+        "max": [
+          1.2,
+          1.6,
+          0.8
+        ]
+      },
+      "prefab": "../prefabs/collision_generator.prefab.json"
     },
     {
       "id": "generator_room/generator_2",
@@ -2487,7 +2710,21 @@
       },
       "modelRenderer": {
         "model": "generator"
-      }
+      },
+      "powerSwitch": {},
+      "interactable": {
+        "min": [
+          -1.2,
+          0.08,
+          -0.8
+        ],
+        "max": [
+          1.2,
+          1.6,
+          0.8
+        ]
+      },
+      "prefab": "../prefabs/collision_generator.prefab.json"
     },
     {
       "id": "generator_room/electrical_panel_1",
@@ -2507,7 +2744,23 @@
       },
       "modelRenderer": {
         "model": "electrical_panel"
-      }
+      },
+      "electricalPanel": {
+        "room": "generator_room"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0.0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
     },
     {
       "id": "generator_room/electrical_panel_2",
@@ -2527,7 +2780,23 @@
       },
       "modelRenderer": {
         "model": "electrical_panel"
-      }
+      },
+      "electricalPanel": {
+        "room": "generator_room"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0.0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
     },
     {
       "id": "generator_room/electrical_panel_3",
@@ -2547,7 +2816,23 @@
       },
       "modelRenderer": {
         "model": "electrical_panel"
-      }
+      },
+      "electricalPanel": {
+        "room": "generator_room"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0.0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
     },
     {
       "id": "generator_room/terminal_1",
@@ -2567,7 +2852,8 @@
       },
       "modelRenderer": {
         "model": "terminal"
-      }
+      },
+      "prefab": "../prefabs/collision_terminal.prefab.json"
     },
     {
       "id": "generator_room/crate_1",
@@ -2582,7 +2868,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "generator_room/door_leaf_1",
@@ -2592,12 +2879,10 @@
         "position": [
           51.1,
           0.0,
-          2.29
+          2.54
         ]
       },
-      "modelRenderer": {
-        "model": "door_leaf"
-      }
+      "prefab": "../prefabs/sliding_door.prefab.json"
     },
     {
       "id": "generator_room/vent_1",
@@ -2636,6 +2921,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "generator_room",
+            "intensity": 10.0
           }
         }
       }
@@ -2657,6 +2946,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "generator_room",
+            "intensity": 10.0
           }
         }
       }
@@ -2698,6 +2991,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "weapon_dealer",
+            "intensity": 10.0
           }
         }
       }
@@ -2719,6 +3016,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "weapon_dealer",
+            "intensity": 10.0
           }
         }
       }
@@ -2760,6 +3061,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "medic",
+            "intensity": 10.0
           }
         }
       }
@@ -2781,6 +3086,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "medic",
+            "intensity": 10.0
           }
         }
       }
@@ -2822,6 +3131,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "resource_trader",
+            "intensity": 10.0
           }
         }
       }
@@ -2843,6 +3156,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "resource_trader",
+            "intensity": 10.0
           }
         }
       }
@@ -2884,6 +3201,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "technician",
+            "intensity": 10.0
           }
         }
       }
@@ -2905,6 +3226,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "technician",
+            "intensity": 10.0
           }
         }
       }
@@ -2946,6 +3271,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "scout",
+            "intensity": 10.0
           }
         }
       }
@@ -2967,6 +3296,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "scout",
+            "intensity": 10.0
           }
         }
       }
@@ -2984,7 +3317,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "weapon_dealer/crate_2",
@@ -2999,7 +3333,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "weapon_dealer/locker_1",
@@ -3019,7 +3354,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "weapon_dealer/locker_2",
@@ -3039,7 +3375,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "medic/bunk_1",
@@ -3059,7 +3396,8 @@
       },
       "modelRenderer": {
         "model": "bunk"
-      }
+      },
+      "prefab": "../prefabs/collision_bunk.prefab.json"
     },
     {
       "id": "medic/shelf_1",
@@ -3079,7 +3417,8 @@
       },
       "modelRenderer": {
         "model": "shelf"
-      }
+      },
+      "prefab": "../prefabs/collision_shelf.prefab.json"
     },
     {
       "id": "resource_trader/crate_1",
@@ -3094,7 +3433,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "resource_trader/crate_2",
@@ -3109,7 +3449,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "resource_trader/crate_3",
@@ -3124,7 +3465,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "resource_trader/crate_4",
@@ -3139,7 +3481,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "technician/terminal_1",
@@ -3159,7 +3502,8 @@
       },
       "modelRenderer": {
         "model": "terminal"
-      }
+      },
+      "prefab": "../prefabs/collision_terminal.prefab.json"
     },
     {
       "id": "technician/electrical_panel_1",
@@ -3179,7 +3523,23 @@
       },
       "modelRenderer": {
         "model": "electrical_panel"
-      }
+      },
+      "electricalPanel": {
+        "room": "technician"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0.0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
     },
     {
       "id": "technician/table_1",
@@ -3199,7 +3559,8 @@
       },
       "modelRenderer": {
         "model": "table"
-      }
+      },
+      "prefab": "../prefabs/collision_table.prefab.json"
     },
     {
       "id": "scout/table_1",
@@ -3214,7 +3575,8 @@
       },
       "modelRenderer": {
         "model": "table"
-      }
+      },
+      "prefab": "../prefabs/collision_table.prefab.json"
     },
     {
       "id": "scout/terminal_1",
@@ -3234,7 +3596,8 @@
       },
       "modelRenderer": {
         "model": "terminal"
-      }
+      },
+      "prefab": "../prefabs/collision_terminal.prefab.json"
     },
     {
       "id": "airlock/locker_1",
@@ -3254,7 +3617,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "airlock/locker_2",
@@ -3274,7 +3638,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "airlock/locker_3",
@@ -3294,7 +3659,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "airlock/locker_4",
@@ -3314,7 +3680,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "airlock/locker_5",
@@ -3334,7 +3701,8 @@
       },
       "modelRenderer": {
         "model": "locker"
-      }
+      },
+      "prefab": "../prefabs/collision_locker.prefab.json"
     },
     {
       "id": "airlock/bench_1",
@@ -3349,7 +3717,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "airlock/bench_2",
@@ -3364,7 +3733,8 @@
       },
       "modelRenderer": {
         "model": "bench"
-      }
+      },
+      "prefab": "../prefabs/collision_bench.prefab.json"
     },
     {
       "id": "airlock/crate_1",
@@ -3379,7 +3749,8 @@
       },
       "modelRenderer": {
         "model": "crate"
-      }
+      },
+      "prefab": "../prefabs/collision_crate.prefab.json"
     },
     {
       "id": "airlock/emergency_light_1",
@@ -3422,7 +3793,7 @@
       "parent": "airlock",
       "transform": {
         "position": [
-          0.29,
+          0.54,
           0.0,
           1.1
         ],
@@ -3432,9 +3803,7 @@
           0.0
         ]
       },
-      "modelRenderer": {
-        "model": "door_leaf"
-      }
+      "prefab": "../prefabs/sliding_door.prefab.json"
     },
     {
       "id": "airlock/lamp_1",
@@ -3453,6 +3822,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "airlock",
+            "intensity": 10.0
           }
         }
       }
@@ -3474,6 +3847,10 @@
           "pointLight": {
             "intensity": 10.0,
             "range": 6.0
+          },
+          "emergencyLight": {
+            "room": "airlock",
+            "intensity": 10.0
           }
         }
       }
@@ -3495,6 +3872,10 @@
           "pointLight": {
             "intensity": 6.0,
             "range": 4.5
+          },
+          "emergencyLight": {
+            "room": "exit_passage",
+            "intensity": 6.0
           }
         }
       }
@@ -3548,6 +3929,708 @@
         "density": 0.012,
         "startDistance": 6.0,
         "maxOpacity": 0.4
+      }
+    },
+    {
+      "id": "corridor/emergency_light_1/source",
+      "parent": "corridor/emergency_light_1",
+      "transform": {
+        "position": [
+          0,
+          3,
+          0.15
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 4
+      },
+      "emergencyLight": {
+        "room": "corridor",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "corridor/emergency_light_2/source",
+      "parent": "corridor/emergency_light_2",
+      "transform": {
+        "position": [
+          0,
+          3,
+          0.15
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 4
+      },
+      "emergencyLight": {
+        "room": "corridor",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "corridor/emergency_light_3/source",
+      "parent": "corridor/emergency_light_3",
+      "transform": {
+        "position": [
+          0,
+          3,
+          0.15
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 4
+      },
+      "emergencyLight": {
+        "room": "corridor",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "airlock/emergency_light_1/source",
+      "parent": "airlock/emergency_light_1",
+      "transform": {
+        "position": [
+          0,
+          3,
+          0.15
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 4
+      },
+      "emergencyLight": {
+        "room": "airlock",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "corridor/power_panel",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          0.0,
+          0,
+          -1.7
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "corridor"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "corridor/backup_light",
+      "parent": "corridor",
+      "transform": {
+        "position": [
+          0.0,
+          3,
+          -1.4
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "corridor",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "dormitory/power_panel",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          4,
+          0,
+          2.55
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "dormitory"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "dormitory/backup_light",
+      "parent": "dormitory",
+      "transform": {
+        "position": [
+          4,
+          3,
+          2.8499999999999996
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "dormitory",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "locker_room/power_panel",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          12.0,
+          0,
+          2.3
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "locker_room"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "locker_room/backup_light",
+      "parent": "locker_room",
+      "transform": {
+        "position": [
+          12.0,
+          3,
+          2.5999999999999996
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "locker_room",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "common_area/power_panel",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          20.0,
+          0,
+          2.3
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "common_area"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "common_area/backup_light",
+      "parent": "common_area",
+      "transform": {
+        "position": [
+          20.0,
+          3,
+          2.5999999999999996
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "common_area",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "generator_room/power_panel",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          44.0,
+          0,
+          2.3
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "generator_room"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "generator_room/backup_light",
+      "parent": "generator_room",
+      "transform": {
+        "position": [
+          44.0,
+          3,
+          2.5999999999999996
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "generator_room",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "weapon_dealer/power_panel",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          0.0,
+          0,
+          -9.7
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "weapon_dealer"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "weapon_dealer/backup_light",
+      "parent": "weapon_dealer",
+      "transform": {
+        "position": [
+          0.0,
+          3,
+          -9.399999999999999
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "weapon_dealer",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "medic/power_panel",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          12.0,
+          0,
+          -9.7
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "medic"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "medic/backup_light",
+      "parent": "medic",
+      "transform": {
+        "position": [
+          12.0,
+          3,
+          -9.399999999999999
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "medic",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "resource_trader/power_panel",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          24.0,
+          0,
+          -9.7
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "resource_trader"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "resource_trader/backup_light",
+      "parent": "resource_trader",
+      "transform": {
+        "position": [
+          24.0,
+          3,
+          -9.399999999999999
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "resource_trader",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "technician/power_panel",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          36.0,
+          0,
+          -9.7
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "technician"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "technician/backup_light",
+      "parent": "technician",
+      "transform": {
+        "position": [
+          36.0,
+          3,
+          -9.399999999999999
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "technician",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "scout/power_panel",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          48.0,
+          0,
+          -9.7
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "scout"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "scout/backup_light",
+      "parent": "scout",
+      "transform": {
+        "position": [
+          48.0,
+          3,
+          -9.399999999999999
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "scout",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "airlock/power_panel",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -8.0,
+          0,
+          -5.7
+        ]
+      },
+      "modelRenderer": {
+        "model": "electrical_panel"
+      },
+      "electricalPanel": {
+        "room": "airlock"
+      },
+      "interactable": {
+        "min": [
+          -0.35,
+          0.9,
+          0
+        ],
+        "max": [
+          0.35,
+          1.9,
+          0.22
+        ]
+      },
+      "prefab": "../prefabs/collision_electrical_panel.prefab.json"
+    },
+    {
+      "id": "airlock/backup_light",
+      "parent": "airlock",
+      "transform": {
+        "position": [
+          -8.0,
+          3,
+          -5.4
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.18,
+          0.04
+        ],
+        "range": 5
+      },
+      "emergencyLight": {
+        "room": "airlock",
+        "intensity": 3,
+        "emergency": true
+      }
+    },
+    {
+      "id": "game_spawn",
+      "parent": "dormitory",
+      "playerSpawn": {
+        "feet": [
+          6,
+          0,
+          4
+        ],
+        "yaw": 0
       }
     }
   ]

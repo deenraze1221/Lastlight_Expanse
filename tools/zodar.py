@@ -299,7 +299,11 @@ def cmd_report(args):
 # --- asset registry (ZodarAssetTool) --------------------------------------------------------
 
 def cmd_assets(args):
-    exe = executable(args, "assets")
+    asset_root = ROOT / "game" / "assets"
+    paths = [Path(value).resolve() for value in args.rest + args.extra if not value.startswith("-")]
+    paths.append(Path.cwd().resolve())
+    game_assets = any(path == asset_root or asset_root in path.parents for path in paths)
+    exe = executable(args, "LastlightAssetTool" if game_assets else "assets")
     action = ["import"] if args.command == "import" else [args.action]
     return subprocess.run([str(exe)] + action + args.rest + args.extra).returncode
 

@@ -1,5 +1,57 @@
 # Progress
 
+## D7 — Bunker gameplay (2026-11-03)
+
+- Base: latest main `98be77503cdb97c7f7c179e85524e497f1d554fc`. Dedicated branch:
+  `feat/d7-bunker-gameplay`. No merge and no D8 work.
+- Added game-only registered Collider, Door, PowerSwitch, ElectricalPanel, EmergencyLight,
+  Interactable and PlayerSpawn components. Imported solids now carry generated prefab
+  colliders; architecture retains voxel queries through CollisionWorld. Legacy model/table
+  collision remains an export fallback. Added LastlightAssetTool registration frontend while
+  sharing the generic asset CLI implementation; engine code contains no game component types.
+- Default dormitory player supports fixed-action walking, sprint, jump edges, crouch with
+  standing clearance, gravity, stairs and collision. The existing controller implementation
+  and public name are retained. `--free-cam` preserves flying; `--explore` preserves the
+  entrance spawn and existing regression routes.
+- E selects the nearest in-range, unoccluded interaction. Typed stable-ID events drive panel
+  repair, generator toggles and door requests. A persistent named fixed-tick timer advances
+  sliding leaves; full swept-volume player obstruction stops/reopens them. Fixed the old
+  door placement embedded inside the thicker voxel wall.
+- Room main power requires a running generator and repaired room panel; emergency lighting
+  is its inverse. Point-light intensity and derived emissive material overrides stay in sync
+  without mutating shared model materials. No construction, networking, inventory or NPC work.
+- D6 snapshots persist player/controller, ECS door/panel/power state, pending interactions and
+  named timers. F5/F9 use the selected quick slot; interactive sessions default to
+  `saves/bunker.save.json`, 300-second fixed-clock autosave and normal-exit save. Headless exit
+  saves remain explicit. Quick-slot actions are ignored during input recording/playback;
+  validated replay continuation uses `--load-save` rather than external slot history.
+- A moving-door continuation initially exposed a staging fingerprint mismatch: D6 hierarchy
+  capture changes entity indices. Fixed fingerprints to sort stable scene IDs and canonicalized
+  initial/reloaded scene order, preserving light/draw ordering after restoration. Added a
+  hierarchy-order regression. Compatibility hashes are cached until scene reload; static
+  collision is cached while moving leaf boxes follow current transforms.
+- Focused D7: 6 cases / 34 assertions passed. Full warnings-as-errors gate passed Debug
+  **43/43** (298.13 s) and Release **43/43** (67.75 s), with no compiler warnings. Each suite
+  runs 322 engine cases (2 existing optional timing skips), 77 GPU cases (1 existing optional
+  timing skip), and 21 game cases / 422 assertions. No CTest target was disabled or skipped.
+- Both explicit Highlands golden checks match unchanged main on this machine:
+  `5ddd23b4cf86dfd551dfad44e349fcefb2594f31a2c37b72f6d9c00f68045776`.
+  All 25 run reports per build have zero Vulkan warnings/errors. Strict registry validation:
+  50 assets, no warnings/errors; generated assets match their generator.
+- Added the 837-tick `game/tests/bunker_walk.inputrec.jsonl`: dormitory panel, corridor panel,
+  generator, door close/reopen, airlock. `gpu.lastlight_bunker_walk` checks the saved endpoint,
+  room power/emergency state, and exact state/pixel equality after restoring a moving door.
+  Existing moving input replay, save/replay, exploration, walkthrough and voxel golden tests
+  remain green. Pre-fix failing continuation evidence was retained outside the checkout.
+- Contracts and controls: `docs/guide/BUNKER_GAMEPLAY.md`; INPUT, SAVES, ARCHITECTURE and the
+  phase plan updated. Limits: same-build/platform float determinism; Linux GCC 14.2 and Mesa
+  lavapipe only. Physical keyboard/gamepad and hardware GPU testing were unavailable. No
+  hardware performance claim; full D6 exit snapshots still have a per-tick capture cost.
+- Next: review this D7 branch. Read this handoff, PHASE_D_PLAN D7, BUNKER_GAMEPLAY, INPUT,
+  GAMEPLAY and SAVES before changing it. First step: review the D7 diff and recorded test
+  evidence. Do not merge or begin D8 without a separate instruction.
+
+
 ## D6 correctness review (2026-11-03)
 
 Reviewed `d6/scene-extensions-transactional-saves` against latest main

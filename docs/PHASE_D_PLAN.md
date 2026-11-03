@@ -287,6 +287,11 @@ No D6 state restoration, serializers or save/load APIs are added.
   and payloads; unsupported pending closures fail capture. No D7 gameplay added.
 
 ### D7 — Playable bunker (game)
+
+Implementation: `docs/guide/BUNKER_GAMEPLAY.md`. Game components, authored prefab colliders,
+controller, action/event interactions, named door timer, room power and D6 persistence are
+integrated on `feat/d7-bunker-gameplay` from main `98be775`. Verification is recorded in
+PROGRESS.md. D8 is not started.
 - Read: `docs/guide/INPUT.md` and `GAMEPLAY.md` (drafted in D3–D6), `game/src`,
   `game/assets/levels/bunker.scene.json`.
 - Read also: GDD §4 (electricity), §10, §11.

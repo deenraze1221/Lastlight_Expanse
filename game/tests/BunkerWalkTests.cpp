@@ -95,7 +95,7 @@ TEST_CASE("bunker: walk from the entrance through every room and corridor") {
         {"corridor east end", 58.0f, 0.0f},
     };
     for (const Waypoint& w : route) {
-        CAPTURE(w.what);
+        CAPTURE(std::string(w.what));
         CHECK(walkTo(walker, level.world, w.x, w.z, minY));
         if (std::string(w.what) == "up the exit stairs") CHECK(walker.feet().y > 1.0f);
     }
