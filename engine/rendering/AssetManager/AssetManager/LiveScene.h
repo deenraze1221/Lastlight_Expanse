@@ -57,6 +57,9 @@ public:
     LiveScene& operator=(const LiveScene&) = delete;
 
     // (Re)loads the scene file now. Returns false (error() set, previous state kept) on failure.
+    // Save restoration using bindings already owned by this scene. All validation and
+    // instantiation must have completed in the supplied staging world.
+    void commitSave(World&& world, SceneDocument&& document, SceneInstance&& instance) noexcept;
     bool load() { return reload(); }
     bool reload();
     // While watching: checks the scene and prefab files every watchInterval and reloads after

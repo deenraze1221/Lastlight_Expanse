@@ -126,3 +126,9 @@ N+1 events, one checkpoint per tick, catch-up frames, frozen final replay frames
 counts. Existing empty-scheduler runtime tests and both-level record/replay pixel/state tests
 remain enabled. Before pushing, run `tools/gate.sh` (Debug/Release, warnings as errors, all CTest
 and Vulkan checks) with the established Highlands hash. D6/D7 remain separate phases.
+
+## Checkpoints and persistence
+
+See [SAVES.md](SAVES.md) for the completed-tick checkpoint contract, named persistent timers,
+event codecs, input/RNG restoration, and nonthrowing staged commits. Anonymous pending closures
+and nonempty unregistered event channels cannot be saved. D6 introduces no D7 gameplay systems.

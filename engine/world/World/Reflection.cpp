@@ -18,6 +18,7 @@ std::string_view fieldTypeName(FieldType type) {
         return "[4]";
     case FieldType::Quat:
         return "quat [x, y, z, w]";
+    case FieldType::EntityReference:
     case FieldType::String:
         return "string";
     }
@@ -55,6 +56,7 @@ std::string formatField(const FieldInfo& field, const void* component) {
         list(v, 4);
         break;
     }
+    case FieldType::EntityReference:
     case FieldType::String:
         out << '"' << field.get<std::string>(component) << '"';
         break;

@@ -4,6 +4,7 @@
 #include "Scene/Voxel/ChunkMesher.h"
 #include "Scene/Voxel/VoxelChunk.h"
 
+#include <map>
 #include <glm/glm.hpp>
 
 #include <array>
@@ -151,6 +152,10 @@ public:
     // True when every chunk in range has data and an up-to-date mesh.
     bool isSettled() const { return m_settled; }
 
+    // Persistent in-memory edits. Restore only into a fresh staging world before update().
+    using EditSnapshot = std::map<ChunkCoord, VoxelChunk>;
+    EditSnapshot captureEdits() const;
+    void restoreEdits(const EditSnapshot& edits);
     // Voxel access in world voxel coordinates. Unloaded chunks read as empty.
     Voxel getVoxel(const glm::ivec3& voxel) const;
     bool hasChunkData(ChunkCoord coord) const {

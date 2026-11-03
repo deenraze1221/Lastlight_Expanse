@@ -1,3 +1,4 @@
+#include <nlohmann/json.hpp>
 #include "Bunker/BunkerApp.h"
 #include "GameInput.h"
 
@@ -56,6 +57,55 @@ protected:
                                  m_explore?m_walker.velocity():glm::vec3(0),m_explore&&m_walker.grounded())+
                ":"+std::to_string(m_waypoint)+":"+std::to_string(m_captured);
     }
+    SaveGameDesc saveGameDesc() const override { auto settings=Application::saveGameDesc(); settings.scenePath=kLevel; settings.sceneDirectory=std::filesystem::absolute(m_assetDir/std::filesystem::path(kLevel).parent_path()); return settings; }
+    SaveGameData captureGameSave() const override {
+        if (!m_level) fail("cannot save before bunker is ready");
+        SaveGameData data;
+        data.world=captureScene(m_world,invertBindings(m_level->document(),m_level->bindings()));
+        data.game["bunker"]=nlohmann::json{{"position",{m_view.camera.position.x,m_view.camera.position.y,m_view.camera.position.z}},
+            {"yaw",m_yaw},{"pitch",m_pitch},{"walker",nlohmann::json::parse(m_walker.capture())},
+            {"waypoint",m_waypoint},{"captured",m_captured}}.dump();
+        return data;
+    }
+    std::unique_ptr<SaveCommit> prepareGameSave(const SaveGameData& data) override {
+        if (!m_level || data.game.size()!=1) fail("invalid bunker save handlers");
+        const auto j=nlohmann::json::parse(data.game.at("bunker"));
+        if (!j.is_object() || j.size()!=6 || !j.at("position").is_array() || j.at("position").size()!=3 ||
+            !j.at("captured").is_boolean() || !j.at("waypoint").is_number_unsigned()) fail("invalid bunker save");
+        glm::vec3 position;
+        for (int i=0;i<3;++i) {
+            const auto& v=j.at("position")[static_cast<size_t>(i)];
+            if (!v.is_number() || (!std::isfinite(v.get<float>()) || std::abs(v.get<float>())>1000000.0f)) fail("invalid saved camera");
+            position[i]=v.get<float>();
+        }
+        const float yaw=j.at("yaw").get<float>(), pitch=j.at("pitch").get<float>();
+        if (!std::isfinite(yaw) || !std::isfinite(pitch)) fail("invalid saved orientation");
+        auto walker=m_walker.stage(j.at("walker").dump());
+        const auto waypoint=j.at("waypoint").get<size_t>();
+        if (waypoint>m_route.size()) fail("invalid saved route cursor");
+        const bool captured=j.at("captured").get<bool>();
+        const auto state=playerFingerprint(m_explore?walker.feet():position,yaw,pitch,
+            m_explore?walker.velocity():glm::vec3(0),m_explore&&walker.grounded())+
+            ":"+std::to_string(waypoint)+":"+std::to_string(captured);
+        struct Stage { World world; SceneDocument document; SceneInstance instance; CollisionWorld collision; };
+        auto staged=std::make_shared<Stage>(); staged->document=data.world;
+        staged->instance=instantiateScene(data.world,staged->world,m_level->bindings());
+        if (m_explore) {
+            staged->collision.setVoxelWorld(m_voxels->world.get());
+            (void)buildLevelColliders(data.world,m_colliderTable,[&](const std::string& model)->std::optional<Aabb> {
+                const auto it=m_level->bindings().models.find(model);
+                if (it==m_level->bindings().models.end() || !it->second || it->second->bounds().isEmpty()) return std::nullopt;
+                return Aabb{it->second->bounds().min,it->second->bounds().max};
+            },staged->collision);
+        }
+        return makeSaveCommit([this,staged,position,yaw,pitch,walker,waypoint,captured]() noexcept {
+            m_level->commitSave(std::move(staged->world),std::move(staged->document),std::move(staged->instance));
+            m_view.camera.position=position; m_yaw=yaw; m_pitch=pitch; m_walker=walker;
+            m_waypoint=waypoint; m_captured=captured;
+            if (m_explore) m_collision=std::move(staged->collision);
+            m_colliderGeneration=m_level->generation();
+        },state);
+    }
     void onStart() override {
         input().setContext("explore", m_explore);
         gameplay().systems().add({"Bunker.Controls", GameplayPhase::FixedSimulation,
@@ -83,7 +133,7 @@ protected:
         const SceneDocument doc = loadSceneFile(level);
         m_warmModels = m_assets->loadSceneModelsAsync(doc, level, &m_registry);
         m_warmMaterials = m_assets->createSceneMaterialsAsync(doc, level);
-        if (Application::desc().deterministic || Application::desc().recordInput) {
+        if (Application::desc().deterministic || Application::desc().recordInput || Application::desc().loadSave || Application::desc().saveAtExit) {
             m_assets->waitAll(); // reproducible frames: the level is complete in frame 0
         }
         m_view.camera.projection.nearPlane = 0.05f;

@@ -1,3 +1,4 @@
+#include <cmath>
 #include "Runtime/Application.h"
 
 #include "Core/Error.h"
@@ -116,9 +117,11 @@ Application::~Application() {
 }
 
 std::string Application::simulationFingerprint() const {
-    std::string bytes=inputState();
-    bytes+="|rng:"+std::to_string(m_random.seed());
-    for(const auto& [name,value]:m_random.states()) bytes+="|"+std::to_string(name.size())+":"+name+":"+std::to_string(value);
+    return simulationFingerprint(inputState(),m_random);
+}
+std::string Application::simulationFingerprint(std::string bytes, const Random& random) {
+    bytes+="|rng:"+std::to_string(random.seed());
+    for(const auto& [name,value]:random.states()) bytes+="|"+std::to_string(name.size())+":"+name+":"+std::to_string(value);
     return inputHash(bytes);
 }
 
@@ -130,6 +133,8 @@ void Application::requestCapture(std::filesystem::path path) {
 int Application::run() {
     int exitCode = 0;
     try {
+        if (!std::isfinite(m_desc.autosaveInterval) || m_desc.autosaveInterval<0) fail("autosave requires a nonnegative interval and --save-at-exit");
+        m_starting=true;
         onStart();
         m_gameplay.systems().validate();
         if(m_desc.recordInput || m_playback) m_recording.header={m_desc.identifier,m_input.map().hash(),inputLevelHash(),m_desc.seed.value_or(0),m_timestep.fixedDt()};
@@ -140,7 +145,10 @@ int Application::run() {
                 for(const auto& [name,v]:t.actions) { (void)v; if(!m_input.snapshot().contains(name)) fail("unknown replay action"); }
             }
         }
+        if (m_desc.loadSave) loadCheckpoint(*m_desc.loadSave);
+        m_starting=false;
         loop();
+
     } catch (const std::exception& e) {
         ZODAR_LOG_ERROR("Fatal: {}", e.what());
         exitCode = 1;
@@ -154,6 +162,15 @@ int Application::run() {
     }
     if (exitCode == 0) exitCode = verifyOutputs();
     if (m_desc.reportPath && !writeReport(exitCode) && exitCode == 0) exitCode = 1;
+    if (exitCode == 0 && m_desc.saveAtExit) {
+        try {
+            if (!m_exitSave) fail("no completed fixed tick available for save");
+            writeCheckpointFile(*m_desc.saveAtExit,*m_exitSave);
+        } catch (const std::exception& e) {
+            ZODAR_LOG_ERROR("Save failed: {}",e.what()); exitCode=1;
+            if (m_desc.reportPath) (void)writeReport(exitCode);
+        }
+    }
     // Preserve the previous recording if simulation, shutdown, capture validation or
     // reporting failed. Atomic replacement is the final successful-run operation.
     if (exitCode == 0 && m_desc.recordInput) {
@@ -254,6 +271,7 @@ void Application::loop() {
     const auto start = Clock::now();
     auto last = start;
     FrameTime time;
+    time.time=static_cast<double>(m_gameplay.completedTicks())*m_timestep.fixedDt();
     if (m_desc.screenshot) createParentDirectory(*m_desc.screenshot);
     if (!m_desc.captureFrames.empty()) createParentDirectory(m_desc.captureDir / "frame");
 
@@ -292,6 +310,7 @@ void Application::loop() {
         const bool replayComplete = m_playback && m_inputTick >= m_desc.maxFrames;
         time.dt = replayComplete ? 0.0 : m_desc.deterministic ? m_timestep.fixedDt()
                                        : std::min(time.realDt, static_cast<double>(m_desc.maxFrameDt));
+        m_restored=false;
         time.fixedSteps = m_timestep.advance(time.dt);
         for (uint32_t i = 0; i < time.fixedSteps; ++i) {
             ZODAR_CPU_SCOPE(m_cpuProfiler, "Fixed update");
@@ -303,7 +322,18 @@ void Application::loop() {
             m_input.beginStep();
             m_gameplay.step(m_timestep.fixedDt(), [this] { onFixedUpdate(m_timestep.fixedDt()); }, &m_cpuProfiler);
             ++m_inputTick;
-            onCheckpoint(m_gameplay.completedTicks());
+            m_checkpoint=true;
+            try {
+                onCheckpoint(m_gameplay.completedTicks());
+                if (m_desc.saveAtExit) {
+                    // ponytail: full snapshot per tick; use dirty capture if large worlds make this costly.
+                    m_exitSave=captureCheckpoint();
+                    auto settings=saveGameDesc();
+                    if (autosaveDue(settings,m_inputTick-1,m_inputTick,m_timestep.fixedDt()))
+                        writeCheckpointFile(*m_desc.saveAtExit,*m_exitSave);
+                }
+            } catch (...) { m_checkpoint=false; throw; }
+            m_checkpoint=false;
             if (m_desc.inputMap) m_inputStateHash=simulationFingerprint();
             if(m_playback) {
                 const auto& expected=m_playback->ticks[m_inputTick - 1].state;
@@ -311,6 +341,11 @@ void Application::loop() {
             }
             if(m_desc.recordInput) m_recording.ticks.push_back({m_input.snapshot(),m_inputStateHash});
             if (m_desc.inputMap && !m_desc.headless) SDL_SetWindowRelativeMouseMode(m_window->native(), m_input.relativeMouse());
+            if (m_restored) {
+                time.fixedSteps=i+1;
+                time.time=static_cast<double>(m_inputTick-1)*m_timestep.fixedDt();
+                break;
+            }
         }
         // Retrying the final replay frame must preserve visual simulation time too.
         if (m_playback) time.time = static_cast<double>(m_inputTick ? m_inputTick - 1 : 0) * m_timestep.fixedDt();

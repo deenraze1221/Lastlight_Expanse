@@ -26,6 +26,7 @@ public:
     // Adds frameSeconds (negative treated as 0) and returns the number of fixed steps to run.
     uint32_t advance(double frameSeconds);
 
+    void restoreCheckpoint(uint64_t tick) noexcept { m_steps=tick; m_accumulator=0; m_dropped=0; }
     double fixedDt() const { return m_desc.fixedDt; }
     // Fraction of a step left in the accumulator, in [0, 1): interpolation weight.
     double alpha() const { return m_accumulator / m_desc.fixedDt; }

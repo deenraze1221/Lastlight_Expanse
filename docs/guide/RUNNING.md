@@ -190,3 +190,10 @@ unchanged. Run reports include `System/Highlands.Camera`, `System/Highlands.Terr
 CPU scopes retain calls on skipped render attempts. Focused CPU checks:
 `ZodarTests --test-case='gameplay:*'`; runtime ordering/multi-tick/skipped-frame checks remain
 in `gpu.input_runtime_regression`. APIs and checkpoint semantics: [GAMEPLAY.md](GAMEPLAY.md).
+
+## Save/load CLI
+
+`--load-save FILE` restores a completed checkpoint before simulation; `--save-at-exit FILE`
+selects the save/autosave slot. `--autosave-interval SECONDS` sets the fixed-clock interval
+(0 disables periodic saves; Lastlight default 300 seconds). During replay, `--frames N` remains
+an absolute final tick after loading. Detailed contracts and public APIs: [SAVES.md](SAVES.md).

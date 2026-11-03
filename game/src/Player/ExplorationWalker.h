@@ -3,6 +3,8 @@
 #include "Physics/CollisionWorld.h"
 
 #include <glm/glm.hpp>
+#include <string>
+#include <string_view>
 
 namespace lastlight {
 
@@ -32,6 +34,8 @@ struct WalkerSettings {
 
 class ExplorationWalker {
 public:
+    std::string capture() const;
+    ExplorationWalker stage(std::string_view text) const;
     ExplorationWalker() = default;
     explicit ExplorationWalker(const WalkerSettings& settings) : m_settings(settings) {}
 

@@ -22,6 +22,9 @@ constexpr std::string_view kHelp =
     "  --headless                 No visible window (SDL offscreen driver); needs --frames\n"
     "  --record-input FILE        Record fixed-tick actions (JSONL)\n"
     "  --replay-input FILE        Replay actions; deterministic, ends at recording length\n"
+    "  --load-save FILE          Restore a completed checkpoint before simulation\n"
+    "  --save-at-exit FILE       Save the last completed fixed tick on normal exit\n"
+    "  --autosave-interval S     Fixed-clock seconds between saves (requires --save-at-exit)\n"
     "  --replay-lenient            Allow input-map/level hash differences (state checks remain)\n"
     "  --input-map FILE           Override the application's JSON action bindings\n"
     "  --deterministic            Every frame advances exactly one fixed step\n"
@@ -91,6 +94,9 @@ std::vector<std::string> parseStandardOptions(std::span<const std::string> args,
         else if (arg == "--headless") desc.headless = true;
         else if (arg == "--record-input") desc.recordInput=std::filesystem::path(std::string(next()));
         else if (arg == "--replay-input") { desc.replayInput=std::filesystem::path(std::string(next())); desc.deterministic=true; }
+        else if (arg == "--load-save") desc.loadSave=std::filesystem::path(std::string(next()));
+        else if (arg == "--save-at-exit") desc.saveAtExit=std::filesystem::path(std::string(next()));
+        else if (arg == "--autosave-interval") desc.autosaveInterval=parseNumber<double>(arg,next());
         else if (arg == "--replay-lenient") desc.replayLenient=true;
         else if (arg == "--input-map") desc.inputMap=std::filesystem::path(std::string(next()));
         else if (arg == "--deterministic") desc.deterministic = true;

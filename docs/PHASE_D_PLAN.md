@@ -1,8 +1,8 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **D0 and D1–D4 are on main. D5 is implemented on `codex/d5-deterministic-gameplay`
-validated and awaiting review; D6–D8 remain pending.** Current main also includes V4–V6.
-Next implementation order: D5 → D6 → D7 → D8; V6 already landed ahead of the original order. Roadmap summary:
+Status: **D0 and D1–D5 are on main (`25c3994`). D6 is implemented, reviewed and validated on
+`d6/scene-extensions-transactional-saves`, awaiting review. D7–D8 remain pending.** Current main
+also includes V4–V6. No merge or D7 implementation is part of the D6 session. Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`. Area-by-area production after
 D8 (completion levels, checklist, tracks): `docs/WORLD_PRODUCTION_ROADMAP.md`.
@@ -278,6 +278,13 @@ No D6 state restoration, serializers or save/load APIs are added.
   autosave interval (deterministic ticks) and save on exit; GPU determinism: replay to tick N,
   save, load, continue = uninterrupted screenshot.
 - Acceptance: determinism case passes; a failed load leaves the running World unchanged.
+
+- **D6 implemented (2026-11-03)** on `d6/scene-extensions-transactional-saves` from
+  `25c3994`. Public API and contracts: `docs/guide/SAVES.md`. Full GCC 14 Debug/Release
+  CTest 42/42 each, warnings as errors; Highlands PNG identical to unchanged main on the
+  same lavapipe driver. Moving replay/save/load/continue matches state and pixels in bunker
+  and Highlands. Pending events use explicit codecs; persistent timers use named callbacks
+  and payloads; unsupported pending closures fail capture. No D7 gameplay added.
 
 ### D7 — Playable bunker (game)
 - Read: `docs/guide/INPUT.md` and `GAMEPLAY.md` (drafted in D3–D6), `game/src`,

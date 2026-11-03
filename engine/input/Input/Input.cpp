@@ -106,6 +106,53 @@ std::string InputMap::serialize() const {
     return root.dump();
 }
 std::string InputMap::hash() const { return inputHash(serialize()); }
+std::string Input::capture() const {
+    const auto actions = [](const ActionSnapshot& state) {
+        Json out = Json::object();
+        for (const auto& [name, v] : state) out[name] = {v.x,v.y,v.held,v.pressed,v.released};
+        return out;
+    };
+    return Json{{"map",m_map.hash()},{"enabled",m_enabled},{"controls",m_controls},
+        {"pending",actions(m_pending)},{"state",actions(m_state)},{"injected",actions(m_injected)},
+        {"relativeMouse",m_relativeMouse}}.dump();
+}
+Input Input::stage(std::string_view bytes) const {
+    const auto j = Json::parse(bytes);
+    if (!j.is_object() || j.size()!=7 || !j.at("enabled").is_object() || !j.at("controls").is_object() || j.at("map")!=m_map.hash()) fail("incompatible saved input map");
+    Input out = *this;
+    out.m_enabled.clear();
+    for (const auto& [name,v] : j.at("enabled").items()) {
+        if (!m_enabled.contains(name) || !v.is_boolean()) fail("invalid saved input context");
+        out.m_enabled[name] = v.get<bool>();
+    }
+    if (out.m_enabled.size()!=m_enabled.size()) fail("missing saved input context");
+    out.m_controls.clear();
+    for (const auto& [name,v] : j.at("controls").items()) {
+        if (!v.is_number() || !std::isfinite(v.get<float>())) fail("invalid saved input control");
+        out.m_controls[name]=v.get<float>();
+    }
+    const auto actions = [&](const Json& values, bool complete) {
+        if (!values.is_object()) fail("invalid saved actions");
+        ActionSnapshot result;
+        for (const auto& [name,v] : values.items()) {
+            if (!m_state.contains(name) || !v.is_array() || v.size()!=5 || !v[0].is_number() || !v[1].is_number() ||
+                !v[2].is_boolean() || !v[3].is_boolean() || !v[4].is_boolean() ||
+                !std::isfinite(v[0].get<float>()) || !std::isfinite(v[1].get<float>())) fail("invalid saved action");
+            result[name]={v[0].get<float>(),v[1].get<float>(),v[2].get<bool>(),v[3].get<bool>(),v[4].get<bool>()};
+        }
+        if (complete && result.size()!=m_state.size()) fail("incomplete saved actions");
+        return result;
+    };
+    out.m_pending=actions(j.at("pending"),true); out.m_state=actions(j.at("state"),true);
+    out.m_injected=actions(j.at("injected"),false);
+    if (!j.at("relativeMouse").is_boolean()) fail("invalid saved mouse mode");
+    out.m_relativeMouse=j.at("relativeMouse").get<bool>();
+    return out;
+}
+void Input::commit(Input&& s) noexcept {
+    m_enabled.swap(s.m_enabled); m_controls.swap(s.m_controls); m_pending.swap(s.m_pending);
+    m_state.swap(s.m_state); m_injected.swap(s.m_injected); m_relativeMouse=s.m_relativeMouse;
+}
 void Input::setMap(InputMap map) {
     m_map=std::move(map); m_enabled.clear(); m_controls.clear(); m_pending.clear(); m_state.clear(); m_injected.clear();
     for (const auto& c:m_map.contexts) { m_enabled[c.name]=true; for (const auto& [name,a]:c.actions) { (void)a; m_pending[name]={}; } }

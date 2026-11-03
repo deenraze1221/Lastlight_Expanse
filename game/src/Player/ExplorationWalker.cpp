@@ -86,3 +86,31 @@ void ExplorationWalker::step(const CollisionWorld& world, const WalkInput& input
 }
 
 } // namespace lastlight
+
+#include <nlohmann/json.hpp>
+namespace lastlight {
+std::string ExplorationWalker::capture() const {
+    return nlohmann::json{{"spawn",{m_spawn.x,m_spawn.y,m_spawn.z}}, {"feet",{m_feet.x,m_feet.y,m_feet.z}},
+        {"velocity",{m_velocity.x,m_velocity.y,m_velocity.z}}, {"eyeLag",m_eyeLag},{"grounded",m_grounded}}.dump();
+}
+ExplorationWalker ExplorationWalker::stage(std::string_view text) const {
+    const auto j=nlohmann::json::parse(text);
+    if (!j.is_object() || j.size()!=5) throw std::invalid_argument("invalid saved walker");
+    auto out=*this;
+    const auto vec=[&](const char* name) {
+        const auto& v=j.at(name);
+        if (!v.is_array() || v.size()!=3) throw std::invalid_argument("invalid walker vector");
+        glm::vec3 result;
+        for (size_t i=0;i<3;++i) {
+            if (!v[i].is_number() || (!std::isfinite(v[i].get<float>()) || std::abs(v[i].get<float>())>1000000.0f)) throw std::invalid_argument("invalid walker number");
+            result[static_cast<int>(i)]=v[i].get<float>();
+        }
+        return result;
+    };
+    out.m_spawn=vec("spawn"); out.m_feet=vec("feet"); out.m_velocity=vec("velocity");
+    if (!j.at("eyeLag").is_number() || !std::isfinite(j.at("eyeLag").get<float>()) || std::abs(j.at("eyeLag").get<float>())>1000000.0f || !j.at("grounded").is_boolean())
+        throw std::invalid_argument("invalid walker state");
+    out.m_eyeLag=j.at("eyeLag").get<float>(); out.m_grounded=j.at("grounded").get<bool>();
+    return out;
+}
+}

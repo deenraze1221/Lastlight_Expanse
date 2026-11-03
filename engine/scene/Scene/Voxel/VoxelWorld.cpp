@@ -852,3 +852,21 @@ VoxelWorldStats VoxelWorld::stats() const {
 }
 
 } // namespace zodar::voxel
+
+namespace zodar::voxel {
+VoxelWorld::EditSnapshot VoxelWorld::captureEdits() const {
+    EditSnapshot out;
+    for (const auto& [coord,chunk]:m_edits) out.emplace(coord,*chunk);
+    return out;
+}
+void VoxelWorld::restoreEdits(const EditSnapshot& edits) {
+    if (!m_chunks.empty() || !m_edits.empty()) throw std::invalid_argument("voxel edits require a fresh staging world");
+    decltype(m_edits) staged;
+    for (const auto& [coord,chunk]:edits) {
+        if (std::abs(static_cast<int64_t>(coord.x))>1000000 || std::abs(static_cast<int64_t>(coord.z))>1000000 ||
+            coord.y<m_settings.minChunkY || coord.y>m_settings.maxChunkY) throw std::invalid_argument("invalid saved chunk coordinate");
+        staged.emplace(coord,std::make_shared<VoxelChunk>(chunk));
+    }
+    m_edits.swap(staged);
+}
+}

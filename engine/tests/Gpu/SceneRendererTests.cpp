@@ -9,6 +9,7 @@
 #include <glm/gtc/packing.hpp>
 
 #include <vector>
+#include <array>
 
 using namespace zodar;
 using namespace zodar::gfx;
@@ -240,4 +241,34 @@ TEST_CASE("scene: target resize retires old targets safely and resolves to an ou
     CHECK(std::abs(int(centre[0]) - 137) <= 1); // linear 0.25
     CHECK(std::abs(int(centre[1]) - 188) <= 1); // linear 0.5
     CHECK(centre[2] == 255);                    // 2.0 clamped (no tone mapping yet)
+}
+
+TEST_CASE("scene: opaque ordering is independent of mesh allocation addresses") {
+    zodar::test::ValidationGuard guard;
+    Fixture f;
+    const auto material=f.unlit({1,1,1,1});
+    auto red=primitives::cube(1.0f),green=red;
+    for (auto& v:red.vertices) v.color={1,0,0,1};
+    for (auto& v:green.vertices) v.color={0,1,0,1};
+    std::array<GpuMesh,2> meshes;
+    glm::vec4 first{};
+    for (unsigned layout=0;layout<2;++layout) {
+        UploadBatch batch(*gpu().upload);
+        meshes[layout]=GpuMesh(batch,red);
+        meshes[1-layout]=GpuMesh(batch,green);
+        batch.submit();
+        // Identical geometry deliberately ties in depth. The semantic draw order stays
+        // red then green while the two meshes exchange allocation-address order.
+        const std::vector<MeshDraw> draws={{&meshes[layout],0,material,glm::mat4(1)},
+                                          {&meshes[1-layout],0,material,glm::mat4(1)}};
+        auto view=frontCamera(); view.draws=draws;
+        f.render(view);
+        const auto color=at(f.readColor(),32,32);
+        if (!layout) first=color;
+        else {
+            CHECK(color.r==first.r);
+            CHECK(color.g==first.g);
+            CHECK(color.b==first.b);
+        }
+    }
 }

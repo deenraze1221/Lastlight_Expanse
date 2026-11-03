@@ -9,8 +9,40 @@ Timers::Id Timers::after(uint64_t delay, std::function<void()> callback, uint64_
     if (!delay || !callback) fail("timer requires a positive tick delay and callback");
     if (!m_next || delay > std::numeric_limits<uint64_t>::max() - m_tick) fail("timer ID/deadline overflow");
     const auto id = m_next++;
-    m_entries.emplace(id, Entry{m_tick + delay, repeat, std::move(callback)});
+    m_entries.emplace(id, Entry{m_tick + delay, repeat, std::move(callback), {}, {}});
     return id;
+}
+void Timers::registerCallback(std::string name, std::function<void(std::string_view)> callback) {
+    if (name.empty() || !callback || m_callbacks.contains(name)) fail("invalid timer callback registration");
+    m_callbacks.emplace(std::move(name), std::move(callback));
+}
+Timers::Id Timers::afterNamed(uint64_t delay, std::string name, std::string payload, uint64_t repeat) {
+    const auto callback = m_callbacks.at(name);
+    const auto id = after(delay, [callback, payload] { callback(payload); }, repeat);
+    m_entries.at(id).name = std::move(name); m_entries.at(id).payload = std::move(payload);
+    return id;
+}
+Timers::Snapshot Timers::capture() const {
+    if (m_active) fail("timer snapshot during active tick");
+    Snapshot out{m_tick, m_next, {}};
+    for (const auto& [id, e] : m_entries) {
+        if (e.name.empty()) fail("pending anonymous timer cannot be saved");
+        out.entries.push_back({id, e.due, e.repeat, e.name, e.payload});
+    }
+    return out;
+}
+Timers Timers::stage(const Snapshot& s) const {
+    if (!s.next) fail("invalid next timer ID");
+    Timers out; out.m_callbacks = m_callbacks; out.m_tick = s.tick; out.m_next = s.next;
+    for (const auto& e : s.entries) {
+        if (!e.id || e.id >= s.next || e.due <= s.tick || out.m_entries.contains(e.id)) fail("invalid saved timer");
+        const auto callback = m_callbacks.at(e.name);
+        out.m_entries.emplace(e.id, Entry{e.due, e.repeat, [callback, payload=e.payload] { callback(payload); }, e.name, e.payload});
+    }
+    return out;
+}
+void Timers::commit(Timers&& staged) noexcept {
+    m_entries.swap(staged.m_entries); m_tick = staged.m_tick; m_next = staged.m_next;
 }
 void Timers::beginTick() {
     if (m_active) fail("recursive timer clock advancement");

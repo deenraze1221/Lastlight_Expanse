@@ -786,3 +786,45 @@ Camera/movement/edit logic now runs only through registered game systems. Highla
 Camera → Terrain → Interaction fixed systems; Bunker has fixed Controls and presentation-only
 CameraSync. Existing hooks remain valid for other apps; no systems preserves their behavior.
 Public contracts and limitations: `docs/guide/GAMEPLAY.md`.
+
+### D6: scene extensions and transactional checkpoints
+
+- Scene component registration reuses `FieldInfo` and the existing prefab field patcher;
+  custom JSON is stored canonically in SceneEntity. Registration precedes scene parsing.
+  `SceneId` and string-valued EntityReference fields persist identity independently of ECS
+  handles. Prefab expansion rebases references; capture avoids generated/authored ID collisions.
+- SaveGame (`zodar.save` v1) stages a new World. Application stages input, named RNG streams,
+  gameplay tick, both event batches, named timers, replay identity/cursor and game handlers
+  before a nonthrowing commit. Handler preparation must have no live-state side effects.
+  Timers/events require explicit persistent names/codecs; anonymous pending work is rejected.
+- Only successful completed fixed ticks are save checkpoints. Exit saves use a cached checkpoint
+  instead of sampling render/update state. Restoration discards old wall-clock interpolation
+  and catch-up work. Replay continuation uses the absolute saved tick and recording identity.
+- Atomic file replacement reuses Core/AtomicFile on POSIX and Windows. Backup candidates are
+  tried newest-first, with explicit recovery reporting. Backup-set rotation is not a multi-file
+  filesystem transaction; fsync durability and concurrent writers remain outside this contract.
+- Lastlight persists its existing bunker walker/camera and entity scene, or Highlands camera
+  and terrain edits. Collider replacement is staged; voxel edits restore only into a fresh
+  staging world. Autosave interval defaults to five minutes when a CLI save slot is selected.
+  Player controllers, doors, interaction, power and other D7 gameplay remain outside D6.
+
+
+### D6 review: failure boundaries
+
+Component registration also owns C++ type identity; a second JSON name cannot alias and
+silently overwrite a built-in or previously registered component. Save material definitions
+are snapshots; relative assets resolve against the runtime scene directory, not slot storage.
+Backup publication now stages all replacements/originals and rolls back ordinary failures;
+failed rollback retains original recovery files. A rejected primary does not evict the valid
+backup used for recovery, including application-level rejection of otherwise valid JSON.
+Replay validation precedes checkpoint publication. Load validation recomputes the candidate
+logical-state/RNG fingerprint supplied by the staged handler rather than trusting the saved hash. Loaded checkpoints seed the exit cache even
+when playback has no remaining tick, and Highlands stages its camera/GPU geometry before commit.
+A failed exit save rewrites the run report with the actual failure exit code. Crash durability,
+concurrent mutation and metadata-preserving filesystem transactions remain unsupported.
+
+Opaque CPU draw batches retain pipeline/material/mesh grouping, but group order is assigned by
+first appearance in the input scene rather than process-specific pointer addresses. This
+removes allocation-dependent winners for coplanar geometry during record/replay and restoration.
+Transparent back-to-front ordering is unchanged. A GPU regression exchanges two meshes'
+allocation-address order while keeping the same semantic draws and requires identical pixels.
