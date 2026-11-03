@@ -786,3 +786,24 @@ Camera/movement/edit logic now runs only through registered game systems. Highla
 Camera → Terrain → Interaction fixed systems; Bunker has fixed Controls and presentation-only
 CameraSync. Existing hooks remain valid for other apps; no systems preserves their behavior.
 Public contracts and limitations: `docs/guide/GAMEPLAY.md`.
+
+### D6: scene extensions and transactional checkpoints
+
+- Scene component registration reuses `FieldInfo` and the existing prefab field patcher;
+  custom JSON is stored canonically in SceneEntity. Registration precedes scene parsing.
+  `SceneId` and string-valued EntityReference fields persist identity independently of ECS
+  handles. Prefab expansion rebases references; capture avoids generated/authored ID collisions.
+- SaveGame (`zodar.save` v1) stages a new World. Application stages input, named RNG streams,
+  gameplay tick, both event batches, named timers, replay identity/cursor and game handlers
+  before a nonthrowing commit. Handler preparation must have no live-state side effects.
+  Timers/events require explicit persistent names/codecs; anonymous pending work is rejected.
+- Only successful completed fixed ticks are save checkpoints. Exit saves use a cached checkpoint
+  instead of sampling render/update state. Restoration discards old wall-clock interpolation
+  and catch-up work. Replay continuation uses the absolute saved tick and recording identity.
+- Atomic file replacement reuses Core/AtomicFile on POSIX and Windows. Backup candidates are
+  tried newest-first, with explicit recovery reporting. Backup-set rotation is not a multi-file
+  filesystem transaction; fsync durability and concurrent writers remain outside this contract.
+- Lastlight persists its existing bunker walker/camera and entity scene, or Highlands camera
+  and terrain edits. Collider replacement is staged; voxel edits restore only into a fresh
+  staging world. Autosave interval defaults to five minutes when a CLI save slot is selected.
+  Player controllers, doors, interaction, power and other D7 gameplay remain outside D6.

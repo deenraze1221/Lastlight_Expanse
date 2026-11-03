@@ -1,3 +1,4 @@
+#include <nlohmann/json.hpp>
 // Lastlight Expanse, built on the ZODAR engine. Levels:
 //   bunker    (default, Phase D2) the team bunker greybox from game/assets (Bunker/BunkerApp.cpp)
 //   highlands streamed voxel highlands at dusk (regression scene; this file)
@@ -106,6 +107,7 @@ ApplicationDesc defaultDesc() {
     desc.width = 1600;
     desc.height = 900;
     desc.seed = 1337;
+    desc.autosaveInterval = 300;
     return desc;
 }
 
@@ -126,6 +128,9 @@ protected:
     std::string inputState() const override {
         return lastlight::playerFingerprint(m_view.camera.position,m_yaw,m_pitch)+m_editState;
     }
+    SaveGameDesc saveGameDesc() const override { auto settings=Application::saveGameDesc(); settings.scenePath="procedural:highlands"; return settings; }
+    SaveGameData captureGameSave() const override;
+    std::unique_ptr<SaveCommit> prepareGameSave(const SaveGameData& data) override;
     void onStart() override;
     void updateCamera(double dt);
     void updateTerrain();
@@ -155,6 +160,62 @@ private:
     double m_statsElapsed = 0.0;
     uint64_t m_statsFrames = 0;
 };
+
+SaveGameData LastlightApp::captureGameSave() const {
+    SaveGameData data;
+    nlohmann::json edits=nlohmann::json::array();
+    for (const auto& [coord,chunk]:m_world->captureEdits()) {
+        std::vector<Voxel> values;
+        for (int y=0;y<kChunkSize;++y) for (int z=0;z<kChunkSize;++z) for (int x=0;x<kChunkSize;++x)
+            values.push_back(chunk.get(x,y,z));
+        edits.push_back({{"coord",{coord.x,coord.y,coord.z}},{"values",values}});
+    }
+    data.game["highlands"]=nlohmann::json{{"position",{m_view.camera.position.x,m_view.camera.position.y,m_view.camera.position.z}},
+        {"yaw",m_yaw},{"pitch",m_pitch},{"editState",m_editState},{"edits",edits}}.dump();
+    return data;
+}
+std::unique_ptr<SaveCommit> LastlightApp::prepareGameSave(const SaveGameData& data) {
+    if (data.game.size()!=1 || !data.world.entities.empty() || !data.world.materials.empty()) fail("invalid Highlands save");
+    const auto j=nlohmann::json::parse(data.game.at("highlands"));
+    if (!j.is_object() || j.size()!=5 || !j.at("position").is_array() || j.at("position").size()!=3 || !j.at("edits").is_array()) fail("invalid Highlands state");
+    glm::vec3 position;
+    for (int i=0;i<3;++i) {
+        const auto& v=j.at("position")[static_cast<size_t>(i)];
+        if (!v.is_number() || (!std::isfinite(v.get<float>()) || std::abs(v.get<float>())>1000000.0f)) fail("invalid saved camera");
+        position[i]=v.get<float>();
+    }
+    const float yaw=j.at("yaw").get<float>(),pitch=j.at("pitch").get<float>();
+    if (!std::isfinite(yaw) || !std::isfinite(pitch)) fail("invalid saved orientation");
+    auto editState=j.at("editState").get<std::string>();
+    VoxelWorld::EditSnapshot edits;
+    for (const auto& e:j.at("edits")) {
+        if (e.size()!=2 || !e.at("coord").is_array() || e.at("coord").size()!=3 ||
+            !e.at("values").is_array() || e.at("values").size()!=kChunkVolume) fail("invalid saved voxel edits");
+        ChunkCoord coord;
+        int32_t* fields[]={&coord.x,&coord.y,&coord.z};
+        for (size_t i=0;i<3;++i) {
+            const auto& v=e.at("coord")[i];
+            if (!v.is_number_integer() || v.get<int64_t>()<INT32_MIN || v.get<int64_t>()>INT32_MAX) fail("invalid chunk coordinate");
+            *fields[i]=v.get<int32_t>();
+        }
+        VoxelChunk chunk;
+        size_t i=0;
+        for (int y=0;y<kChunkSize;++y) for (int z=0;z<kChunkSize;++z) for (int x=0;x<kChunkSize;++x) {
+            const auto& v=e.at("values")[i++];
+            if (!v.is_number_unsigned() || v.get<uint64_t>()>=lastlight::Count) fail("invalid saved Highlands voxel");
+            chunk.set(x,y,z,v.get<Voxel>());
+        }
+        chunk.compact();
+        if (!edits.emplace(coord,std::move(chunk)).second) fail("duplicate saved chunk");
+    }
+    auto world=std::make_shared<std::unique_ptr<VoxelWorld>>(std::make_unique<VoxelWorld>(m_terrain,m_world->palette(),m_streaming,&jobs()));
+    (*world)->restoreEdits(edits);
+    do { (*world)->update(position); (*world)->finishPendingWork(); } while (!(*world)->isSettled());
+    auto meshes=std::make_shared<std::unique_ptr<StreamedMeshSet>>(std::make_unique<StreamedMeshSet>(renderer().context(),upload()));
+    return makeSaveCommit([this,world,meshes,position,yaw,pitch,editState=std::move(editState)]() mutable noexcept {
+        m_world.swap(*world); m_chunkMeshes.swap(*meshes); m_view.camera.position=position; m_yaw=yaw; m_pitch=pitch; m_editState.swap(editState);
+    });
+}
 
 void LastlightApp::onStart() {
     input().setContext("explore", false);

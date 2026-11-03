@@ -41,6 +41,7 @@
 #include "Renderer/RenderGraph/RenderGraph.h"
 #include "Renderer/SceneRenderer.h"
 #include "Runtime/FixedTimestep.h"
+#include "SceneFile/SaveGame.h"
 #include "Runtime/RunReport.h"
 
 #include <glm/vec3.hpp>
@@ -116,6 +117,8 @@ struct ApplicationDesc {
     std::optional<std::filesystem::path> inputMap;
     std::optional<std::filesystem::path> recordInput, replayInput;
     bool replayLenient = false;
+    std::optional<std::filesystem::path> loadSave, saveAtExit;
+    double autosaveInterval = 0;
 };
 
 // Per-frame timing passed to onUpdate.
@@ -143,6 +146,19 @@ struct RenderContext {
     const gfx::FrameContext& frame;
 };
 
+struct SaveCommit {
+    virtual ~SaveCommit() = default;
+    virtual void commit() noexcept = 0;
+};
+template<class F> std::unique_ptr<SaveCommit> makeSaveCommit(F fn) {
+    static_assert(std::is_nothrow_invocable_v<F&>, "save commit must not throw");
+    struct Commit final : SaveCommit {
+        F fn;
+        explicit Commit(F f) : fn(std::move(f)) {}
+        void commit() noexcept override { fn(); }
+    };
+    return std::make_unique<Commit>(std::move(fn));
+}
 class Application {
 public:
     explicit Application(ApplicationDesc desc);
@@ -154,6 +170,9 @@ public:
     // Runs onStart, the frame loop and onShutdown; returns the exit code (see top).
     int run();
     // Ends the loop after the current frame.
+    // Main thread, only from onCheckpoint. Loads also permitted during startup.
+    void saveCheckpoint(const std::filesystem::path& path);
+    void loadCheckpoint(const std::filesystem::path& path);
     void requestQuit() { m_quit = true; }
     // Saves the next rendered frame to `path` (.png or .ppm). Listed in the run report;
     // run() returns 3 if it is not written (failed, or the loop ended first).
@@ -184,12 +203,17 @@ protected:
     // App-owned identity and deterministic state; no renderer time or global state here.
     virtual std::string inputLevelHash() const { return {}; }
     virtual std::string inputState() const { return {}; }
+    virtual SaveGameDesc saveGameDesc() const;
+    virtual SaveGameData captureGameSave() const;
+    // Validate and allocate everything here. Returned commit must only perform noexcept
+    // swaps/assignments. No live state may change during preparation.
+    virtual std::unique_ptr<SaveCommit> prepareGameSave(const SaveGameData& data);
     virtual void onStart() {}
     // Every OS event not consumed by the overlay (Escape already requests quit).
     virtual void onEvent(const SDL_Event& event) { (void)event; }
     virtual void onFixedUpdate(double dt) { (void)dt; }
-    // Once after fixed systems/hook, timer callbacks and event publication. Observe only;
-    // completedTicks identifies the next input cursor for a future D6 checkpoint.
+    // Once after fixed systems/hook, timer callbacks and event publication. Save/load
+    // checkpoint APIs are legal here; completedTicks is the next input cursor.
     virtual void onCheckpoint(uint64_t completedTicks) { (void)completedTicks; }
     virtual void onUpdate(const FrameTime& time) { (void)time; }
     virtual void onRender(RenderContext& context) { (void)context; }
@@ -200,6 +224,7 @@ protected:
     virtual void onShutdown() {}
 
 private:
+    SaveGameData captureCheckpoint() const;
     void loop();
     void renderFrame(const FrameTime& time, bool lastFrame);
     int verifyOutputs() const;
@@ -230,6 +255,8 @@ private:
     FixedTimestep m_timestep;
     gfx::RenderStats m_renderStats;
     bool m_quit = false;
+    bool m_checkpoint = false, m_starting = false, m_restored = false;
+    std::optional<SaveGameData> m_exitSave;
     // Captures attempted (--screenshot, --capture-frames) and run-report samples.
     std::vector<RunReport::Capture> m_captures;
     std::vector<std::filesystem::path> m_pendingCaptures; // requestCapture(), next frame

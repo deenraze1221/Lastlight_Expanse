@@ -16,7 +16,7 @@ add_executable(LastlightExpanse
     src/Rendering/BlockTextures.cpp)
 target_include_directories(LastlightExpanse PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(LastlightExpanse PRIVATE LastlightGameCore Zodar::Runtime Zodar::Scene Zodar::AssetManager
-    Zodar::SceneFile Zodar::World Zodar::WorldRender SDL3::SDL3)
+    Zodar::SceneFile Zodar::World Zodar::WorldRender nlohmann_json::nlohmann_json SDL3::SDL3)
 # Default asset directory (--assets overrides): the bunker level, models, materials, registry.
 target_compile_definitions(LastlightExpanse PRIVATE LASTLIGHT_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
 zodar_set_warnings(LastlightExpanse)
@@ -95,4 +95,11 @@ if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS AND Python3_Interpreter_FOUND)
         COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/engine/tests/Runtime/ReplaySmoke.py
                 $<TARGET_FILE:LastlightExpanse> ${CMAKE_BINARY_DIR}/input_replay)
     set_tests_properties(gpu.lastlight_input_replay PROPERTIES TIMEOUT 300 ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
+endif()
+
+if(ZODAR_BUILD_TESTS AND ZODAR_GPU_TESTS AND Python3_Interpreter_FOUND)
+    add_test(NAME gpu.save_replay
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/engine/tests/Runtime/SaveReplaySmoke.py
+                $<TARGET_FILE:LastlightExpanse> ${CMAKE_BINARY_DIR}/save_replay)
+    set_tests_properties(gpu.save_replay PROPERTIES TIMEOUT 900 ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
 endif()

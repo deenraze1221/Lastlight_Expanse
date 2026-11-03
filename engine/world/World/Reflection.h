@@ -17,7 +17,7 @@
 // ComponentReflection<T> with `key` (JSON / console name), `description` and `fields()`.
 namespace zodar {
 
-enum class FieldType : uint32_t { Bool, Uint, Float, Vec3, Vec4, Quat, String };
+enum class FieldType : uint32_t { Bool, Uint, Float, Vec3, Vec4, Quat, String, EntityReference };
 
 // Field type -> C++ type: Bool bool, Uint uint32_t, Float float, Vec3 glm::vec3, Vec4 glm::vec4,
 // Quat glm::quat, String std::string.

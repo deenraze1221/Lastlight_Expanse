@@ -6,7 +6,8 @@ add_library(ZodarSceneFile STATIC
     SceneFile/DataError.cpp
     SceneFile/BlockFile.cpp
     SceneFile/MaterialFile.cpp
-    SceneFile/SceneFile.cpp)
+    SceneFile/SceneFile.cpp
+    SceneFile/SaveGame.cpp)
 add_library(Zodar::SceneFile ALIAS ZodarSceneFile)
 
 target_include_directories(ZodarSceneFile PUBLIC ${ZODAR_ENGINE_DIR}/rendering/SceneFile)

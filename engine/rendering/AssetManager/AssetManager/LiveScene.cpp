@@ -114,3 +114,9 @@ bool LiveScene::update() {
 }
 
 } // namespace zodar
+
+namespace zodar {
+void LiveScene::commitSave(World&& world, SceneDocument&& document, SceneInstance&& instance) noexcept {
+    m_world=std::move(world); m_document=std::move(document); m_instance=std::move(instance); ++m_generation;
+}
+}

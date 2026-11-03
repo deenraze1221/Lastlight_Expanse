@@ -43,6 +43,9 @@ struct InputMap {
 // Main-thread input. SDL translation is implemented separately; gameplay only reads actions.
 class Input {
 public:
+    std::string capture() const;
+    Input stage(std::string_view bytes) const;
+    void commit(Input&& staged) noexcept;
     void setMap(InputMap map);
     const InputMap& map() const { return m_map; }
     void setContext(std::string_view name, bool enabled);

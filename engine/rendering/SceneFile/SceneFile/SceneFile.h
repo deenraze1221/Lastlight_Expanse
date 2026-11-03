@@ -8,6 +8,10 @@
 #include "WorldRender/WorldRender.h"
 
 #include <cstdint>
+#include <functional>
+#include <map>
+#include <memory>
+#include "World/Reflection.h"
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -29,6 +33,25 @@
 // "<instance id>/<id>", prefab material ids "<prefab path>#<id>"; "overrides" patches fields of
 // prefab entities by id. The resulting document is flat (serializeScene writes no prefab refs).
 namespace zodar {
+
+// Register once before parsing or instantiation, on the main thread. Field tables and
+// their string views must have static lifetime, like ComponentReflection tables.
+struct SceneComponentRegistration {
+    std::string name;
+    std::vector<FieldInfo> fields;
+    std::function<std::shared_ptr<void>()> create;
+    std::function<void(World&, Entity, const void*)> add;
+    std::function<const void*(const World&, Entity)> get;
+};
+void registerSceneComponent(SceneComponentRegistration registration);
+template<class T>
+void registerSceneComponent(std::string name, std::span<const FieldInfo> fields) {
+    registerSceneComponent({std::move(name), {fields.begin(), fields.end()},
+        [] { return std::make_shared<T>(); },
+        [](World& w, Entity e, const void* value) { w.add<T>(e, *static_cast<const T*>(value)); },
+        [](const World& w, Entity e) -> const void* { return w.tryGet<T>(e); }});
+}
+struct SceneId { std::string value; }; // Stable authored ID; never a backend entity handle.
 
 // A material defined by the scene: inline, or loaded from `source` (path as written in the
 // file, relative to the scene file's directory). `data` is filled in both cases.
@@ -79,6 +102,7 @@ struct SceneEntity {
     std::optional<SpotLightComponent> spotLight;
     std::optional<EnvironmentComponent> environment;
     std::optional<FogComponent> fog;
+    std::map<std::string, std::string> components{}; // Registered components, canonical JSON.
 
     bool operator==(const SceneEntity&) const = default;
 };

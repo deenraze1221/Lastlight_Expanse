@@ -1,5 +1,57 @@
 # Progress
 
+## D6 handoff — Scene Extensions & Transactional Saves (2026-11-03)
+
+Branch: `d6/scene-extensions-transactional-saves`, based on main `25c3994`. Implemented,
+validated and prepared for review; no merge and no D7 gameplay work.
+
+- Custom scene registration reuses reflection/prefab validation and round-trip capture.
+  SceneId/string EntityReference fields preserve authored identity, including prefab prefixes.
+  The parser no longer caches component keys across registrations. Prefab expansion owns its
+  instance prefix while appending entities, and instantiation rolls back partially created
+  entities on exceptions. Uint ranges and custom quaternion validation remain strict.
+- SaveGame v1 stages world and game data. Runtime stages input/context/control/edge state,
+  RNG streams, completed tick, replay identity/cursor, both event batches and named timers
+  before nonthrowing commit. Catch-up/interpolation remainder is discarded after restoration.
+  Lastlight handlers preserve bunker scene, walker/camera/collision state or Highlands edits
+  and camera state. No doors, power, interaction or D7 player controller were introduced.
+- Atomic replacement reuses Core/AtomicFile; rotating backups default to 3, recovery is
+  reported. Fixed-clock autosave defaults to 300 seconds in Lastlight when --save-at-exit
+  selects a slot; --autosave-interval 0 disables periodic saves. Normal-exit writes use a
+  cached completed checkpoint, after successful shutdown/output checks.
+- Public APIs, CLI, persistence contracts and limits: `docs/guide/SAVES.md`, linked from
+  SCENE_FILES, GAMEPLAY and RUNNING; architecture decisions recorded in ARCHITECTURE.
+
+Validation (GCC 14.2, C++23, Debian 13, Mesa 25.0.7 lavapipe, validation layers 1.4.309):
+
+- Full Debug CTest: **42/42 passed** (316.20 seconds); full Release: **42/42 passed**
+  (139.76 seconds). ZODAR_GPU_TESTS and ZODAR_WARNINGS_AS_ERRORS ON in both trees; no compiler
+  warnings. Engine unit: 316 passed, 2 existing optional skips; GPU: 76 passed, 1 existing
+  optional skip; game: 15 passed. No CTest tests were skipped or disabled.
+- Focused new CPU tests: 3 cases, 37 assertions. Parsing, prefab patches, reciprocal stable
+  references, capture round trips, unknown fields/IDs, numeric ranges, incompatible/corrupt/
+  missing saves, staging/rollback, failed writes, backup rotation/recovery, autosave clock,
+  pending events/timers, input edges and RNG continuation.
+- gpu.save_replay passed in both configurations: moving input, Highlands dig, replay through
+  tick 6, save, reload, continue to tick 12. State fingerprints and PNG bytes match the full
+  uninterrupted run. Periodic rotation, normal-exit saving, fallback reporting and invalid
+  save rejection are exercised. Existing replay/runtime integration checks also pass.
+- Unchanged-main source archive built separately for the Highlands baseline. Debug and Release
+  Highlands (90 frames, 640x360, view radius 5, threads 2) match its PNG byte-for-byte:
+  `b1646c18528e93fe4f4b933145b61f6b6156406bad7c0d5a1467b1a461e9c500`.
+  Existing engine/game mesher golden-hash assertions pass. All 20 generated application run
+  reports per configuration record zero Vulkan validation warnings/errors.
+
+Limits: only named timer callbacks and explicitly encoded event types can persist pending
+work; callbacks must keep mutable state in saved payload/game data. Restore invalidates raw
+entity/component references. Exit checkpoint caching copies full state each tick when a slot
+is enabled. Writes are per-file atomic, not a crash-durable multi-file backup transaction;
+concurrent writers are unsupported. Windows, hardware GPU performance and power-loss recovery
+were not tested. No dependencies were added.
+
+Next step: review D6 and its public contracts; D7 requires a separate request. Read SAVES.md,
+SceneFile/SaveGame.h, Runtime/Application.h and the D6 section of PHASE_D_PLAN.md for review.
+
 ## Completed
 - Imported ZODAR engine (SECTOR-ENGINE) with full history, plus unmerged `ui/stage2` (Zodar::UI).
 - Reorganised into `engine/{core,graphics,rendering,assets,scene,tools,ui,samples,tests}` + `game/`.

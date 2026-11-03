@@ -3,6 +3,17 @@
 #include <cmath>
 
 namespace zodar {
+Gameplay::Snapshot Gameplay::capture() const {
+    if (m_active || m_timers.tick() != m_completed) fail("save requires a completed fixed tick");
+    return {m_completed, m_timers.capture(), m_events.capture()};
+}
+Gameplay::Staged Gameplay::stage(const Snapshot& s) const {
+    if (m_active || s.tick != s.timers.tick) fail("inconsistent saved gameplay clock");
+    return {s.tick, m_timers.stage(s.timers), m_events.stage(s.events)};
+}
+void Gameplay::commit(Staged&& staged) noexcept {
+    m_timers.commit(std::move(staged.timers)); m_events.commit(std::move(staged.events)); m_completed = staged.tick;
+}
 void Gameplay::step(double dt, const std::function<void()>& hook, CpuProfiler* profiler) {
     if (!std::isfinite(dt) || dt <= 0) fail("gameplay requires a positive finite fixed dt");
     if (m_active || m_timers.tick() != m_completed) fail("recursive or inconsistent gameplay tick");

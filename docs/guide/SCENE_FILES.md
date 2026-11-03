@@ -146,3 +146,9 @@ object for a missing field) and the JSON pointer of the value. Errors found afte
 (`instantiateScene`, `captureScene`, `createSceneMaterials`) carry document paths only. Unknown
 fields are errors (typo protection). `instantiateScene` validates all bindings first and leaves
 the World unchanged on error; `createSceneMaterials` creates nothing if a shader is unknown.
+
+## Custom components and saves
+
+D6 registration, stable entity references, staged restoration and the `zodar.save` format are
+specified in [SAVES.md](SAVES.md). Custom components use the same strict field readers and prefab
+patching as built-ins; raw backend entity handles are not persistent references.

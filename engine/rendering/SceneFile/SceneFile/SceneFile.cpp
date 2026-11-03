@@ -20,6 +20,11 @@ namespace {
 
 constexpr std::size_t kMaxPrefabDepth = 16;
 
+std::map<std::string, SceneComponentRegistration>& registrations() {
+    static std::map<std::string, SceneComponentRegistration> entries;
+    return entries;
+}
+
 // Calls f(&SceneEntity::member) for every reflected scene component.
 template <typename F>
 void forEachReflected(F&& f) {
@@ -52,7 +57,10 @@ void readReflected(const Json& object, const std::string& path, const ComponentI
             detail::readBool(object, f.name, path, f.get<bool>(component), issues);
             break;
         case FieldType::Uint:
-            detail::readUint(object, f.name, path, f.get<uint32_t>(component), issues);
+            if (detail::readUint(object, f.name, path, f.get<uint32_t>(component), issues)) {
+                const auto value=static_cast<double>(f.get<uint32_t>(component));
+                if (value<f.min || value>f.max) issues.add(child(path,f.name),"integer outside reflected range");
+            }
             break;
         case FieldType::Float:
             detail::readFloat(object, f.name, path, f.get<float>(component), issues, f.min, f.max);
@@ -66,12 +74,17 @@ void readReflected(const Json& object, const std::string& path, const ComponentI
         case FieldType::Quat: {
             glm::vec4 q(0.0f);
             if (detail::readVec<4>(object, f.name, path, q, issues)) {
+                if (std::abs(glm::length(q)-1.0f)>1e-3f) issues.add(child(path,f.name),"quaternion must have unit length");
                 f.get<glm::quat>(component) = glm::quat(q.w, q.x, q.y, q.z);
             }
             break;
         }
+        case FieldType::EntityReference:
         case FieldType::String:
-            detail::readString(object, f.name, path, f.get<std::string>(component), issues);
+            if (const auto it=object.find(f.name); it!=object.end()) {
+                if (!it->is_string()) issues.add(child(path,f.name),"expected a string");
+                else f.get<std::string>(component)=it->get<std::string>();
+            }
             break;
         }
     }
@@ -102,6 +115,7 @@ Json reflectedJson(const ComponentInfo& info, const void* component) {
             j[key] = detail::vecJson(glm::vec4(q.x, q.y, q.z, q.w));
             break;
         }
+        case FieldType::EntityReference:
         case FieldType::String:
             j[key] = f.get<std::string>(component);
             break;
@@ -177,6 +191,7 @@ void readModelRenderer(const Json& object, const std::string& path, SceneModelRe
 std::vector<std::string_view> componentKeys(std::initializer_list<std::string_view> base) {
     std::vector<std::string_view> keys(base);
     forEachReflected([&keys](auto member) { keys.push_back(ComponentReflection<ComponentOf<decltype(member)>>::key); });
+    for (const auto& [key, registration] : registrations()) { (void)registration; keys.push_back(key); }
     return keys;
 }
 
@@ -227,6 +242,16 @@ void readEntityComponents(const Json& object, const std::string& path, SceneEnti
             readReflected(*it, child(path, key), componentInfo<T>(), &*component, issues);
         }
     });
+    for (const auto& [key, registration] : registrations()) {
+        if (const auto it = object.find(key); it != object.end()) {
+            auto value = registration.create();
+            const ComponentInfo info{key, {}, registration.fields};
+            if (const auto old = entity.components.find(key); old != entity.components.end())
+                readReflected(Json::parse(old->second), child(path, key), info, value.get(), issues);
+            readReflected(*it, child(path, key), info, value.get(), issues);
+            entity.components[key] = reflectedJson(info, value.get()).dump();
+        }
+    }
 }
 
 // --- Parsing -----------------------------------------------------------------------------
@@ -293,7 +318,7 @@ void expandPrefab(std::size_t instance, const std::string& prefabPath, const Jso
         }
     }
 
-    const std::string& instanceId = doc.entities[instance].id;
+    const std::string instanceId = doc.entities[instance].id;
     std::unordered_map<std::string, std::size_t> local;
     std::vector<SceneEntity> copies;
     for (const SceneEntity& entity : prefab.entities) {
@@ -316,7 +341,7 @@ void expandPrefab(std::size_t instance, const std::string& prefabPath, const Jso
     if (overrides != nullptr) {
         const std::string overridesPath = child(path, "overrides");
         if (detail::requireObject(*overrides, overridesPath, issues)) {
-            static const std::vector<std::string_view> allowed = componentKeys({"name", "transform", "meshRenderer", "modelRenderer"});
+            const std::vector<std::string_view> allowed = componentKeys({"name", "transform", "meshRenderer", "modelRenderer"});
             for (const auto& [id, value] : overrides->items()) {
                 const std::string entryPath = child(overridesPath, id);
                 const auto target = local.find(id);
@@ -332,6 +357,15 @@ void expandPrefab(std::size_t instance, const std::string& prefabPath, const Jso
         }
     }
     for (SceneEntity& copy : copies) {
+        for (auto& [name, bytes] : copy.components) {
+            auto fields = Json::parse(bytes);
+            for (const auto& field : registrations().at(name).fields)
+                if (field.type == FieldType::EntityReference) {
+                    const auto ref = fields.at(field.name).get<std::string>();
+                    if (!ref.empty()) fields[std::string(field.name)] = instanceId + "/" + ref;
+                }
+            bytes = fields.dump();
+        }
         doc.entities.push_back(std::move(copy));
         sourcePaths.push_back(at);
     }
@@ -388,7 +422,7 @@ SceneDocument parseSceneImpl(std::string_view json, const std::string& file, con
         if (!it->is_array()) {
             issues.add("/entities", "expected an array, got " + detail::typeName(*it));
         } else {
-            static const std::vector<std::string_view> allowed =
+            const std::vector<std::string_view> allowed =
                 componentKeys({"id", "parent", "name", "transform", "meshRenderer", "modelRenderer", "prefab", "overrides"});
             for (std::size_t i = 0; i < it->size(); ++i) {
                 const Json& object = (*it)[i];
@@ -429,6 +463,14 @@ SceneDocument parseSceneImpl(std::string_view json, const std::string& file, con
     }
     for (std::size_t i = 0; i < doc.entities.size(); ++i) {
         const SceneEntity& entity = doc.entities[i];
+        for (const auto& [name, bytes] : entity.components) {
+            const auto fields = Json::parse(bytes);
+            for (const auto& field : registrations().at(name).fields)
+                if (field.type == FieldType::EntityReference) {
+                    const auto ref = fields.at(field.name).get<std::string>();
+                    if (!ref.empty() && !entityIds.contains(ref)) issues.add(child(child(sourcePaths[i],name),field.name), "unknown entity reference '"+ref+"'");
+                }
+        }
         if (entity.parent.empty()) {
             continue;
         }
@@ -475,6 +517,18 @@ SceneDocument parseSceneImpl(std::string_view json, const std::string& file, con
 }
 
 } // namespace
+
+void registerSceneComponent(SceneComponentRegistration registration) {
+    const auto keys = componentKeys({"id", "parent", "name", "transform", "meshRenderer", "modelRenderer", "prefab", "overrides"});
+    if (registration.name.empty() || std::ranges::find(keys, registration.name) != keys.end() ||
+        !registration.create || !registration.add || !registration.get)
+        throw std::invalid_argument("duplicate or invalid scene component registration");
+    std::unordered_set<std::string_view> names;
+    for (const auto& field : registration.fields)
+        if (field.name.empty() || !field.access || !names.insert(field.name).second)
+            throw std::invalid_argument("invalid scene component field");
+    registrations().emplace(registration.name, std::move(registration));
+}
 
 SceneDocument parseScene(std::string_view json, std::string_view file, const std::filesystem::path& baseDirectory) {
     ParseState state;
@@ -528,6 +582,7 @@ std::string serializeScene(const SceneDocument& document) {
         if (!entity.parent.empty()) {
             e["parent"] = entity.parent;
         }
+        for (const auto& [key, value] : entity.components) e[key] = Json::parse(value);
         if (entity.transform) {
             e["transform"] = reflectedJson(componentInfo<Transform>(), &*entity.transform);
         }
@@ -627,10 +682,29 @@ SceneInstance instantiateScene(const SceneDocument& document, World& world, cons
     }
     issues.throwIfAny();
 
+    // Validate registered values before creating any entities. Manual documents must
+    // satisfy the same field and reference rules as parsed ones.
+    for (size_t i=0;i<document.entities.size();++i)
+        for (const auto& [key, bytes] : document.entities[i].components) {
+            const auto found=registrations().find(key);
+            if (found==registrations().end()) { issues.add(child("/entities",i), "unknown registered component "+key); continue; }
+            auto value=found->second.create();
+            readReflected(Json::parse(bytes),child(child("/entities",i),key),{key,{},found->second.fields},value.get(),issues);
+            for (const auto& field:found->second.fields) if (field.type==FieldType::EntityReference) {
+                const auto& ref=field.get<std::string>(value.get());
+                if (!ref.empty() && !ids.contains(ref)) issues.add(child(child("/entities",i),key),"unknown entity reference "+ref);
+            }
+        }
+    issues.throwIfAny();
     SceneInstance instance;
     instance.entities.reserve(document.entities.size());
+    struct Rollback {
+        World& world; SceneInstance& instance; bool committed=false;
+        ~Rollback() { if (!committed) for (const auto e:instance.entities) world.destroy(e); }
+    } rollback{world,instance};
     for (const SceneEntity& entity : document.entities) {
         const Entity e = world.create();
+        instance.entities.push_back(e);
         if (entity.name) {
             world.add<Name>(e, Name{*entity.name});
         }
@@ -651,10 +725,18 @@ SceneInstance instantiateScene(const SceneDocument& document, World& world, cons
                 world.add<ComponentOf<decltype(member)>>(e, *component);
             }
         });
+        for (const auto& [key, bytes] : entity.components) {
+            const auto& registration = registrations().at(key);
+            auto value = registration.create();
+            readReflected(Json::parse(bytes), child("/entities", instance.entities.size()),
+                          {key, {}, registration.fields}, value.get(), issues);
+            issues.throwIfAny();
+            registration.add(world, e, value.get());
+        }
         if (!entity.id.empty()) {
+            world.add<SceneId>(e, SceneId{entity.id});
             instance.byId.emplace(entity.id, e);
         }
-        instance.entities.push_back(e);
     }
     for (std::size_t i = 0; i < document.entities.size(); ++i) {
         const std::string& parent = document.entities[i].parent;
@@ -670,6 +752,7 @@ SceneInstance instantiateScene(const SceneDocument& document, World& world, cons
             }
         }
     }
+    rollback.committed=true;
     return instance;
 }
 
@@ -718,18 +801,36 @@ SceneDocument captureScene(const World& world, const SceneCaptureNames& names, s
         index.emplace(order[i].id(), i);
     }
 
+    std::unordered_set<std::string> usedIds;
+    for (const auto e : order) if (const auto* id=world.tryGet<SceneId>(e))
+        if (id->value.empty() || !usedIds.insert(id->value).second) throw std::invalid_argument("duplicate or empty SceneId");
+    std::vector<std::string> stableIds;
+    for (size_t i=0;i<order.size();++i) {
+        if (const auto* id=world.tryGet<SceneId>(order[i])) stableIds.push_back(id->value);
+        else {
+            std::string generatedId="e"+std::to_string(i);
+            while (usedIds.contains(generatedId)) generatedId="_"+generatedId;
+            usedIds.insert(generatedId); stableIds.push_back(std::move(generatedId));
+        }
+    }
     Issues issues{std::string(file)};
     SceneDocument doc;
     doc.materials = names.materialDefinitions;
     for (std::size_t i = 0; i < order.size(); ++i) {
         const Entity e = order[i];
         SceneEntity s;
+        for (const auto& [key, registration] : registrations())
+            if (const auto* value = registration.get(world, e))
+                s.components[key] = reflectedJson({key, {}, registration.fields}, value).dump();
         if (!world.children(e).empty()) {
-            s.id = "e" + std::to_string(i);
+            s.id = stableIds[i];
         }
         if (const Entity parent = world.parent(e); !parent.isNull()) {
-            s.parent = "e" + std::to_string(index.at(parent.id()));
+            s.parent = stableIds[index.at(parent.id())];
         }
+        if (const auto* id = world.tryGet<SceneId>(e)) s.id = id->value;
+        if (const Entity parent = world.parent(e); !parent.isNull())
+            if (const auto* id = world.tryGet<SceneId>(parent)) s.parent = id->value;
         if (const Name* name = world.tryGet<Name>(e)) {
             s.name = name->value;
         }
