@@ -284,6 +284,13 @@ def summarize(path):
         sys.exit(f"zodar: {path}: unknown report format")
 
 
+def cmd_replay(args):
+    code, _, _ = run_logged([str(executable(args, "game")), "--headless", "--replay-input", args.file] + args.extra,
+                            log_dir(args) / "replay.log", env=gpu_env(), timeout=args.timeout)
+    print(f"Replay exit {code}; log: {log_dir(args) / 'replay.log'}")
+    return code
+
+
 def cmd_report(args):
     summarize(args.file)
     return 0
@@ -348,6 +355,11 @@ def main(argv=None):
 
     p = sub.add_parser("explore", help="walk the bunker in first person (game window, Windows/Linux)")
     p.set_defaults(func=cmd_explore)
+
+    p = sub.add_parser("replay", help="headless game action replay with state verification")
+    p.add_argument("file")
+    p.add_argument("--timeout", type=float, default=600)
+    p.set_defaults(func=cmd_replay)
 
     p = sub.add_parser("report", help="summarize a run report or ZodarBench report")
     p.add_argument("file")

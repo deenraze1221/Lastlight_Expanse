@@ -929,3 +929,76 @@
   Full tools/gate.sh passed Debug 39/39 and Release 39/39 with warnings as errors and Vulkan
   validation. Both Highlands hashes and the region pixel hash remain unchanged; zero validation
   errors/warnings. Existing skipped unit cases remain skipped. No V7 work.
+
+
+## D0, D3, D4 — Reliability, action input and deterministic replay (uncommitted review)
+
+- Base: main bcebcd4259d479048b2db37bf44afac05091288d. No commit, push or merge requested.
+- D0: `VoxelWorld::integrateResults` drains jobs outside the result lock after observing a
+  terminal failure, merges all remaining results and releases counters before throwing.
+  The partial-completion regression uses a FIFO marker and gated worker to force a published
+  failure alongside outstanding work; ordinary region and empty-message cases remain enabled.
+- D3: `Zodar::Input`, JSON bindings, priority contexts, held/press/release states, accumulated
+  pointer/wheel deltas, gamepad events/device lifetime, focus reset and one-tick injection.
+  Bunker/Highlands read only actions; movement, look and voxel edits run at fixed steps.
+  Default bindings in `game/assets/input.json`; SDL translation lives in the engine adapter.
+- D4: named SplitMix64 RNG streams (`Core/Random`), checked delta JSONL recording/playback,
+  strict app/map/content/seed/clock compatibility, mandatory count/checksum footer, per-tick
+  application/RNG fingerprints. Standard record/replay/map/lenient CLI; `zodar.py replay`;
+  input summary in run reports. Bunker recording waits for startup assets. Deterministic
+  Highlands streaming waits for jobs so replay visibility is reproducible.
+- Focused region/input/replay checks and both-level real-game replay checks pass. New
+  `gpu.lastlight_input_replay` exercises idle recording, two pixel-identical replays, moving
+  hand-authored actions, state mismatch, strict/lenient compatibility and variable-frame capture.
+- Deliberate limits: recordings buffered in RAM until atomic final write; no partial-crash
+  recovery; FNV hashes detect compatibility/corruption, not malicious alteration. Game state
+  fingerprints cover controller/camera/edit commands, not a general ECS/save snapshot.
+  Same-build/platform float determinism only; hardware controller and Windows tests unavailable.
+- Docs: `docs/guide/INPUT.md`, RUNNING, ARCHITECTURE and PHASE_D_PLAN. No D5 scheduler/events,
+  D6 saves, D7 interactions or networking. Next work: D5 → D6 → D7; V6 is already on main.
+- Final validation (2026-11-02): Debug build passed with no compiler warnings in the build
+  log; focused region/input/replay selection passed 19 cases / 268 assertions. Full CTest:
+  40/40 passed (187.58 s), including the new real-game input replay test and all GPU checks.
+  Engine unit suite: 301 passed, 2 deliberately skipped timing/benchmark cases; GPU suite:
+  76 passed, 1 deliberately skipped timing case; game suite: 15 passed / 388 assertions.
+  No failed checks in the final run. The known failure is covered by the gated regression.
+- Highlands and bunker smoke PNG hashes remain unchanged from the pre-change outputs:
+  Highlands b1646c18528e93fe4f4b933145b61f6b6156406bad7c0d5a1467b1a461e9c500;
+  bunker 8ff5e3af1892b13097e2e69804ac77e4a3991fefbece357e4d6d43df19f9830d.
+  Their reports, the bunker walkthrough and moving replays report zero validation warnings/errors.
+  `tools/zodar.py replay` also passed on the bunker recording. `git diff --check` is clean.
+  Release, Windows/MSVC, physical gamepad and hardware GPU validation were not run here.
+- D0, D3 and D4 acceptance criteria are met within the documented same-build/platform scope.
+  Delivery is handled on the reviewed feature branch below; no merge is authorized.
+
+
+## D0/D3/D4 correctness review and delivery
+
+- Reviewed failure locking/job lifetime, input events/contexts, JSON protocol, RNG state,
+  application-loop termination and both game integrations on feature branch
+  `codex/d0-d3-d4-reliability-input-replay` (base main bcebcd4).
+- Confirmed critical regressions before fixes: unwritable capture returned exit 3 but replaced
+  an existing recording; a minimized final replay frame advanced into `replay exhausted`;
+  profiler-consumed clicks reached gameplay. Focused regressions failed on the original code.
+- Fixed publication ordering after shutdown/output/report success; replay ends by ticks and
+  freezes simulation/visual time while retrying its final frame; UI consumption filters presses
+  and motion but delivers releases so held inputs cannot stick.
+- Highlands recording now advances terrain streaming at fixed ticks before queries/edits,
+  eliminating render-cadence dependence. Edit fingerprints include actual mutation outcomes.
+- Also canonicalized SDL key aliases, OR-combined button bindings, rejected duplicate map fields
+  and nonintegral metadata, and gave the regression's FIFO promise marker shared ownership.
+- Added `gpu.input_runtime_regression`; expanded moving Highlands replay with dig/place actions
+  and focused alias/button/schema tests. Focused runtime regression passes after fixes.
+- The first complete Debug/Release warnings-as-errors gate passed 41/41 in both configurations,
+  with identical Highlands SHA-256 5ddd23b4cf86dfd551dfad44e349fcefb2594f31a2c37b72f6d9c00f68045776.
+  A final gate is run again after the overlay-consumption regression fix; results follow below.
+- No networking/gameplay phases added. Review limits remain software Vulkan, same-platform float
+  determinism, bounded in-memory recording use and selected state fingerprints (not ECS saves).
+
+- Final review gate: Debug 41/41 (174.22 s), Release 41/41 (68.89 s), warnings as errors;
+  both explicit Highlands hash checks matched the reference above, with zero validation errors
+  or warnings. Engine unit cases 303 passed / 2 timing cases skipped; GPU subsystem cases
+  76 passed / 1 timing case skipped; game cases 15 passed. No unresolved critical findings.
+- Final diff/whitespace checks passed. Changes are committed to the feature branch for PR review;
+  main remains unchanged and merging is not authorized. GitHub API network access must be
+  available to create the PR (the api.github.com domain addition was saved in environment settings).

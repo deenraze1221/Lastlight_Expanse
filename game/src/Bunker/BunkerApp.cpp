@@ -1,4 +1,5 @@
 #include "Bunker/BunkerApp.h"
+#include "GameInput.h"
 
 #include "Bunker/LevelColliders.h"
 #include "Bunker/BunkerVoxels.h"
@@ -23,7 +24,6 @@
 #include "WorldRender/SceneComponents.h"
 #include "WorldRender/WorldRender.h"
 
-#include <SDL3/SDL.h>
 
 #include <glm/glm.hpp>
 
@@ -48,7 +48,16 @@ public:
         : Application(desc), m_assetDir(std::move(assetDir)), m_explore(explore), m_walkthrough(walkthrough) {}
 
 protected:
+    std::string inputLevelHash() const override {
+        return inputHash(bunkerContentHash(m_assetDir)+(m_explore?"explore":"fly")+(m_walkthrough?"walkthrough":"manual"));
+    }
+    std::string inputState() const override {
+        return playerFingerprint(m_explore?m_walker.feet():m_view.camera.position,m_yaw,m_pitch,
+                                 m_explore?m_walker.velocity():glm::vec3(0),m_explore&&m_walker.grounded())+
+               ":"+std::to_string(m_waypoint)+":"+std::to_string(m_captured);
+    }
     void onStart() override {
+        input().setContext("explore", m_explore);
         AssetManagerDesc desc;
         desc.root = m_assetDir;
         desc.defaultSampler = SamplerDesc::pixelArt(); // GDD 3: nearest-neighbour pixel art
@@ -67,7 +76,7 @@ protected:
         const SceneDocument doc = loadSceneFile(level);
         m_warmModels = m_assets->loadSceneModelsAsync(doc, level, &m_registry);
         m_warmMaterials = m_assets->createSceneMaterialsAsync(doc, level);
-        if (Application::desc().deterministic) {
+        if (Application::desc().deterministic || Application::desc().recordInput) {
             m_assets->waitAll(); // reproducible frames: the level is complete in frame 0
         }
         m_view.camera.projection.nearPlane = 0.05f;
@@ -101,18 +110,28 @@ protected:
     }
 
     void onFixedUpdate(double dt) override {
-        if (!m_explore || !m_level) {
+        if (!m_level) return;
+        if (m_explore && input().action("capture_toggle").pressed) setMouseCaptured(!m_captured);
+        if (input().action("dig").pressed && m_explore && !m_captured) setMouseCaptured(true);
+        if ((m_explore && m_captured) || (!m_explore && (input().action("look_hold").held || input().action("look_hold").pressed))) {
+            const float sensitivity = m_explore ? 0.0025f : 0.0035f;
+            m_yaw -= input().action("look").x * sensitivity;
+            m_pitch = std::clamp(m_pitch - input().action("look").y * sensitivity, -1.5f, 1.5f);
+        }
+        if (!m_explore) {
+            m_view.camera.setYawPitch(m_yaw, m_pitch);
+            glm::vec3 move = m_view.camera.forward() * input().action("move").y +
+                             m_view.camera.right() * input().action("move").x;
+            move.y += input().action("vertical").x;
+            if (glm::length(move) > 0) m_view.camera.position += glm::normalize(move) *
+                (input().action("sprint").held ? 8.0f : 3.0f) * static_cast<float>(dt);
             return;
         }
-        // Temporary keyboard polling (D3 replaces this with input actions).
-        const bool* keys = SDL_GetKeyboardState(nullptr);
         WalkInput input;
-        input.forward = float(keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) -
-                        float(keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN]);
-        input.right = float(keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) -
-                      float(keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]);
-        input.sprint = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
-        input.jump = keys[SDL_SCANCODE_SPACE];
+        input.forward = this->input().action("move").y;
+        input.right = this->input().action("move").x;
+        input.sprint = this->input().action("sprint").held;
+        input.jump = this->input().action("jump").held;
         if (m_walkthrough) {
             if (m_waypoint < m_route.size()) {
                 const glm::vec2 target = m_route[m_waypoint];
@@ -126,25 +145,6 @@ protected:
         }
         input.yaw = m_yaw;
         m_walker.step(m_collision, input, static_cast<float>(dt));
-    }
-
-    void onEvent(const SDL_Event& e) override {
-        if (m_explore) {
-            // Mouse look while captured; Tab releases/recaptures the mouse, a click recaptures.
-            if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_TAB && !e.key.repeat) setMouseCaptured(!m_captured);
-            if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !m_captured) setMouseCaptured(true);
-            if (e.type == SDL_EVENT_MOUSE_MOTION && m_captured) {
-                m_yaw -= e.motion.xrel * 0.0025f;
-                m_pitch = std::clamp(m_pitch - e.motion.yrel * 0.0025f, -1.5f, 1.5f);
-            }
-            return;
-        }
-        if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_RIGHT) m_looking = true;
-        if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_RIGHT) m_looking = false;
-        if (e.type == SDL_EVENT_MOUSE_MOTION && m_looking) {
-            m_yaw -= e.motion.xrel * 0.0035f;
-            m_pitch = std::clamp(m_pitch - e.motion.yrel * 0.0035f, -1.55f, 1.55f);
-        }
     }
 
     void onUpdate(const FrameTime& time) override {
@@ -166,20 +166,6 @@ protected:
             m_view.camera.position = m_walker.eye();
             finishFrame(time);
             return;
-        }
-        // Fly camera. Speeds are bunker-scale.
-        const float dt = static_cast<float>(time.dt);
-        const bool* keys = SDL_GetKeyboardState(nullptr);
-        glm::vec3 move(0.0f);
-        if (keys[SDL_SCANCODE_W]) move += m_view.camera.forward();
-        if (keys[SDL_SCANCODE_S]) move -= m_view.camera.forward();
-        if (keys[SDL_SCANCODE_D]) move += m_view.camera.right();
-        if (keys[SDL_SCANCODE_A]) move -= m_view.camera.right();
-        if (keys[SDL_SCANCODE_SPACE]) move.y += 1.0f;
-        if (keys[SDL_SCANCODE_LCTRL]) move.y -= 1.0f;
-        if (glm::length(move) > 0.0f) {
-            const float speed = keys[SDL_SCANCODE_LSHIFT] ? 8.0f : 3.0f;
-            m_view.camera.position += glm::normalize(move) * speed * dt;
         }
         finishFrame(time);
     }
@@ -293,11 +279,8 @@ private:
     }
 
     void setMouseCaptured(bool captured) {
-        if (desc().headless || captured == m_captured) {
-            return;
-        }
-        SDL_SetWindowRelativeMouseMode(window().native(), captured);
         m_captured = captured;
+        input().setRelativeMouse(captured);
     }
 
     std::filesystem::path m_assetDir;
@@ -327,7 +310,6 @@ private:
     bool m_captured = false;
     float m_yaw = 0.0f;
     float m_pitch = 0.0f;
-    bool m_looking = false;
 };
 
 } // namespace

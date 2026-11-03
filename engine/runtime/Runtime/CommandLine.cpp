@@ -20,6 +20,10 @@ constexpr std::string_view kHelp =
     "Standard options:\n"
     "  --frames N                 Render N frames, then exit (0 = until the window closes)\n"
     "  --headless                 No visible window (SDL offscreen driver); needs --frames\n"
+    "  --record-input FILE        Record fixed-tick actions (JSONL)\n"
+    "  --replay-input FILE        Replay actions; deterministic, ends at recording length\n"
+    "  --replay-lenient            Allow input-map/level hash differences (state checks remain)\n"
+    "  --input-map FILE           Override the application's JSON action bindings\n"
     "  --deterministic            Every frame advances exactly one fixed step\n"
     "  --fixed-dt S               Fixed simulation step in seconds (default 1/60)\n"
     "  --width W --height H       Window / render size\n"
@@ -85,6 +89,10 @@ std::vector<std::string> parseStandardOptions(std::span<const std::string> args,
         };
         if (arg == "--frames") desc.maxFrames = parseNumber<uint64_t>(arg, next());
         else if (arg == "--headless") desc.headless = true;
+        else if (arg == "--record-input") desc.recordInput=std::filesystem::path(std::string(next()));
+        else if (arg == "--replay-input") { desc.replayInput=std::filesystem::path(std::string(next())); desc.deterministic=true; }
+        else if (arg == "--replay-lenient") desc.replayLenient=true;
+        else if (arg == "--input-map") desc.inputMap=std::filesystem::path(std::string(next()));
         else if (arg == "--deterministic") desc.deterministic = true;
         else if (arg == "--fixed-dt") {
             const double dt = parseNumber<double>(arg, next());

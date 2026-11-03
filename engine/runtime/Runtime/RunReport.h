@@ -57,6 +57,8 @@ struct RunReport {
         bool ok = false;
     };
 
+    std::string inputMode = "live", inputMapHash, inputStateHash;
+    uint64_t inputTicks = 0;
     std::string application;
     int exitCode = 0;
 

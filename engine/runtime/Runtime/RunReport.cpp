@@ -109,6 +109,8 @@ std::string toJson(const RunReport& r) {
     screenshots += "]";
 
     std::string j = "{\n";
+    j += fmt::format("  \"input\": {{\"mode\": {}, \"mapHash\": {}, \"ticks\": {}, \"stateHash\": {}}},\n",
+                     escape(r.inputMode), escape(r.inputMapHash), r.inputTicks, escape(r.inputStateHash));
     j += "  \"schema\": \"zodar.run_report\",\n  \"version\": 1,\n";
     j += fmt::format("  \"application\": {},\n  \"exitCode\": {},\n", escape(r.application), r.exitCode);
     j += fmt::format("  \"run\": {{\"frames\": {}, \"fixedSteps\": {}, \"wallSeconds\": {}, \"simulatedSeconds\": {}, "

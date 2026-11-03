@@ -1,7 +1,7 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **approved; D1 and D2 done; Phase V inserted (V0, V1, V2 and V3 done 2026-11-01).**
-V4 engine implementation: `v4/regions-streaming` (unmerged), Debug/Release gate passed. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
+Status: **approved; D1, D2, D3 and D4 implemented (uncommitted review); Phase V inserted (V0, V1, V2 and V3 done 2026-11-01).**
+Current main includes V4, V5 and V6. D0 reliability and D3/D4 input/replay changes are awaiting review; D5–D8 remain pending. Order: V0 → V1–V5 → D3–D6 → D7 → V6 → D8 (see "Phase V" below). Roadmap summary:
 `docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
 changes scope, and record completed sessions in `PROGRESS.md`. Area-by-area production after
 D8 (completion levels, checklist, tracks): `docs/WORLD_PRODUCTION_ROADMAP.md`.
@@ -203,6 +203,9 @@ handoff block described under "Session workflow".
   interaction, doors, power or gameplay logic.
 
 ### D3 — Input action maps (engine)
+
+Implemented: JSON contexts/actions, SDL adapter, fixed-step injection and game control migration.
+See `docs/guide/INPUT.md`; D5/D6/D7 are not part of this change.
 - Read: `engine/runtime/Runtime/Application.h`, `CommandLine.h`, game input code.
 - `Zodar::Input`: button, 1D axis, 2D axis actions; key, mouse button, mouse delta, wheel,
   gamepad button/stick bindings; dead zone, scale, invert; contexts with priority; relative
@@ -219,6 +222,10 @@ handoff block described under "Session workflow".
 - Acceptance: no game input reads SDL directly; bindings come only from JSON.
 
 ### D4 — Record/replay + deterministic RNG (engine)
+
+Implemented: checked delta JSONL recordings, per-tick app/RNG fingerprints, named SplitMix64
+streams, headless CLI and real-game regression. Snapshots currently stay in memory until an
+atomic final write; cross-platform float determinism is not promised. See `docs/guide/INPUT.md`.
 - Read: Input headers (D3), `engine/runtime/Runtime/RunReport.h`, `docs/guide/RUNNING.md`.
 - `Core/Random`: named streams seeded from `--seed`, independent of call order between
   systems.

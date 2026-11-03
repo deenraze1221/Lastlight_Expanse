@@ -9,5 +9,5 @@ add_library(Zodar::Runtime ALIAS ZodarRuntime)
 
 # Headers are included as "Runtime/<File>.h".
 target_include_directories(ZodarRuntime PUBLIC ${ZODAR_ENGINE_DIR}/runtime)
-target_link_libraries(ZodarRuntime PUBLIC Zodar::Renderer Zodar::Debug PRIVATE SDL3::SDL3)
+target_link_libraries(ZodarRuntime PUBLIC Zodar::Input Zodar::Renderer Zodar::Debug PRIVATE SDL3::SDL3)
 zodar_set_warnings(ZodarRuntime)

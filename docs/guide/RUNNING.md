@@ -172,3 +172,12 @@ traverses the synthetic 4 x 4 km envelope and revisits persisted edits. Use a fr
 name (its `.regions` directory must be empty). The default path is `graph`; `reference`
 is also supported. Full workload, metric definitions, baseline/candidate evidence and
 software-driver limitations: `docs/reports/v6-region-performance/README.md`.
+
+## Action recording and replay (D3–D4)
+
+Game controls are configured in `game/assets/input.json` (`--input-map FILE` overrides).
+`--record-input FILE`, `--replay-input FILE`, and `--replay-lenient` are standard options.
+`python3 tools/zodar.py replay FILE -- --level bunker --explore` replays headlessly.
+Keep the recorded level/mode/seed/fixed-dt/camera options. Full schema, semantics and limits:
+[INPUT.md](INPUT.md). The old waypoint walkthrough remains a geometry regression, distinct
+from action replay. The runtime still provides hooks; D5 systems and D6 saves are pending.

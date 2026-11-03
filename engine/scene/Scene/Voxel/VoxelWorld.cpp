@@ -298,6 +298,19 @@ void VoxelWorld::integrateResults() {
         generated.swap(m_generateResults);
         meshes.swap(m_meshResults);
     }
+    const bool failed = !m_failure.empty() ||
+        std::ranges::any_of(generated, [](const auto& r) { return r.outcome == WorkOutcome::Failure; }) ||
+        std::ranges::any_of(meshes, [](const auto& r) { return r.outcome == WorkOutcome::Failure; });
+    if (failed) {
+        // No result lock while waiting: workers need it to publish their terminal results.
+        // This main-thread boundary submits no new work while draining the batch.
+        if (m_jobs) m_jobs->waitIdle();
+        std::lock_guard lock(m_resultMutex);
+        for (auto& r : m_generateResults) generated.push_back(std::move(r));
+        for (auto& r : m_meshResults) meshes.push_back(std::move(r));
+        m_generateResults.clear();
+        m_meshResults.clear();
+    }
     // Completion order varies between runs with worker threads; apply in a fixed order.
     const auto byCoord = [](const auto& a, const auto& b) { return a.coord < b.coord; };
     std::sort(generated.begin(), generated.end(), byCoord);
