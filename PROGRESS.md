@@ -1,5 +1,36 @@
 # Progress
 
+## D7 airlock acceptance completion (2026-11-03)
+
+- Traced the final replay save: generator running, airlock panel unrepaired, both main
+  lights at zero and both emergency sources at intensity 3. Room references and generator
+  dependencies were correct. The route omitted the local repair; additionally the generated
+  panel at x=-8 intersected the airlock's west-wall corner. A collision-respecting approach
+  stopped at x=-7.199, confirming that reaching the original panel was not a valid fix.
+- Moved only the airlock distribution panel along its existing wall to x=-6, exposing its
+  interaction surface. Its associated backup source follows the same authored location.
+  Regenerated scene data and registry hash. No power-system rule or initial repair state changed.
+- Extended the action-only route to approach and repair that panel, then return to the
+  original airlock endpoint. The recording now has six interactions and 934 ticks.
+  Authoring rejects a route unless dormitory, corridor and airlock all have main power.
+- Strengthened the GPU acceptance check to require the repaired airlock panel and verify
+  positive authored main intensities and zero emergency intensities in all three rooms.
+  A nonempty check requires both lighting classes in each room. Existing endpoint, generator,
+  door, moving-door checkpoint, final-state and exact-pixel assertions remain intact.
+- Focused units: 11 cases / 64 assertions passed. Greybox generator check passed; strict
+  registry check: 50 assets, no warnings or errors. Focused GPU route and moving-door
+  continuation passed (117.64 seconds), including exact final-state and pixel equality.
+- Full warnings-as-errors `tools/gate.sh`: Debug **44/44** (225.76 seconds), Release
+  **43/43** (63.42 seconds). No CTest failures/skips and no compiler warnings/errors.
+  Both final saves have a repaired airlock panel, two main lights at intensity 10 and both
+  emergency sources at zero. Both end at (-3.9471, 0, 0.1063), within the original tolerance.
+- Both Highlands PNGs match the unchanged-main golden
+  `61ab33fa0fc3305645a12a7dcd222ba2a9d54a136616b27bdb5031a1f3b9753d`.
+  All 27 Debug and 25 Release application reports have zero Vulkan warnings/errors.
+  Tested with GCC 13.3 and Mesa software Vulkan; no hardware performance claim.
+
+No merge, D8 work or unrelated runtime changes. Next: review the completed D7 acceptance route.
+
 ## D7 independent correctness review (2026-11-03)
 
 Reviewed `feat/d7-bunker-gameplay` at `d384eb7` against latest main

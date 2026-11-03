@@ -31,19 +31,25 @@ assert player['grounded']
 entities = {e['id']: e for e in saved['world']['entities']}
 assert entities['dormitory/power_panel']['electricalPanel']['repaired']
 assert entities['corridor/electrical_panel_1']['electricalPanel']['repaired']
+assert entities['airlock/power_panel']['electricalPanel']['repaired']
 assert entities['generator_room/generator_1']['powerSwitch']['enabled']
 door = entities['dormitory/door_leaf_1/leaf']['door']
 assert door['open'] and door['fraction'] == 1 and not door['obstructed'], door
+checked_lights = set()
 for entity in entities.values():
     light = entity.get('emergencyLight')
-    if light and light['room'] in ('dormitory', 'corridor'):
+    if light and light['room'] in ('dormitory', 'corridor', 'airlock'):
         intensity = entity['pointLight']['intensity']
         assert intensity == (0 if light['emergency'] else light['intensity']), entity
+        assert light['intensity'] > 0, entity
+        checked_lights.add((light['room'], light['emergency']))
+assert checked_lights == {(room, emergency) for room in ('dormitory', 'corridor', 'airlock')
+                         for emergency in (False, True)}, checked_lights
 
 # The first door interaction closes it. Save while it moves, with a persistent door timer.
 rows = [json.loads(line) for line in recording.read_text().splitlines()]
 uses = [r['tick'] for r in rows if r.get('actions', {}).get('interact', [0, 0, False, False])[3]]
-assert len(uses) == 5
+assert len(uses) == 6
 mid = root / 'moving.save.json'
 run('prefix', ['--frames', str(uses[3] + 8), '--save-at-exit', str(mid)])
 moving = json.loads(mid.read_text())

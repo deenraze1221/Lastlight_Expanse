@@ -913,6 +913,8 @@ def level(authoring=False):
             x, z = CELL*i0, CELL*j0 - 2 + WALL + 0.05
             if room == "dormitory":
                 x, z = 4, 2.55
+            elif room == "airlock":
+                x = -6  # Clear the west-wall corner so the panel faces walkable room space.
             entities.append({"id": room + "/power_panel", "parent": room,
                              "transform": {"position": [x, 0, z]},
                              "modelRenderer": {"model": "electrical_panel"},

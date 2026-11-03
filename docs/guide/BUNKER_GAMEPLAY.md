@@ -82,13 +82,16 @@ python3 tools/zodar.py --build-dir /path/to/build assets check --registry game/a
 ```
 
 `game/tests/bunker_walk.inputrec.jsonl` is a checked action recording: dormitory panel,
-corridor panel, generator, close/reopen a door, then airlock. Regenerate after intentional
+corridor panel, generator, close/reopen a door, then repair the airlock panel and return to
+the airlock endpoint. The airlock panel sits clear of the west-wall corner so its interaction
+surface is exposed to the room. Regenerate after intentional
 content changes with `LastlightGameTests --write-bunker-route FILE`. The CPU authoring helper
 uses the same movement, raycast, event delay and door logic; it does not teleport or bypass
 occlusion. Header hashes bind the recording to the input map and current assets.
 
 `gpu.lastlight_bunker_walk` replays that file, inspects saved player/panel/generator/lighting
-state, then compares a moving-door checkpoint continuation with uninterrupted pixels and
+state, including positive main-light intensities and zero emergency-light intensities in the
+airlock, then compares a moving-door checkpoint continuation with uninterrupted pixels and
 state. Unit tests cover interaction range/occlusion/nearest target, full-travel obstruction,
 power combinations, enclosing interaction volumes, crouch clearance and the five-minute autosave boundary.
 Debug `gpu.lastlight_bunker_asset_reload` changes a copied model without reloading the scene,

@@ -103,7 +103,11 @@ void writeBunkerRoute(const std::filesystem::path& output) {
     useAt({6,1.5f,2.56f}); // reopen, then enter through it
     walkTo(6,0);
     walkTo(-4,0); // airlock
-    if (!roomPowered(world,"dormitory") || !roomPowered(world,"corridor")) fail("route did not restore power");
+    walkTo(-6,-4);
+    useAt({-6,1.5f,-5.55f}); // airlock distribution panel, reached from inside the room
+    walkTo(-4,0);
+    if (!roomPowered(world,"dormitory") || !roomPowered(world,"corridor") || !roomPowered(world,"airlock"))
+        fail("route did not restore dormitory, corridor and airlock power");
     recording.save(output);
     std::cout<<"wrote "<<recording.ticks.size()<<" action ticks\n";
 }

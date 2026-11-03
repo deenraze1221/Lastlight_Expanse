@@ -75,7 +75,7 @@
       "id": "bunker",
       "type": "scene",
       "source": "levels/bunker.scene.json",
-      "hash": "fnv1a64:1f730caea0cfad61",
+      "hash": "fnv1a64:942ea78f9c8af431",
       "dependencies": [
         "materials/sign_airlock.material.json",
         "materials/sign_common.material.json",

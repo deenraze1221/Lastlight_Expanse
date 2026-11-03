@@ -4572,7 +4572,7 @@
       "parent": "airlock",
       "transform": {
         "position": [
-          -8.0,
+          -6,
           0,
           -5.7
         ]
@@ -4602,7 +4602,7 @@
       "parent": "airlock",
       "transform": {
         "position": [
-          -8.0,
+          -6,
           3,
           -5.4
         ]

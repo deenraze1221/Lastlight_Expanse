@@ -309,7 +309,7 @@ PROGRESS.md. D8 is not started.
   for player, doors, panels and power; game autosave every 5 minutes and on normal exit
   (D6 interval).
 - Recording `game/tests/bunker_walk.inputrec.jsonl`: dormitory → repair panel → start
-  generator → door → airlock.
+  generator → door → repair airlock panel → airlock endpoint.
 - Tests: AABB sweep (walls, corners, steps, no tunnelling at max speed), door, panel and power
   state machines (emergency lights on without power, main lights only with generator + repaired
   panel); GPU `gpu.lastlight_bunker_walk` (ends in the airlock within tolerance, main lights on,
