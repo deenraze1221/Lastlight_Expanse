@@ -8,8 +8,8 @@ environment (walls, floors, ceilings, stairs, terrain; `docs/guide/VOXELS.md`). 
 models: weapons, characters, mutants, furniture, generators, machinery, computers, vehicles,
 equipment and decorative props (including doors and frames, lights, signs, terminals). The D2
 architecture modules (`floor`, `wall`, `doorway`, `corner`, `pillar`, `beam`, `stairs`,
-`ceiling`, …) are temporary greybox geometry that moves to voxels in V5; they do not restrict
-what imported models are used for.
+`ceiling`, …) were temporary greybox geometry replaced by voxels in V5. Imported models now
+follow the content split above.
 
 Registry, check and loading details:
 `docs/guide/ASSETS.md`. The engine reads glTF only; it never parses `.bbmodel` or `.blend`
@@ -115,7 +115,7 @@ Notes are informational: `assets check --strict` passes with notes and fails on 
 
 ```bash
 python3 tools/zodar.py import game/assets/models            # batch: every asset file, sorted
-python3 tools/zodar.py import game/assets/models/wall.glb --class architecture
+python3 tools/zodar.py import game/assets/models/crate.glb --class prop
 python3 tools/zodar.py assets check -- --registry game/assets/assets.json --strict --report report.json
 ```
 
@@ -128,6 +128,10 @@ python3 tools/zodar.py assets check -- --registry game/assets/assets.json --stri
   16..64 texels/m (target 32; V2 makes target and sizes configurable per game: Lastlight
   64 texels/m, 32..128 accepted, size limits per class) and bounds outside 1/16..64 m. The report lists `sourceTool`,
   `notes`, `size`, `class` and `triangleBudget` per model.
+
+A source image shared by LINEAR and NEAREST samplers always compiles losslessly, regardless
+of material order. The importer rejects a preexisting lossy cache for that image. Sampler
+filters remain per texture; sharing an image does not change either sampler.
 
 ## Hot reload
 
@@ -146,7 +150,7 @@ registry hash is current (`check` reports stale entries).
 - [ ] Footprint/pivot on the 0.5 m grid where the model meets voxel geometry.
 - [ ] Triangle count within the class budget; `class` set at import.
 - [ ] `zodar.py import` done; `zodar.py assets check --strict` passes (notes are fine).
-- [ ] Source file (`.bbmodel` / `.blend`) committed next to the export under the same base
+- [ ] Source file (`.bbmodel` / `.blend`) committed under `sources/` with the export base
       name; `.blend` saved compressed, ≤ 20 MB, no packed textures, no `.blend1` backups.
 
 ## Test fixtures

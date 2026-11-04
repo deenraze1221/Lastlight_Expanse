@@ -1,10 +1,9 @@
 # Phase D plan — Lastlight bunker first (approved rev 2, 2026-11-01)
 
-Status: **D0 and D1–D5 are on main (`25c3994`). D6 is implemented, reviewed and validated on
-`d6/scene-extensions-transactional-saves`, awaiting review. D7–D8 remain pending.** Current main
-also includes V4–V6. No merge or D7 implementation is part of the D6 session. Roadmap summary:
-`docs/AI_FIRST_ROADMAP.md` (Phase D). This file is the binding plan; update it when a session
-changes scope, and record completed sessions in `PROGRESS.md`. Area-by-area production after
+Status: **D0–D7 and V0–V6 are on main (`8c53cc3`). D8 integration, audit and documentation
+are implemented on `feat/d8-integration-audit`; validation and limitations are recorded in
+PROGRESS.md. No merge or subsequent phase is part of D8.** This file remains the binding plan;
+roadmap summary: `docs/AI_FIRST_ROADMAP.md`. Area-by-area production after
 D8 (completion levels, checklist, tracks): `docs/WORLD_PRODUCTION_ROADMAP.md`.
 
 ## Authoritative game specification
@@ -60,9 +59,9 @@ part of the binding plan.
 
 - D0/D3/D4 are merged: action input and named RNG/replay exist. The voxel/model bunker and
   temporary exploration walker are present; the original pre-D findings are historical.
-- D5 adds sequential scheduling, events, timers and a fixed-tick checkpoint boundary. D6 must
-  add scene-component extensions and transactional save/load; those are not implemented here.
-- Scene files still reject unknown fields and cannot yet carry the planned game components.
+- D5 supplies sequential scheduling, events, timers and a fixed-tick checkpoint boundary. D6
+  supplies scene-component extensions and transactional save/load; D7 consumes both.
+- Scene files reject unknown fields while supporting explicitly registered game components.
 - `ModelRenderer` CPU draws are sufficient for bunker scale. Collision remains behind the
   game-side `CollisionWorld` adapter until Phase E; point-light ranges remain room-bounded.
 
@@ -291,7 +290,7 @@ No D6 state restoration, serializers or save/load APIs are added.
 Implementation: `docs/guide/BUNKER_GAMEPLAY.md`. Game components, authored prefab colliders,
 controller, action/event interactions, named door timer, room power and D6 persistence are
 integrated on `feat/d7-bunker-gameplay` from main `98be775`. Verification is recorded in
-PROGRESS.md. D8 is not started.
+PROGRESS.md. D8 verification is recorded in PROGRESS.md.
 - Read: `docs/guide/INPUT.md` and `GAMEPLAY.md` (drafted in D3–D6), `game/src`,
   `game/assets/levels/bunker.scene.json`.
 - Read also: GDD §4 (electricity), §10, §11.
@@ -319,6 +318,10 @@ PROGRESS.md. D8 is not started.
   systems and events; no system depends on the AABB implementation directly.
 
 ### D8 — Integration, audit, docs
+
+Implementation: `feat/d8-integration-audit` from main `8c53cc3`. Independent reviews and
+fixes, complete bunker checkpoint equality, CPU example and Release baseline are recorded
+in PROGRESS.md and `docs/reports/d8-bunker-performance/README.md`.
 - Read: `PROGRESS.md` handoff notes D1–D7, then the diff per review area.
 - Save/load mid-replay in the bunker equals the uninterrupted run.
 - Two read-only review subagents: (1) input/replay/scheduler determinism; (2) save, SceneFile

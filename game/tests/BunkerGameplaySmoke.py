@@ -55,7 +55,9 @@ run('prefix', ['--frames', str(uses[3] + 8), '--save-at-exit', str(mid)])
 moving = json.loads(mid.read_text())
 moving_door = next(e['door'] for e in moving['world']['entities'] if e['id'] == 'dormitory/door_leaf_1/leaf')
 assert 0 < moving_door['fraction'] < 1, moving_door
-resumed, resumed_pixels = run('resumed', ['--load-save', str(mid)])
+resumed_slot = root / 'resumed.save.json'
+resumed, resumed_pixels = run('resumed', ['--load-save', str(mid), '--save-at-exit', str(resumed_slot)])
 assert resumed['input']['stateHash'] == full['input']['stateHash']
 assert resumed_pixels == pixels
+assert json.loads(resumed_slot.read_text()) == saved, 'complete checkpoint differs after continuation'
 print('D7 route: dormitory, panels, generator, sliding door, airlock; moving-door save continuation matches state and pixels')

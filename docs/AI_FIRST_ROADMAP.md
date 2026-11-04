@@ -1,10 +1,9 @@
 # ZODAR — AI-First Engine Roadmap
 
-**Status:** **Phase C complete; Phase D planned and approved (8 sessions,
-`docs/PHASE_D_PLAN.md`); D1 and D2 done; Phase V (hybrid voxel + model foundation,
-`docs/guide/VOXELS.md`) inserted, V0 done; next V1. Order: V1–V5 → D3–D6 → D7 → V6 → D8.
-After D8: World Production Roadmap (`docs/WORLD_PRODUCTION_ROADMAP.md`; S5–S8 after D8, then
-area-by-area production, bunker first).** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
+**Status:** **Phases A–C complete; D0–D7 and V0–V6 on main (`8c53cc3`). D8 implemented
+on `feat/d8-integration-audit`; validation and limitations: PROGRESS.md. No merge or later phase
+started. Remaining production order requires a separate task: World Production Roadmap
+(`docs/WORLD_PRODUCTION_ROADMAP.md`; rendering S5–S8, then area-by-area production, bunker first).** audit done; C++23 / optional Vulkan 1.4 done (f64a190); **Phase A1 done**
 (`zodar::Application`, `FixedTimestep`, headless/deterministic modes, game migrated).
 **Phase A2 done** (standard CLI + `runMain`, PNG screenshots, capture sequences, `--camera`,
 run report JSON). **Phase A3 done** (CMake presets, `tools/zodar.py`, `docs/guide/RUNNING.md`,
@@ -131,13 +130,13 @@ GDD §3 A1, 8/16 not approved; configurable per registry since V2, declared by L
 - Hot reload of textures, materials, shaders and scene files (file watcher, debug builds). (done: C5/C6)
 
 ### Phase D — Gameplay foundation + Lastlight bunker (8 sessions)
-**Plan approved 2026-11-01, not started.** Binding plan: `docs/PHASE_D_PLAN.md` (sessions,
+**D1–D8 implemented; D8 validation recorded in PROGRESS.md.** Binding plan: `docs/PHASE_D_PLAN.md` (sessions,
 read lists, tests, acceptance criteria). Approved decisions: script-generated greybox bunker
 kit first, later replaced by real exports; temporary game-side AABB collision behind a
 replaceable `CollisionWorld` interface (Jolt in Phase E); `bunker` is the default level,
 `highlands` stays as the regression scene; `.blend` sources in regular Git (no Git LFS;
 compressed, ≤ 20 MB each).
-- Asset pipeline: Blockbench (primary) and Blender (secondary, complex architecture and
+- Asset pipeline: Blockbench (primary) and Blender (secondary, complex props and
   organic models) both export `.glb` into one pipeline (registry defaults, budgets, palette,
   texel density, hot reload) with one art standard; the engine stays tool-agnostic.
 - D1 unified GLB/glTF pipeline for Blockbench and Blender (engine) · D2 game asset layout +
@@ -194,6 +193,6 @@ networking (DEAD SECTOR M7 stays on the engine roadmap but after Phase E).
 4. ~~B1 EnTT world, Transform hierarchy, renderer bridge.~~ Done.
 5. ~~B2 scene/material JSON + reflection + round-trip tests.~~ Done. (C1–C7 done.)
 6. D1 unified GLB/glTF pipeline for Blockbench and Blender (done); D2 game asset layout + static
-   bunker (done); Phase V: V0 docs + GDD Amendment 1 (done), V1 (done), V2 (done), **V3 (next)**..V5, then D3..D6, D7
-   (voxel bunker), V6 (performance), D8 per
+   bunker (done); Phase V: V0–V6 (done), D3–D7 (done), D8 integration/audit
+   (implemented on its dedicated branch) per
    `docs/PHASE_D_PLAN.md`.

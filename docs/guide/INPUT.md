@@ -1,4 +1,4 @@
-# Action input and deterministic replay (D3–D4)
+# Action input and deterministic replay
 
 `Zodar::Input` owns main-thread control state, action snapshots, and context selection.
 `Input/SDLInput.cpp` translates SDL events; game simulation reads only `input().action(name)`.
@@ -38,7 +38,8 @@ Snapshots expose `x`, `y`, `held`, `pressed`, `released`. Edges accumulate betwe
 including a complete press/release tap. Repeated keydown events do not retrigger. Held buttons
 persist; mouse/wheel deltas accumulate, are consumed by the next tick, and then reset.
 No tick means no input is consumed. Focus loss/device removal clears held physical controls.
-`feed(source,code,value)` is the platform-independent control feed.
+`feed(source,code,value)` is the platform-independent control feed. Nonfinite values, delta
+accumulation overflow and scaled axis overflow throw `Error` before publishing an action.
 `inject(action,ActionState)` overrides an action for the next tick (button edges are derived;
 explicit edges preserve short taps). Replays inject a complete snapshot every tick.
 
@@ -81,7 +82,8 @@ Applications override `inputLevelHash()` and `inputState()` for content identity
 verification. The runtime combines game state with named RNG states and checks after every completed tick,
 after D5 timer callbacks, event publication and the checkpoint observer.
 Bunker identity hashes runtime asset bytes (excluding source-project/cache directories); state
-covers walker position/velocity, orientation, grounding, mouse capture and waypoint progress.
+covers walker position/velocity, orientation, grounding, mouse capture, waypoint progress and
+stable-ID door/panel/power state. Content identity refreshes after successful asset or scene reload.
 Highlands identity includes generator version, seed and radius; state covers camera and an edit
 command digest. These are targeted fingerprints, not a complete world/save snapshot. The edit digest includes target coordinates, change results
 and resulting voxel values. Hand-authored
@@ -95,7 +97,7 @@ before querying/editing terrain; normal interactive streaming remains asynchrono
 `Core/Random.h` provides per-instance `Random(seed)`, `next(name)` (SplitMix64) and `unit(name)`
 ([0,1), explicit conversion, no implementation-defined distribution). Names get stable independent
 streams, so calls to another stream cannot perturb a system. `Application::random()` is seeded
-from `--seed` (0 for apps without a seed). `states()/seed()/restore()` support future save
+from `--seed` (0 for apps without a seed). `states()/seed()/restore()` support D6 save
 continuation. Use from fixed-step simulation on one thread; no global RNG or wall-clock seed.
 Existing deterministic terrain/noise algorithms remain unchanged.
 
@@ -105,8 +107,14 @@ Focused doctest cases are `input:*`, `replay:*`, and
 `region: partial worker failure drains before propagation`. `gpu.lastlight_input_replay` checks
 both levels: record/replay pixel equality, two moving hand-authored replays, state divergence
 rejection, strict/lenient compatibility, and variable-frame recording. Existing game, asset,
-UI and Vulkan checks remain enabled. D5 scheduling/events/timers are documented in GAMEPLAY.md; D6 save/load remains separate.
+UI and Vulkan checks remain enabled. Scheduling/events/timers are documented in GAMEPLAY.md;
+save/load continuation is documented in [SAVES.md](SAVES.md).
 
 Review regressions: `gpu.input_runtime_regression` injects a minimized final frame, shutdown
 failure, unwritable screenshot and UI capture. It verifies exact replay tick counts/time,
 previous-recording preservation and release delivery without UI click-through.
+
+The CPU-only [input replay example](../../examples/input_replay/README.md) demonstrates the
+public APIs without a window. CTest `examples.input_replay` verifies all 60 ticks in both builds.
+`gpu.lastlight_bunker_walk` additionally compares complete saved state and pixels after
+restoring a moving door midway through the authored action replay.

@@ -1,5 +1,60 @@
 # Progress
 
+## D8 — Integration, audit and documentation (2026-11-04)
+
+- Base: latest main `8c53cc3` (D7 merged). Dedicated branch: `feat/d8-integration-audit`.
+  No merge or later phase is authorized by this task.
+- Two independent read-only reviews covered input/replay/scheduler/timer/event determinism;
+  staged persistence, scene registration/capture, exporter assets and Phase V integration.
+  Both reviewers checked the resulting fixes and found no residual confirmed issues.
+- Fixed finite input arithmetic overflow before action publication. A valid scale of `3e38`
+  and delta 2 previously produced infinity; repeated finite deltas could also overflow.
+- Fixed shared glTF image compilation depending on material order: LINEAR then NEAREST
+  previously selected BC7, while the reverse selected RGBA8. Aggregate NEAREST policy before
+  decoding/cache selection; both orders now reject and replace existing lossy caches.
+- Fixed the shared JSON diagnostic scanner hanging beyond 512 nesting levels. The old depth
+  guard returned without advancing an enclosing array loop. It now reports a positioned
+  DataError with the source filename. Scene/material/block/registry readers share the fix.
+- Added regressions for all three bugs. Focused Debug: 11 cases / 97 assertions passed.
+  Independent existing input/replay/gameplay review checks: 20 cases / 225 assertions;
+  existing D6 checks: 9 cases / 69 assertions.
+- Added the CPU-only `examples/input_replay` public-API example and CTest target. It records
+  action feeds, scheduled movement and named RNG, then checks all 60 replay tick hashes.
+- Strengthened `gpu.lastlight_bunker_walk`: save while a door moves, restore and continue the
+  authored 934-tick route, then compare complete checkpoint JSON, fingerprint and PNG bytes.
+  Focused example and bunker continuation passed 2/2 (317.63 seconds).
+- Updated INPUT, GAMEPLAY, MODELING, architecture, roadmap, ART_DIRECTION §4 and phase plan.
+  Historical progress blocks are labeled; current next steps stop at D8 review.
+- Built pre-Phase-D `268a2bf29d21429104540885870f3de1b8a5b57e` in an isolated Release tree.
+  Its 640×360/90-frame Highlands PNG matches latest main byte-for-byte on this driver:
+  `61ab33fa0fc3305645a12a7dcd222ba2a9d54a136616b27bdb5031a1f3b9753d`.
+
+Final validation (Ubuntu 24.04 container, GCC 13.3, Mesa llvmpipe 25.2.8):
+
+- Full `tools/gate.sh` with warnings as errors: Debug **45/45** (404.22 seconds),
+  Release **44/44** (90.86 seconds); zero compiler warnings/errors. No CTest target failed,
+  was disabled or was skipped. Debug additionally tests compiled-in hot reload.
+- Each build: 325 engine cases passed (2 existing optional timing skips), 77 GPU cases passed
+  (1 existing optional timing skip), 22 game cases / 426 assertions passed. All new regressions
+  and the input replay example pass in Debug and Release.
+- Both gate Highlands PNGs match the pre-Phase-D hash above. Existing mesher/voxel goldens pass.
+  All 27 Debug and 25 Release generated application reports have zero Vulkan warnings/errors.
+- Three serial stationary bunker Release launches at 640×360, with per-tick exit-save capture:
+  median 29.9469 FPS, CPU/GPU means 33.3762/29.7564 ms; 34 draws, 65 instances, 7,066 triangles.
+  Engine allocations 34,795,568 bytes; maximum process RSS 171,532 KiB. Raw reports, heap-budget
+  accounting and measurement limits: `docs/reports/d8-bunker-performance/README.md`.
+
+Current task complete: D8 implementation, independent review, validation and baseline recording.
+Delivery branch: `feat/d8-integration-audit`. Review this branch; no merge or later phase.
+
+Limits: same-build/platform float determinism; software Vulkan only. Real Blockbench/Blender
+exports, physical input devices, hardware GPUs and Windows/MSVC remain unvalidated. AABB
+collision, bounded in-memory recordings, selected replay fingerprints and filesystem durability
+limits retain their documented contracts. No new game systems or dependencies were introduced.
+Next session: review this branch and `docs/reports/d8-bunker-performance/README.md`; read the
+D8 section of PHASE_D_PLAN, INPUT, GAMEPLAY, MODELING and SAVES before changing these paths.
+Start with the D8 diff and validation evidence; further production requires a separate task.
+
 ## D7 airlock acceptance completion (2026-11-03)
 
 - Traced the final replay save: generator running, airlock panel unrepaired, both main
@@ -336,7 +391,7 @@ SceneFile/SaveGame.h, Runtime/Application.h and the D6 section of PHASE_D_PLAN.m
 - `docs/AI_FIRST_ROADMAP.md`: AI-first audit + phases A–G (runtime/tooling, ECS + scene files,
   asset manager, gameplay, physics/audio/animation, introspection, agent docs).
 
-## Current state
+## Historical state (Phase C–V0)
 - `main`: **Phase C complete** (C1-C7 + audit, commit `54eae81`; Debug + Release 24/24 ctest,
   199 unit, 64 GPU cases, 0 warnings, 0 validation messages).
 - **Phase D plan approved (rev 2, 2026-11-01), not started:** `docs/PHASE_D_PLAN.md`
@@ -372,7 +427,7 @@ SceneFile/SaveGame.h, Runtime/Application.h and the D6 section of PHASE_D_PLAN.m
   texture standards, `blocks` asset type, engine voxel shader `zodar/voxel` (engine only, no
   `game/` changes). Branch `claude/v2-block-format`, not merged. See the V2 handoff below.
 
-## Current task
+## Historical task state (V1–V4)
 - **V1 merged:** `main` fast-forwarded `ad2283d..620ad40` (2026-11-01, no history rewrite)
   after the final V1 review (no critical issues). Minor review findings are recorded as
   follow-ups under V2 and V3 in `docs/PHASE_D_PLAN.md`.
@@ -945,12 +1000,10 @@ SceneFile/SaveGame.h, Runtime/Application.h and the D6 section of PHASE_D_PLAN.m
   textures in files and hot reload (Phase C), game migration to scene files.
 
 ## Next steps
-1. V4 is present in main at `0822c40`; V5 implemented on `v5/voxel-bunker` (no merge).
-   Next approved roadmap: D3–D6 → D7 → V6 → D8 (not started).
-   Streaming budgets, FBX/audio import and skins stay in later phases. Highlands keeps its
-   legacy 256²/512² terrain textures (regression scene, not migrated; VOXELS §12).
-2. Optional tooling follow-ups: image diff tool / golden-image tests (roadmap audit), MSVC build.
-3. S5 shadows when scheduled.
+1. Review D8 on `feat/d8-integration-audit`; do not merge or start another phase in this task.
+2. Remaining validation limits: real Blockbench/Blender exports, physical input devices,
+   hardware GPUs and Windows/MSVC. See the D8 handoff at the top.
+3. Further production/rendering work requires a separate task under WORLD_PRODUCTION_ROADMAP.
 
 ## Backlog (rendering / game visuals, interleave when needed)
 - S5 shadows (CSM sun) in pbr.frag and voxel.frag.

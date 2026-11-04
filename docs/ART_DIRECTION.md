@@ -120,32 +120,33 @@ pipeline, and stay unchanged so the Highlands screenshot regression stays byte-i
 
 ## 4. Technical requirements
 
-What exists today (Phase C1 added the asset manager, see `docs/guide/ASSETS.md`):
+Implemented through D8 (see `docs/guide/ASSETS.md`):
 - `AssetManager` loads PNG textures, glTF models and material files with texture slots;
-  `pixelArt` filter preset; texture size warnings (32 default, 64 maximum); lossless pixel-art
+  `pixelArt` filter preset; registry-configured texture sizes/classes (Lastlight: §2); lossless pixel-art
   compilation (RGBA8 KTX2, BCn rejected).
 - glTF sampler filters are honoured end to end (verified by GPU test on the material sampler).
 - `GltfLoader` imports meshes, materials, UVs, textures and glTF samplers. Nearest
   mag/min/mip filters and wrap modes are read into `ModelSampler`. `KHR_texture_transform` is
-  accepted.
+  reported as unsupported with a warning.
 - `TextureArray` and `zodarSampleArray` exist, with point-filtered sampling and linear mips used
   by the terrain.
 - Fog (`SceneLighting::fog`) exists.
 
-Required work, to be scheduled:
+Implementation status and remaining work:
 
 1. **glTF import for Blockbench and Blender exports** (engine, generic). *Done in Phase D1*:
    sampler filters end to end, per-face UVs, several textures per model, hierarchy and pivots,
-   clashing/space-containing names, Blender PBR materials, vertex colours, tangents and extra
-   UV sets; one importer note per ignored feature, actionable errors for Draco, WebP and mesh
-   quantization; source tool, triangle budgets and bounds in the asset report. Verified with
+   clashing/space-containing names, Blender PBR materials, vertex colours and tangents; extra
+   UV sets are ignored with a note. Actionable errors cover Draco, WebP and mesh quantization;
+   reports include source tool, triangle budgets and bounds. Shared images retain lossless
+   compilation when any sampler requires NEAREST, independent of material order. Verified with
    generated fixtures (`engine/tests/data/gltf_tools`); real exports from both tools are the
    open follow-up.
 2. **Pixel-art texture rules in the asset pipeline** (engine, generic, configured per game).
-   Each texture gets a "pixel art" usage flag that means: no BCn compression (or an
-   art-preserving mode, decided by A/B tests), mip generation that keeps the palette readable,
-   nearest sampling, and a max-anisotropy setting. Size validation (§2: 8/16/32/64) gives a
-   warning, not an error (done at load time in Phase C1; the offline compiler check remains).
+   *Implemented*: pixel-art usage selects lossless RGBA8 KTX2, baked mips and nearest sampling
+   with linear mip filtering; lossy BCn caches are rejected. Registry texture standards enforce
+   §2 through class warnings (errors with `--strict`);
+   sizes ≥256 are always errors. Legacy engine defaults remain separate from Lastlight rules.
 3. **Asset validation report** (engine tool). Texture size class, texel density per mesh
    (texels per metre, from UV area against world area), palette deviation against a
    game-supplied palette, and triangle counts. Output is JSON, so agents can check assets

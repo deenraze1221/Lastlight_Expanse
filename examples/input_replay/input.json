@@ -1,0 +1,15 @@
+{
+  "schema": "zodar.input_map",
+  "version": 1,
+  "contexts": [{
+    "name": "game",
+    "priority": 0,
+    "actions": {
+      "move": {"type": "axis1", "bindings": [
+        {"source": "key", "code": "A", "scale": [-1, 0]},
+        {"source": "key", "code": "D"}
+      ]},
+      "pulse": {"type": "button", "bindings": [{"source": "key", "code": "Space"}]}
+    }
+  }]
+}

@@ -1,0 +1,73 @@
+{
+  "runs": 3,
+  "framesPerRun": 360,
+  "resolution": [
+    640,
+    360
+  ],
+  "threads": 2,
+  "saveAtExit": true,
+  "autosaveInterval": 0,
+  "llvmpipeThreads": "2",
+  "fpsMedianOfRunMeans": 29.9469,
+  "cpuFrameMsMedianOfRunMeans": 33.3762,
+  "gpuFrameMsMedianOfRunMeans": 29.7564,
+  "frameMsP95Median": 39.1512,
+  "maxChildRssKiB": 171532,
+  "renderLastFrame": [
+    {
+      "submitted": 379,
+      "culled": 314,
+      "drawCalls": 34,
+      "instances": 65,
+      "triangles": 7066,
+      "commandDraws": 34,
+      "lights": 52
+    },
+    {
+      "submitted": 379,
+      "culled": 314,
+      "drawCalls": 34,
+      "instances": 65,
+      "triangles": 7066,
+      "commandDraws": 34,
+      "lights": 52
+    },
+    {
+      "submitted": 379,
+      "culled": 314,
+      "drawCalls": 34,
+      "instances": 65,
+      "triangles": 7066,
+      "commandDraws": 34,
+      "lights": 52
+    }
+  ],
+  "memory": [
+    {
+      "deviceLocalUsage": 945147904,
+      "deviceLocalBudget": 10452459520,
+      "allocationBytes": 34795568,
+      "peakDeviceLocalUsage": 989700096
+    },
+    {
+      "deviceLocalUsage": 939950080,
+      "deviceLocalBudget": 10452459520,
+      "allocationBytes": 34795568,
+      "peakDeviceLocalUsage": 993796096
+    },
+    {
+      "deviceLocalUsage": 935075840,
+      "deviceLocalBudget": 10452459520,
+      "allocationBytes": 34795568,
+      "peakDeviceLocalUsage": 983289856
+    }
+  ],
+  "device": {
+    "name": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "driver": "llvmpipe Mesa 25.2.8-0ubuntu0.24.04.4 (LLVM 20.1.2)",
+    "apiVersion": "1.4.0",
+    "softwareRasterizer": true,
+    "validation": false
+  }
+}
