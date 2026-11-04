@@ -12,6 +12,11 @@ base = [str(exe), '--headless', '--deterministic', '--width', '160', '--height',
 
 def run(name, args):
     report, shot = root / (name + '.json'), root / (name + '.png')
+    outputs = [report, shot]
+    if '--save-at-exit' in args:
+        outputs.append(Path(args[args.index('--save-at-exit') + 1]))
+    for output in outputs:
+        output.unlink(missing_ok=True)
     result = subprocess.run(base + args + ['--report', str(report), '--screenshot', str(shot)],
                             capture_output=True, text=True, timeout=360)
     (root / (name + '.log')).write_text(result.stdout + result.stderr)

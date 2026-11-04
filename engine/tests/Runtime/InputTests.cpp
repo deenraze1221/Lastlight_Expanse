@@ -17,6 +17,14 @@ TEST_CASE("input: finite controls and bindings cannot publish overflowing action
     input.setMap(InputMap{});
     input.feed("mouseDelta", "x", std::numeric_limits<float>::max());
     CHECK_THROWS_AS(input.feed("mouseDelta", "x", std::numeric_limits<float>::max()), Error);
+    input.setMap(InputMap::parse(R"({"schema":"zodar.input_map","version":1,"contexts":[
+        {"name":"game","actions":{"disabled":{"type":"button","bindings":[
+        {"source":"gamepadAxis","code":"leftx","deadZone":0.5,"scale":[0,0]}]}}}]})"));
+    CHECK_THROWS_AS(input.feed("gamepadAxis", "leftx", std::numeric_limits<float>::max()), Error);
+    input.resetControls();
+    input.beginStep();
+    CHECK_FALSE(input.action("disabled").held);
+    CHECK_FALSE(input.action("disabled").pressed);
 }
 namespace {
 InputMap map() { return InputMap::parse(R"({"schema":"zodar.input_map","version":1,"contexts":[

@@ -39,7 +39,8 @@ including a complete press/release tap. Repeated keydown events do not retrigger
 persist; mouse/wheel deltas accumulate, are consumed by the next tick, and then reset.
 No tick means no input is consumed. Focus loss/device removal clears held physical controls.
 `feed(source,code,value)` is the platform-independent control feed. Nonfinite values, delta
-accumulation overflow and scaled axis overflow throw `Error` before publishing an action.
+accumulation overflow, dead-zone remapping overflow and scaled axis overflow throw `Error`
+before publishing an action.
 `inject(action,ActionState)` overrides an action for the next tick (button edges are derived;
 explicit edges preserve short taps). Replays inject a complete snapshot every tick.
 
@@ -118,3 +119,7 @@ The CPU-only [input replay example](../../examples/input_replay/README.md) demon
 public APIs without a window. CTest `examples.input_replay` verifies all 60 ticks in both builds.
 `gpu.lastlight_bunker_walk` additionally compares complete saved state and pixels after
 restoring a moving door midway through the authored action replay.
+
+Bunker replay acceptance removes each launch's report, screenshot and exit-save output first,
+so continuation equality cannot reuse stale artifacts. The CPU CTest
+`tools.bunker_gameplay_artifacts` checks missing fresh report/save rejection.

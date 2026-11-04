@@ -1,5 +1,51 @@
 # Progress
 
+## D8 independent correctness review (2026-11-04)
+
+Reviewed `feat/d8-integration-audit` at `4fabfca` against freshly fetched main `8c53cc3`.
+Two independent read-only reviewers inspected overflow/deep-JSON/example paths and shared-image
+compilation/cache policy. Two confirmed issues were fixed, preserving existing architecture.
+
+- Confirmed a finite `FLT_MAX` gamepad feed with dead zone 0.5 overflowed the remap to infinity.
+  A zero-scale button then computed `inf * 0`, and `NaN != 0` activated it. The public feed
+  contract restricts finiteness, not magnitude. Reject nonfinite remaps before action evaluation;
+  the regression also checks that reset leaves the disabled button inactive.
+- Confirmed the bunker replay acceptance test could pass with a no-op executable when its
+  output directory held files from a previous run. That made complete checkpoint equality
+  vulnerable to stale evidence. Reproduced against a copied gate directory outside the checkout.
+- Each launch now removes its expected report, screenshot and exit-save output before running.
+  Continuation input is preserved. Added a CPU regression covering no fresh report and a fresh
+  render without a fresh save; both cases fail against original D8 and pass after the fix.
+  An independent reviewer checked the fix and regression without finding further issues.
+- Final focused Debug input/pixel-art/deep-JSON tests: 11 cases / 100 assertions after the remap
+  guard. Initial Debug/Release checks passed 11 cases / 97 assertions before that last fix.
+  The CPU example verifies all 60 replay hashes. The new artifact test passes both scenarios.
+  An additional 100,000-level valid JSON fixture returns a positioned DataError without hanging.
+- Checked benchmark raw reports against the summary: FPS/CPU/GPU medians, render counters,
+  memory observations, frame counts, resolution and endpoint fingerprints agree. The recorded
+  stationary software-Vulkan workload and memory-accounting limits remain explicit. Production
+  behavior for normal-range input is unchanged; historical performance reports remain without
+  new timing claims. The initial gate was interrupted to add the newly confirmed remap fix;
+  final full validation is run on both fixes together.
+
+Final validation (GCC 13.3, Ubuntu 24.04, Mesa llvmpipe 25.2.8):
+
+- Full warnings-as-errors `tools/gate.sh`: Debug **46/46** (397.30 s), Release **45/45**
+  (91.73 s). No CTest target failed, was disabled or was skipped. Zero compiler warnings/errors.
+- Both builds: 325 engine cases, 77 GPU cases and 22 game cases passed. Existing optional
+  timing skips remain: 2 engine and 1 GPU case. The new CPU artifact regression passes.
+- All 27 Debug and 25 Release fresh application reports have zero Vulkan warnings/errors.
+  Both moving-door continuations match complete final checkpoint JSON and PNG bytes.
+- Both Highlands PNGs match the independently built pre-Phase-D golden:
+  `61ab33fa0fc3305645a12a7dcd222ba2a9d54a136616b27bdb5031a1f3b9753d`.
+  Existing engine/game voxel goldens remain green.
+
+Review complete. Deliver the two confirmed fixes on `feat/d8-integration-audit`; no merge or
+later phase. Next: review this small follow-up diff and its validation evidence.
+
+Limits remain software Vulkan, same-platform floats, generated exporter fixtures, and untested
+physical input devices/hardware GPUs/Windows. Existing optional timing skips remain unchanged.
+
 ## D8 — Integration, audit and documentation (2026-11-04)
 
 - Base: latest main `8c53cc3` (D7 merged). Dedicated branch: `feat/d8-integration-audit`.

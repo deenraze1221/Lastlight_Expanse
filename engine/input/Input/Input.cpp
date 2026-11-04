@@ -191,6 +191,7 @@ void Input::evaluate() {
                 float v=m_controls.contains(k)?m_controls.at(k):0;
                 if(std::abs(v)<=b.deadZone) v=0;
                 else if(b.deadZone>0) v=std::copysign((std::abs(v)-b.deadZone)/(1-b.deadZone),v);
+                if (!std::isfinite(v)) fail("input binding overflow");
                 if(b.invert) v=-v;
                 if(a.type=="button") value.held |= v*b.x!=0;
                 else {

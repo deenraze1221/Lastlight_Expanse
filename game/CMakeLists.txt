@@ -38,6 +38,8 @@ if(ZODAR_BUILD_TESTS)
     add_test(NAME game.unit COMMAND LastlightGameTests)
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME tools.bunker_gameplay_artifacts
+            COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/tests/BunkerGameplayArtifactTests.py)
         # Source-file policy (regular Git, no LFS): .blend files <= 20 MiB, no .blend1/.blend2.
         add_test(NAME tools.game_source_sizes
             COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_source_sizes.py
