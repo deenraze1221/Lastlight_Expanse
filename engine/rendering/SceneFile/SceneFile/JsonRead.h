@@ -42,7 +42,7 @@ public:
     };
 
     JsonLocator() = default;
-    explicit JsonLocator(std::string_view text) : m_text(text) {
+    explicit JsonLocator(std::string_view text, std::string_view file = "<json>") : m_text(text), m_file(file) {
         for (std::size_t i = 0; i < text.size(); ++i) {
             if (text[i] == '\n') {
                 m_lineStarts.push_back(i + 1);
@@ -92,7 +92,11 @@ private:
         return out;
     }
     void value(std::size_t& i, const std::string& path, int depth) {
-        if (i >= m_text.size() || depth > kMaxDepth) {
+        if (depth > kMaxDepth) {
+            const auto at = position(i);
+            throw DataError({{std::string(m_file), at.line, at.column, path, "JSON nesting exceeds 512 levels"}});
+        }
+        if (i >= m_text.size()) {
             return;
         }
         m_positions.emplace(path, i);
@@ -128,6 +132,7 @@ private:
     }
 
     std::string_view m_text;
+    std::string_view m_file;
     std::vector<std::size_t> m_lineStarts{0};
     std::unordered_map<std::string, std::size_t> m_positions;
 };

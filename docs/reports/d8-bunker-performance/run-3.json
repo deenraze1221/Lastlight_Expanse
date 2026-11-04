@@ -1,0 +1,39 @@
+{
+  "input": {"mode": "live", "mapHash": "5b492b1adedd1ca5", "ticks": 360, "stateHash": "127b90fc51753f69"},
+  "schema": "zodar.run_report",
+  "version": 1,
+  "application": "Lastlight Expanse",
+  "exitCode": 0,
+  "run": {"frames": 360, "fixedSteps": 360, "wallSeconds": 12.2634, "simulatedSeconds": 6.0000, "fixedDt": 0.0167, "headless": true, "deterministic": true, "width": 640, "height": 360, "seed": 1337},
+  "device": {"name": "llvmpipe (LLVM 20.1.2, 256 bits)", "driver": "llvmpipe Mesa 25.2.8-0ubuntu0.24.04.4 (LLVM 20.1.2)", "apiVersion": "1.4.0", "softwareRasterizer": true, "validation": false},
+  "validation": {"errors": 0, "warnings": 0},
+  "log": {"warnings": 1, "errors": 0},
+  "fps": {"mean": 29.3485, "p50": 28.8765, "p95": 25.3292, "p99": 23.2450},
+  "frameMs": {"count": 359, "mean": 34.0733, "min": 26.6562, "max": 104.6045, "p50": 34.6302, "p95": 39.4801, "p99": 43.0200},
+  "cpuFrameMs": {"count": 360, "mean": 34.0462, "min": 26.6473, "max": 104.5824, "p50": 34.6185, "p95": 39.4306, "p99": 43.0071},
+  "gpuFrameMs": {"count": 358, "mean": 30.4935, "min": 23.6185, "max": 67.8358, "p50": 30.8939, "p95": 35.1088, "p99": 38.9006},
+  "cpuScopes": {
+    "Fixed update": {"count": 360, "mean": 2.7775, "min": 2.3510, "max": 5.5575, "p50": 2.6394, "p95": 3.5095, "p99": 4.9727},
+    "System/Bunker.Controls": {"count": 360, "mean": 0.0193, "min": 0.0104, "max": 0.2548, "p50": 0.0166, "p95": 0.0295, "p99": 0.0905},
+    "System/Bunker.Interaction": {"count": 360, "mean": 0.0194, "min": 0.0128, "max": 0.0906, "p50": 0.0175, "p95": 0.0244, "p99": 0.0723},
+    "Update": {"count": 360, "mean": 0.1624, "min": 0.1361, "max": 0.5960, "p50": 0.1434, "p95": 0.2413, "p99": 0.3479},
+    "System/Bunker.CameraSync": {"count": 360, "mean": 0.0006, "min": 0.0002, "max": 0.0479, "p50": 0.0004, "p95": 0.0008, "p99": 0.0009},
+    "Wait + acquire": {"count": 360, "mean": 0.1690, "min": 0.0241, "max": 0.6716, "p50": 0.1482, "p95": 0.2678, "p99": 0.4259},
+    "Build graph": {"count": 360, "mean": 0.2131, "min": 0.0976, "max": 31.2894, "p50": 0.1061, "p95": 0.2096, "p99": 0.4282},
+    "Record": {"count": 360, "mean": 0.0424, "min": 0.0289, "max": 2.3533, "p50": 0.0317, "p95": 0.0600, "p99": 0.1312},
+    "Submit + present": {"count": 360, "mean": 30.6570, "min": 23.7305, "max": 67.9698, "p50": 30.9970, "p95": 35.3335, "p99": 39.0326}
+  },
+  "gpuPasses": {
+    "Frame": {"count": 358, "mean": 30.4935, "min": 23.6185, "max": 67.8358, "p50": 30.8939, "p95": 35.1088, "p99": 38.9006},
+    "MaterialUpdates": {"count": 1, "mean": 0.1357, "min": 0.1357, "max": 0.1357, "p50": 0.1357, "p95": 0.1357, "p99": 0.1357},
+    "Lighting.Upload": {"count": 358, "mean": 0.0867, "min": 0.0487, "max": 0.3858, "p50": 0.0773, "p95": 0.1582, "p99": 0.2665},
+    "Lighting.ClusterCull": {"count": 358, "mean": 0.4732, "min": 0.3049, "max": 2.4077, "p50": 0.4163, "p95": 0.8127, "p99": 1.1488},
+    "Lighting.Stats": {"count": 358, "mean": 0.0863, "min": 0.0425, "max": 2.1755, "p50": 0.0643, "p95": 0.1742, "p99": 0.5041},
+    "Scene.DepthPrepass": {"count": 358, "mean": 2.4386, "min": 1.8528, "max": 8.3807, "p50": 2.3805, "p95": 3.1585, "p99": 5.1622},
+    "Scene": {"count": 358, "mean": 25.5992, "min": 19.6625, "max": 49.9300, "p50": 25.8972, "p95": 29.7155, "p99": 33.2540},
+    "Resolve": {"count": 358, "mean": 1.7153, "min": 1.2075, "max": 7.9961, "p50": 1.7209, "p95": 2.0477, "p99": 2.6706}
+  },
+  "render": {"submitted": 379, "culled": 314, "drawCalls": 34, "instances": 65, "triangles": 7066, "commandDraws": 34, "lights": 52},
+  "memory": {"deviceLocalUsage": 935075840, "deviceLocalBudget": 10452459520, "allocationBytes": 34795568, "peakDeviceLocalUsage": 983289856},
+  "screenshots": []
+}

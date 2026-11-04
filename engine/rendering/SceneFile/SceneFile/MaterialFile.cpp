@@ -179,7 +179,7 @@ Json materialJson(const MaterialData& m) {
 MaterialData parseMaterial(std::string_view json, std::string_view file, std::string_view defaultName) {
     const std::string fileName(file);
     const detail::Json root = detail::parseJson(json, fileName);
-    const detail::JsonLocator locator(json);
+    const detail::JsonLocator locator(json, fileName);
     detail::Issues issues(fileName, &locator);
     MaterialData material;
     detail::readMaterialObject(root, "", std::string(defaultName), material, issues);

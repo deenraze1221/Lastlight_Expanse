@@ -1,6 +1,7 @@
 // Scene / material JSON (Phase B2), CPU only: parsing, validation messages, round-trips and
 // instantiation error paths. Rendering equivalence is covered in Gpu/WorldRenderTests.cpp.
 #include "SceneFile/SceneFile.h"
+#include "AssetManager/AssetRegistry.h"
 
 #include <doctest/doctest.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -12,6 +13,16 @@
 #include <string>
 
 using namespace zodar;
+
+TEST_CASE("scene files: excessive JSON nesting reports an error instead of hanging") {
+    const std::string json = "{\"unknown\":" + std::string(520, '[') + "0" + std::string(520, ']') + "}";
+    CHECK_THROWS_WITH_AS(parseScene(json, "deep.scene.json"),
+        doctest::Contains("deep.scene.json") , DataError);
+    CHECK_THROWS_WITH_AS(parseMaterial(json, "deep.material.json", "deep"),
+        doctest::Contains("JSON nesting exceeds 512 levels"), DataError);
+    CHECK_THROWS_WITH_AS(AssetRegistry::parse(json, "deep.assets.json"),
+        doctest::Contains("deep.assets.json"), DataError);
+}
 
 namespace {
 

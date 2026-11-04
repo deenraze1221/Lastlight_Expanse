@@ -1,4 +1,4 @@
-# Deterministic gameplay execution (D5)
+# Deterministic gameplay execution
 
 `Zodar::Gameplay` is an engine-only, CPU-only module depending on Core. Include
 `Gameplay/Gameplay.h`. `Application::gameplay()` owns one scheduler, event bus and timer
@@ -68,7 +68,7 @@ if nobody read it. Payloads should be plain simulation values, not thread-shared
 The runtime flips once per successful tick after timer dispatch. Outside fixed processing,
 `emit` only queues for the next end-of-tick flip; seed initial state directly and do not drive
 simulation by emitting from presentation hooks. `EventBus::advance()` exists for standalone
-CPU use; the runtime owns it inside Application. No event serializers are provided in D5.
+CPU use; the runtime owns it inside Application. Persistent channels use the explicit D6 event codecs described in SAVES.md.
 
 ## Fixed-tick timers
 
@@ -98,7 +98,7 @@ Each callback gets a `System/<name>` CPU scope. Multiple calls in a multi-tick f
 multiple samples, and skipped render attempts retain CPU scopes in run reports. GPU/frame
 statistics retain their existing rendered-frame meaning. Scope lifetimes close on exceptions.
 
-## Checkpoint boundary for D6
+## Checkpoint boundary
 
 After systems and the legacy fixed hook, due timers run, events flip, and the completed-tick
 counter advances. `onCheckpoint(uint64_t N)` is called once there, before the replay state
@@ -108,16 +108,15 @@ Use `gameplay().completedTicks()`, not `timestep().totalSteps()`: the latter may
 all steps in a frame while an earlier one is executing.
 
 At that boundary pending timer deadlines and readable next-tick events are part of simulation
-state. D6 must serialize/reconstruct them together with registered component/game state, RNG,
-input edges and replay position. D5 deliberately adds no save/load, clock restore, callback
-serialization or transactional world replacement. Replay fingerprints still use app-selected
-state plus named RNG; apps must expose any new meaningful system state in `inputState()`.
+state. D6 serializes/reconstructs them together with registered component/game state, RNG,
+input edges and replay position through staged commits (SAVES.md). Replay fingerprints still
+use app-selected state plus named RNG; apps must expose any new meaningful system state in `inputState()`.
 
 ## Game integration and validation
 
 Highlands runs Camera → Terrain → Interaction as ordered fixed systems; bunker runs Controls
-in FixedSimulation and derived CameraSync in RenderSync. Existing action bindings, movement
-math, streaming rules and edit behavior remain. Animation is available but unused by games.
+→ Interaction → Doors → Power in FixedSimulation and derived CameraSync in RenderSync.
+Existing action bindings, movement math, streaming rules and edit behavior remain. Animation is available but unused by games.
 
 Focused checks: `ZodarTests --test-case='gameplay:*'` covers graph validation/ties, event batches,
 timer ordering/repeat/cancel, checkpoint semantics, multi-step frames and exception profiling.
@@ -125,10 +124,16 @@ timer ordering/repeat/cancel, checkpoint semantics, multi-step frames and except
 N+1 events, one checkpoint per tick, catch-up frames, frozen final replay frames and profiler
 counts. Existing empty-scheduler runtime tests and both-level record/replay pixel/state tests
 remain enabled. Before pushing, run `tools/gate.sh` (Debug/Release, warnings as errors, all CTest
-and Vulkan checks) with the established Highlands hash. D6/D7 remain separate phases.
+and Vulkan checks) with the established Highlands hash. Bunker system contracts and controls
+are in BUNKER_GAMEPLAY.md.
 
 ## Checkpoints and persistence
 
 See [SAVES.md](SAVES.md) for the completed-tick checkpoint contract, named persistent timers,
 event codecs, input/RNG restoration, and nonthrowing staged commits. Anonymous pending closures
-and nonempty unregistered event channels cannot be saved. D6 introduces no D7 gameplay systems.
+and nonempty unregistered event channels cannot be saved. Game-only components and stable-ID
+interactions are documented in BUNKER_GAMEPLAY.md.
+
+The [CPU input replay example](../../examples/input_replay/README.md) shows one fixed system
+using action snapshots and named RNG. Application owns the loop in real games; do not call
+`beginStep()` or `Gameplay::step()` again from registered callbacks.

@@ -374,7 +374,7 @@ void expandPrefab(std::size_t instance, const std::string& prefabPath, const Jso
 SceneDocument parseSceneImpl(std::string_view json, const std::string& file, const std::filesystem::path& baseDir,
                              ParseState& state) {
     const Json root = detail::parseJson(json, file);
-    const detail::JsonLocator locator(json);
+    const detail::JsonLocator locator(json, file);
     Issues issues(file, &locator);
     SceneDocument doc;
     if (!detail::requireObject(root, "", issues)) {

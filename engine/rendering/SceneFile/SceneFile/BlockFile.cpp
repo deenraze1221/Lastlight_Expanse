@@ -79,7 +79,7 @@ Json floatJson(float v) { return static_cast<double>(v); }
 BlockFileData parseBlockFile(std::string_view json, std::string_view file, const voxel::ShapeLibrary* shapes) {
     const std::string fileName(file);
     const Json root = detail::parseJson(json, fileName);
-    const detail::JsonLocator locator(json);
+    const detail::JsonLocator locator(json, fileName);
     detail::Issues issues(fileName, &locator);
     BlockFileData data;
     if (!detail::requireObject(root, "", issues)) {

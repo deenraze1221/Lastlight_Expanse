@@ -166,7 +166,9 @@ void Input::setRelativeMouse(bool enabled) { m_relativeMouse=enabled; }
 void Input::feed(std::string_view source, std::string_view code, float value) {
     if (!std::isfinite(value)) fail("non-finite input");
     const std::string k=std::string(source)+":"+std::string(code);
-    if(delta(source)) m_controls[k]+=value; else m_controls[k]=value;
+    const float next = delta(source) && m_controls.contains(k) ? m_controls.at(k) + value : value;
+    if (!std::isfinite(next)) fail("input control overflow");
+    m_controls[k]=next;
     evaluate();
 }
 void Input::resetControls() { m_controls.clear(); evaluate(); }
@@ -189,9 +191,13 @@ void Input::evaluate() {
                 float v=m_controls.contains(k)?m_controls.at(k):0;
                 if(std::abs(v)<=b.deadZone) v=0;
                 else if(b.deadZone>0) v=std::copysign((std::abs(v)-b.deadZone)/(1-b.deadZone),v);
+                if (!std::isfinite(v)) fail("input binding overflow");
                 if(b.invert) v=-v;
                 if(a.type=="button") value.held |= v*b.x!=0;
-                else { value.x+=v*b.x; value.y+=v*b.y; }
+                else {
+                    value.x+=v*b.x; value.y+=v*b.y;
+                    if (!std::isfinite(value.x) || !std::isfinite(value.y)) fail("input action overflow");
+                }
             }
             if(a.type=="button") value.x=value.held?1.0f:0.0f;
             next[name]=value;

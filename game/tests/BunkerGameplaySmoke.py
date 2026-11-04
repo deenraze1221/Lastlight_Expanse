@@ -12,6 +12,11 @@ base = [str(exe), '--headless', '--deterministic', '--width', '160', '--height',
 
 def run(name, args):
     report, shot = root / (name + '.json'), root / (name + '.png')
+    outputs = [report, shot]
+    if '--save-at-exit' in args:
+        outputs.append(Path(args[args.index('--save-at-exit') + 1]))
+    for output in outputs:
+        output.unlink(missing_ok=True)
     result = subprocess.run(base + args + ['--report', str(report), '--screenshot', str(shot)],
                             capture_output=True, text=True, timeout=360)
     (root / (name + '.log')).write_text(result.stdout + result.stderr)
@@ -55,7 +60,9 @@ run('prefix', ['--frames', str(uses[3] + 8), '--save-at-exit', str(mid)])
 moving = json.loads(mid.read_text())
 moving_door = next(e['door'] for e in moving['world']['entities'] if e['id'] == 'dormitory/door_leaf_1/leaf')
 assert 0 < moving_door['fraction'] < 1, moving_door
-resumed, resumed_pixels = run('resumed', ['--load-save', str(mid)])
+resumed_slot = root / 'resumed.save.json'
+resumed, resumed_pixels = run('resumed', ['--load-save', str(mid), '--save-at-exit', str(resumed_slot)])
 assert resumed['input']['stateHash'] == full['input']['stateHash']
 assert resumed_pixels == pixels
+assert json.loads(resumed_slot.read_text()) == saved, 'complete checkpoint differs after continuation'
 print('D7 route: dormitory, panels, generator, sliding door, airlock; moving-door save continuation matches state and pixels')

@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include <nlohmann/json.hpp>
 
 #include "AssetPipeline/ModelCompiler.h"
 #include "AssetPipeline/TextureCompiler.h"
@@ -355,4 +356,45 @@ TEST_CASE("pixel art: NEAREST model textures compile losslessly; lossy caches ar
 
     std::filesystem::remove_all(textureCacheDirectory(model.path()));
     std::filesystem::remove(dir / "pixels.png");
+}
+
+TEST_CASE("pixel art: shared image sampler order preserves lossless compilation and cache rejection") {
+    const zodar::test::TempFile model("zodar_shared_sampler_test.gltf");
+    const auto cache = textureCachePath(model.path(), 0, TextureUsage::Color);
+    const auto encoded = png(32, 32, 3);
+    writeBytes(model.path().parent_path() / "pixels.png", encoded);
+    const auto reference = loadImageFromMemory(encoded, ColorSpace::Srgb, "pixels");
+    for (bool nearestFirst : {false, true}) {
+        writePixelArtModel(model.path(), false);
+        auto json = nlohmann::json::parse(zodar::test::readFile(model.path()));
+        json["samplers"].push_back({{"magFilter", 9728}, {"minFilter", 9986}});
+        json["textures"].push_back({{"source", 0}, {"sampler", 1}});
+        json["materials"].push_back(json["materials"][0]);
+        json["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"]["index"] = nearestFirst ? 1 : 0;
+        json["materials"][1]["pbrMetallicRoughness"]["baseColorTexture"]["index"] = nearestFirst ? 0 : 1;
+        model.write(json.dump());
+        std::filesystem::remove_all(textureCacheDirectory(model.path()));
+        GltfLoadOptions options;
+        options.keepImageSources = true;
+        const auto sources = loadGltf(model.path(), options);
+        REQUIRE(sources.imageSources.size() == 1);
+        CHECK(sources.imageSources[0].pixelArt);
+        auto bc7 = optionsFor(TextureUsage::Color);
+        bc7.quality = EncodeQuality::Fast;
+        auto keys = compilerKeyValues(bc7);
+        keys[kTextureSourceKey] = sources.imageSources[0].sourceKey;
+        saveKtx2(cache, compileTexture(reference, bc7), keys);
+        const auto loaded = loadGltf(model.path());
+        CHECK(loaded.textureStats.lossyRejected == 1);
+        CHECK(loaded.images[0].levels[0] == reference.levels[0]);
+        ModelCompileOptions compile;
+        compile.quality = EncodeQuality::Fast;
+        const auto results = compileModelTextures(model.path(), compile);
+        REQUIRE(results.size() == 1);
+        CHECK((results[0].format == PixelFormat::Rgba8));
+        CHECK_FALSE(results[0].upToDate);
+        CHECK(loadGltf(model.path()).images[0].levels[0] == reference.levels[0]);
+    }
+    std::filesystem::remove_all(textureCacheDirectory(model.path()));
+    std::filesystem::remove(model.path().parent_path() / "pixels.png");
 }

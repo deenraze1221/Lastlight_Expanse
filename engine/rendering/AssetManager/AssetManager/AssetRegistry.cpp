@@ -400,7 +400,7 @@ ModelLoadSettings modelLoadSettings(const AssetEntry& entry) {
 AssetRegistry AssetRegistry::parse(std::string_view json, const std::filesystem::path& file) {
     const std::string fileName = file.generic_string();
     const Json root = detail::parseJson(json, fileName);
-    const detail::JsonLocator locator(json);
+    const detail::JsonLocator locator(json, fileName);
     detail::Issues issues(fileName, &locator);
     AssetRegistry registry(file.parent_path());
     if (!detail::requireObject(root, "", issues)) {

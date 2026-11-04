@@ -14,6 +14,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <optional>
+#include <set>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -119,6 +120,12 @@ public:
         reportUnsupported();
         for (cgltf_size i = 0; i < raw->samplers_count; ++i) {
             m_model.samplers.push_back(convertSampler(raw->samplers[i]));
+        }
+        // Images share one cache per usage. Preserve every NEAREST consumer before decoding.
+        for (cgltf_size i = 0; i < raw->textures_count; ++i) {
+            const auto& texture = raw->textures[i];
+            if (texture.image && texture.sampler && texture.sampler->mag_filter == cgltf_filter_type_nearest)
+                m_pixelArtImages.insert(texture.image);
         }
         for (cgltf_size i = 0; i < raw->materials_count; ++i) {
             m_model.materials.push_back(convertMaterial(raw->materials[i]));
@@ -267,8 +274,7 @@ private:
         const std::string name = image->name ? image->name : (image->uri ? image->uri : "embedded");
         std::vector<uint8_t> bytes = sourceBytes(*image, name);
         const std::string sourceKey = textureSourceKey(bytes, usage);
-        const bool pixelArt =
-            m_options.pixelArt || (tex.sampler && tex.sampler->mag_filter == cgltf_filter_type_nearest);
+        const bool pixelArt = m_options.pixelArt || m_pixelArtImages.contains(image);
         const std::filesystem::path cache = textureCachePath(m_path, sourceIndex, usage);
 
         ImageData loaded;
@@ -533,6 +539,7 @@ private:
     std::unique_ptr<cgltf_data, DataDeleter> m_data;
     ModelData m_model;
     std::map<std::pair<const cgltf_image*, TextureUsage>, int> m_imageIndex;
+    std::set<const cgltf_image*> m_pixelArtImages;
     // feature -> (kind of users, users), in first-seen order.
     using Note = std::pair<std::string, std::pair<std::string, std::vector<std::string>>>;
     std::vector<Note> m_notes;

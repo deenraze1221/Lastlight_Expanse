@@ -405,7 +405,7 @@ Vulkan sample) and ZodarUISandbox (SDL renderer) intentionally keep their own lo
   `meshRenderer` meshes are still bound by name from code (`SceneBindings::meshes`; whole
   glTF models use `modelRenderer`, C4).
 
-## Phase D decisions (approved plan, not implemented)
+## Phase D decisions (implemented)
 
 Binding plan: `docs/PHASE_D_PLAN.md`.
 - New engine modules: `Zodar::Input` (`engine/input/Input`: action maps, record/replay) and
@@ -424,7 +424,7 @@ Binding plan: `docs/PHASE_D_PLAN.md`.
   `tools.game_source_sizes`, which also rejects `.blend1`/`.blend2` backups; no blanket size
   limit on other assets). `game/assets/**` is `-text` (registry hashes cover exact bytes).
 
-## Phase V decisions: hybrid voxel + model world (approved V0, 2026-11-01; not implemented)
+## Phase V decisions: hybrid voxel + model world (V0–V6 implemented)
 
 Specification: `docs/guide/VOXELS.md`; game rules: GDD §2/§3 Amendment 1.
 - Voxel blocks: architecture and structural environment. Imported 3D models (glTF, D1
@@ -840,3 +840,21 @@ participate in D6 persistence. Player/controller and power/door state enter repl
 Rendering derives per-room emissive material overrides rather than modifying shared models.
 The game asset frontend registers these types before invoking the shared generic asset CLI.
 Contracts, controls, save-slot policy and tests: guide/BUNKER_GAMEPLAY.md.
+
+## D8 integration audit
+
+The architecture remains unchanged: engine APIs own action sampling, sequential scheduling,
+RNG, scene registration and staged persistence; the game owns bunker rules and player state.
+Independent read-only reviews covered those boundaries and Phase V integration.
+
+- Input rejects finite arithmetic overflow before publishing nonfinite action snapshots.
+- Shared glTF images aggregate NEAREST requirements before decoding or cache selection,
+  preserving one image/cache per usage and lossless compilation independent of material order.
+- The shared JSON diagnostic scanner rejects nesting beyond 512 levels with a file/position
+  DataError instead of looping without advancing its cursor. This limit applies to scene,
+  material, block catalogue and asset registry readers.
+- `examples/input_replay` is a CPU-only public API example, registered in CTest when samples
+  and tests are enabled. Runtime applications continue to use the existing Application loop.
+- The moving-door bunker replay now compares complete final checkpoint JSON, fingerprints
+  and PNG bytes. Performance evidence and accounting limits live in
+  `docs/reports/d8-bunker-performance/README.md`; this is a baseline, not a hardware claim.
